@@ -1,0 +1,6 @@
+{
+  "name": "Sistema Colmena Restaurante",
+  "description": "Sistema full-stack, modular y multisucursal para gestión de restaurantes, POS, comandas de cocina en tiempo real, mesas, inventario y caja en Colombia.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

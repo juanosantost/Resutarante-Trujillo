@@ -1,0 +1,905 @@
+/* ==========================================================================
+   SISTEMA COLMENA RESTAURANTE — LIGHT & DARK THEME ENGINE
+   Guadalajara de Buga (Valle del Cauca, Colombia)
+   
+   Regla fundamental:
+   - Modo Oscuro: Conserva el 100% de la estética original oscura.
+   - Modo Claro (.theme-light): Transforma todas las vistas, tarjetas,
+     paneles, tablas, controles, TODOS LOS MODALES Y TODOS LOS BOTONES
+     en una experiencia limpia con fondo claro y letra negra de alta legibilidad.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. CANVAS Y ESTRUCTURA GLOBAL EN MODO CLARO
+   -------------------------------------------------------------------------- */
+html.theme-light,
+html.theme-light body,
+html.theme-light #root {
+  background-color: #f6f5f0 !important;
+  color: #0f172a !important;
+}
+
+/* Scrollbars en modo claro */
+html.theme-light ::-webkit-scrollbar-track {
+  background: #eae7de !important;
+}
+html.theme-light ::-webkit-scrollbar-thumb {
+  background: #c28807 !important;
+}
+html.theme-light ::-webkit-scrollbar-thumb:hover {
+  background: #966603 !important;
+}
+
+/* --------------------------------------------------------------------------
+   2. FONDOS OSCUROS HEXADECIMALES -> FONDOS LUMINOSOS
+   -------------------------------------------------------------------------- */
+
+/* Fondos de lienzo y páginas completas */
+html.theme-light .bg-\[\#0e0e10\],
+html.theme-light .bg-\[\#0c0b10\],
+html.theme-light .bg-\[\#0e0e12\],
+html.theme-light .bg-\[\#0f0e13\],
+html.theme-light .bg-\[\#0f0e14\],
+html.theme-light .bg-\[\#09090d\],
+html.theme-light .bg-\[\#0e0d13\],
+html.theme-light .bg-\[\#0a0a0c\] {
+  background-color: #f6f5f0 !important;
+}
+
+/* Fondos principales de tarjetas, paneles y barras de navegación */
+html.theme-light .bg-\[\#181818\],
+html.theme-light .bg-\[\#121117\],
+html.theme-light .bg-\[\#14131a\],
+html.theme-light .bg-\[\#18171f\],
+html.theme-light .bg-\[\#16151e\],
+html.theme-light .bg-\[\#16151c\],
+html.theme-light .bg-\[\#16151f\],
+html.theme-light .bg-\[\#121214\],
+html.theme-light .bg-\[\#121212\],
+html.theme-light .bg-\[\#131313\],
+html.theme-light .bg-\[\#131317\],
+html.theme-light .bg-\[\#14121a\],
+html.theme-light .bg-\[\#141318\],
+html.theme-light .bg-\[\#141414\],
+html.theme-light .bg-\[\#14141b\],
+html.theme-light .bg-\[\#15141a\],
+html.theme-light .bg-\[\#151515\],
+html.theme-light .bg-\[\#17161f\],
+html.theme-light .bg-\[\#17171f\],
+html.theme-light .bg-\[\#181611\],
+html.theme-light .bg-\[\#181720\],
+html.theme-light .bg-\[\#191919\],
+html.theme-light .bg-\[\#1a1414\],
+html.theme-light .bg-\[\#1a1820\],
+html.theme-light .bg-\[\#1a1822\],
+html.theme-light .bg-\[\#1a1922\],
+html.theme-light .bg-\[\#1a1924\],
+html.theme-light .bg-\[\#1a1a1a\],
+html.theme-light .bg-\[\#1a1a1c\],
+html.theme-light .bg-\[\#1b181e\],
+html.theme-light .bg-\[\#1b1924\],
+html.theme-light .bg-\[\#1c1a24\],
+html.theme-light .bg-\[\#1c1b18\],
+html.theme-light .bg-\[\#1c1b24\],
+html.theme-light .bg-\[\#1c1c1f\],
+html.theme-light .bg-\[\#1e1818\],
+html.theme-light .bg-\[\#1e1b26\],
+html.theme-light .bg-\[\#1e1c26\],
+html.theme-light .bg-\[\#1e1c28\],
+html.theme-light .bg-\[\#1e1e1e\],
+html.theme-light .bg-\[\#100f14\],
+html.theme-light .bg-\[\#1a1722\] {
+  background-color: #ffffff !important;
+}
+
+/* Fondos secundarios, sub-tarjetas, métricas, celdas y áreas de contenido */
+html.theme-light .bg-\[\#242424\],
+html.theme-light .bg-\[\#252525\],
+html.theme-light .bg-\[\#222222\],
+html.theme-light .bg-\[\#222\],
+html.theme-light .bg-\[\#1f1e24\],
+html.theme-light .bg-\[\#201e28\],
+html.theme-light .bg-\[\#24222e\],
+html.theme-light .bg-\[\#1c1c1c\],
+html.theme-light .bg-\[\#2d2d2d\],
+html.theme-light .bg-\[\#2e2e2e\],
+html.theme-light .bg-\[\#322f3f\],
+html.theme-light .bg-\[\#303030\],
+html.theme-light .bg-\[\#282828\],
+html.theme-light .bg-\[\#2b2b2b\],
+html.theme-light .bg-\[\#2c2c2c\],
+html.theme-light .bg-\[\#2f2f2f\],
+html.theme-light .bg-\[\#333\],
+html.theme-light .bg-\[\#333333\],
+html.theme-light .bg-\[\#383838\],
+html.theme-light .bg-\[\#2a2a2a\],
+html.theme-light .bg-\[\#292929\],
+html.theme-light .bg-\[\#262626\],
+html.theme-light .bg-\[\#202020\],
+html.theme-light .bg-\[\#212121\],
+html.theme-light .bg-\[\#24211a\],
+html.theme-light .bg-\[\#252528\],
+html.theme-light .bg-\[\#2a2a32\],
+html.theme-light .bg-\[\#302d3d\],
+html.theme-light .bg-\[\#343042\],
+html.theme-light .bg-\[\#1f1d24\],
+html.theme-light .bg-\[\#1f1d26\],
+html.theme-light .bg-\[\#1f1d28\],
+html.theme-light .bg-\[\#1f1f1f\],
+html.theme-light .bg-\[\#1f1f22\],
+html.theme-light .bg-\[\#1f1f24\],
+html.theme-light .bg-\[\#201818\],
+html.theme-light .bg-\[\#201f28\],
+html.theme-light .bg-\[\#22202b\],
+html.theme-light .bg-\[\#22202c\] {
+  background-color: #f8fafc !important;
+}
+
+/* Fondos dorados y ámbar oscuros -> fondos crema dorado cálido */
+html.theme-light .bg-\[\#2b2416\],
+html.theme-light .bg-\[\#292212\],
+html.theme-light .bg-\[\#2a2213\],
+html.theme-light .bg-\[\#383124\],
+html.theme-light .bg-\[\#3f3521\],
+html.theme-light .bg-\[\#1e1b12\],
+html.theme-light .bg-\[\#1e1b15\],
+html.theme-light .bg-\[\#211b11\],
+html.theme-light .bg-\[\#252016\],
+html.theme-light .bg-\[\#352c1b\],
+html.theme-light .bg-\[\#382d17\],
+html.theme-light .bg-\[\#382d18\],
+html.theme-light .bg-\[\#382f1d\],
+html.theme-light .bg-\[\#3a3222\],
+html.theme-light .bg-\[\#3b2a12\],
+html.theme-light .bg-\[\#3d3119\],
+html.theme-light .bg-\[\#3d331e\],
+html.theme-light .bg-\[\#3d321d\],
+html.theme-light .bg-\[\#3d331f\] {
+  background-color: #fef9ee !important;
+}
+
+/* Fondos oscuros de estado de mesas convertidos a tarjetas claras elegantes */
+html.theme-light .bg-\[\#141d17\] {
+  /* Mesa Libre */
+  background-color: #f0fdf4 !important;
+  border-color: #86efac !important;
+}
+html.theme-light .bg-\[\#221316\] {
+  /* Mesa Ocupada */
+  background-color: #fff1f2 !important;
+  border-color: #fca5a5 !important;
+}
+html.theme-light .bg-\[\#1b1522\] {
+  /* Mesa Reservada */
+  background-color: #faf5ff !important;
+  border-color: #d8b4fe !important;
+}
+html.theme-light .bg-\[\#121b24\] {
+  /* Mesa Limpieza */
+  background-color: #f0f9ff !important;
+  border-color: #7dd3fc !important;
+}
+html.theme-light .bg-\[\#171717\] {
+  /* Mesa Mantenimiento */
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+}
+html.theme-light .bg-\[\#241d13\] {
+  /* Mesa Pidiendo Cuenta */
+  background-color: #fffbeb !important;
+  border-color: #fde047 !important;
+}
+html.theme-light .bg-\[\#291e33\] {
+  background-color: #f3e8ff !important;
+  color: #6b21a8 !important;
+}
+html.theme-light .bg-\[\#111e16\] {
+  background-color: #ecfdf5 !important;
+  color: #065f46 !important;
+}
+html.theme-light .bg-\[\#261f13\] {
+  background-color: #fef3c7 !important;
+  color: #78350f !important;
+}
+html.theme-light .bg-\[\#1e1912\] {
+  background-color: #fffbeb !important;
+  border-color: #f59e0b !important;
+}
+html.theme-light .bg-\[\#1f1b14\] {
+  background-color: #fef3c7 !important;
+}
+html.theme-light .bg-\[\#2a2315\] {
+  background-color: #fef9c3 !important;
+  color: #713f12 !important;
+}
+
+/* Tailwind neutral/stone/zinc dark color classes */
+html.theme-light .bg-neutral-900,
+html.theme-light .bg-neutral-950,
+html.theme-light .bg-stone-900,
+html.theme-light .bg-stone-950,
+html.theme-light .bg-zinc-900,
+html.theme-light .bg-zinc-950,
+html.theme-light .bg-slate-900,
+html.theme-light .bg-slate-950,
+html.theme-light .bg-gray-900,
+html.theme-light .bg-gray-950 {
+  background-color: #ffffff !important;
+}
+
+html.theme-light .bg-neutral-800,
+html.theme-light .bg-stone-800,
+html.theme-light .bg-zinc-800,
+html.theme-light .bg-slate-800,
+html.theme-light .bg-gray-800 {
+  background-color: #f8fafc !important;
+}
+
+/* --------------------------------------------------------------------------
+   3. TODOS LOS MODALES Y TELONES DE FONDO (BACKDROPS)
+   -------------------------------------------------------------------------- */
+html.theme-light .fixed.inset-0.bg-black\/95,
+html.theme-light .fixed.inset-0.bg-black\/90,
+html.theme-light .fixed.inset-0.bg-black\/85,
+html.theme-light .fixed.inset-0.bg-black\/80,
+html.theme-light .fixed.inset-0.bg-black\/75,
+html.theme-light .fixed.inset-0.bg-black\/70,
+html.theme-light .fixed.inset-0.bg-black\/65,
+html.theme-light .fixed.inset-0.bg-black\/60,
+html.theme-light .fixed.inset-0.bg-black\/50,
+html.theme-light .fixed.inset-0.bg-black\/40,
+html.theme-light div[class*="fixed inset-0"][class*="bg-black"],
+html.theme-light .fixed.inset-0[class*="bg-black"] {
+  background-color: rgba(15, 23, 42, 0.45) !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+/* Modales completos y tarjetas internas */
+html.theme-light .fixed.inset-0 > div[class*="bg-[#"],
+html.theme-light .fixed.inset-0 > div > div[class*="bg-[#"],
+html.theme-light div[role="dialog"] {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+html.theme-light .fixed.inset-0 > div > div[class*="rounded"],
+html.theme-light .fixed.inset-0 > div[class*="rounded"] {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* --------------------------------------------------------------------------
+   4. BORDES EN MODO CLARO
+   -------------------------------------------------------------------------- */
+html.theme-light .border-\[\#2d281e\],
+html.theme-light .border-\[\#383838\],
+html.theme-light .border-\[\#333333\],
+html.theme-light .border-\[\#383124\],
+html.theme-light .border-\[\#2e2e2e\],
+html.theme-light .border-\[\#2b2735\],
+html.theme-light .border-\[\#242424\],
+html.theme-light .border-\[\#2d2d2d\],
+html.theme-light .border-\[\#3f3521\],
+html.theme-light .border-\[\#24211a\],
+html.theme-light .border-\[\#444444\],
+html.theme-light .border-\[\#2a2a2a\],
+html.theme-light .border-\[\#2b2b2b\],
+html.theme-light .border-\[\#333\],
+html.theme-light .border-\[\#292929\],
+html.theme-light .border-\[\#262626\],
+html.theme-light .border-\[\#444\],
+html.theme-light .border-\[\#555\],
+html.theme-light .border-\[\#555555\],
+html.theme-light .border-\[\#52411e\],
+html.theme-light .border-\[\#292520\],
+html.theme-light .border-\[\#1f1e24\],
+html.theme-light .border-\[\#181818\],
+html.theme-light .border-\[\#222\],
+html.theme-light .border-\[\#232019\],
+html.theme-light .border-\[\#25221c\],
+html.theme-light .border-\[\#26231d\],
+html.theme-light .border-\[\#282828\],
+html.theme-light .border-\[\#2d2922\],
+html.theme-light .border-\[\#332a1e\],
+html.theme-light .border-\[\#3a2f18\],
+html.theme-light .border-\[\#3a3a3a\],
+html.theme-light .border-\[\#3b354d\],
+html.theme-light .border-\[\#3d382e\],
+html.theme-light .border-\[\#3d3d3d\],
+html.theme-light .border-\[\#483d29\],
+html.theme-light .border-\[\#4d3d19\],
+html.theme-light .border-\[\#5c491c\],
+html.theme-light .border-\[\#73531b\],
+html.theme-light .border-\[\#888\],
+html.theme-light .border-stone-800,
+html.theme-light .border-neutral-800,
+html.theme-light .border-zinc-800,
+html.theme-light .border-stone-700,
+html.theme-light .border-neutral-700,
+html.theme-light .border-zinc-700 {
+  border-color: #cbd5e1 !important;
+}
+
+/* Bordes dorados suaves */
+html.theme-light .border-\[\#B77900\]\/40,
+html.theme-light .border-\[\#d4af37\]\/40,
+html.theme-light .border-\[\#D6A21A\]\/40,
+html.theme-light .border-\[\#B77900\]\/60 {
+  border-color: rgba(183, 121, 0, 0.45) !important;
+}
+
+/* --------------------------------------------------------------------------
+   5. TARJETAS Y TIPOGRAFÍA: FONDO CLARO Y LETRA NEGRA NÍTIDA
+   -------------------------------------------------------------------------- */
+/* Títulos y encabezados en tarjetas */
+html.theme-light h1,
+html.theme-light h2,
+html.theme-light h3,
+html.theme-light h4,
+html.theme-light h5,
+html.theme-light .text-\[\#FFFDF5\],
+html.theme-light .text-\[\#faf5ee\],
+html.theme-light .text-\[\#f5f4f8\],
+html.theme-light .text-\[\#fafafa\],
+html.theme-light .text-\[\#f8f8f8\] {
+  color: #000000 !important;
+}
+
+/* Encabezados crema claro -> negro definido */
+html.theme-light .text-\[\#fef3c7\] {
+  color: #000000 !important;
+}
+
+/* Números y métricas principales: negro intenso y visible */
+html.theme-light span.font-black,
+html.theme-light div.font-black,
+html.theme-light p.font-black {
+  color: #000000 !important;
+}
+
+/* Textos secundarios y grisáceos: carbón nítido y legible */
+html.theme-light .text-\[\#d6d3d1\],
+html.theme-light .text-zinc-300,
+html.theme-light .text-stone-300 {
+  color: #1e293b !important;
+}
+
+html.theme-light .text-\[\#a8a29e\],
+html.theme-light .text-zinc-400,
+html.theme-light .text-stone-400 {
+  color: #334155 !important;
+}
+
+html.theme-light .text-\[\#78716c\],
+html.theme-light .text-zinc-500,
+html.theme-light .text-stone-500 {
+  color: #475569 !important;
+}
+
+/* Valores monetarios dorados: ámbar profundo de alto contraste */
+html.theme-light .text-\[\#D6A21A\],
+html.theme-light .text-\[\#d4af37\] {
+  color: #92400e !important;
+}
+
+/* Textos blancos genéricos dentro de tarjetas */
+html.theme-light h1.text-white,
+html.theme-light h2.text-white,
+html.theme-light h3.text-white,
+html.theme-light h4.text-white,
+html.theme-light p.text-white,
+html.theme-light span.text-white:not(button *):not([class*="bg-emerald"]):not([class*="bg-red"]):not([class*="bg-blue"]):not([class*="bg-violet"]):not([class*="badge"]),
+html.theme-light div.text-white:not([class*="bg-emerald"]):not([class*="bg-red"]):not([class*="bg-blue"]):not([class*="bg-violet"]):not([class*="bg-gradient-"]):not(button) {
+  color: #000000 !important;
+}
+
+/* Círculo o cuadro con número de mesa */
+html.theme-light span.w-12.h-12.rounded-2xl {
+  background-color: #fef3c7 !important;
+  color: #78350f !important;
+  border-color: #f59e0b !important;
+}
+
+/* --------------------------------------------------------------------------
+   6. CONTROLES DE FORMULARIO (INPUTS, TEXTAREAS, SELECTS)
+   -------------------------------------------------------------------------- */
+html.theme-light input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]),
+html.theme-light textarea,
+html.theme-light select {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  border-color: #cbd5e1 !important;
+}
+
+html.theme-light input::placeholder,
+html.theme-light textarea::placeholder {
+  color: #64748b !important;
+}
+
+html.theme-light input:focus,
+html.theme-light textarea:focus,
+html.theme-light select:focus {
+  border-color: #b77900 !important;
+  box-shadow: 0 0 0 2px rgba(183, 121, 0, 0.2) !important;
+}
+
+html.theme-light input[type="date"] {
+  color-scheme: light !important;
+}
+
+/* --------------------------------------------------------------------------
+   7. DEGRADADOS Y ENCABEZADOS DE MODAL Y HERO
+   -------------------------------------------------------------------------- */
+html.theme-light [class*="from-[#1b1b1b]"],
+html.theme-light [class*="via-[#1f1b14]"],
+html.theme-light [class*="to-[#171717]"],
+html.theme-light [class*="from-[#16151e]"],
+html.theme-light [class*="via-[#1a1924]"],
+html.theme-light [class*="to-[#14131a]"],
+html.theme-light [class*="from-[#1a1722]"],
+html.theme-light [class*="via-[#16141d]"],
+html.theme-light [class*="to-[#121117]"],
+html.theme-light [class*="from-[#14131a]"],
+html.theme-light [class*="from-[#0e0e12]"],
+html.theme-light [class*="from-[#121117]"],
+html.theme-light [class*="from-[#1c1917]"],
+html.theme-light [class*="from-[#241e14]"],
+html.theme-light [class*="from-[#201c14]"],
+html.theme-light [class*="from-[#2a2213]"],
+html.theme-light [class*="from-[#1e1912]"],
+html.theme-light [class*="from-[#181818]"]:not([class*="from-[#B77900]"]):not([class*="from-[#d4af37]"]) {
+  background-image: linear-gradient(135deg, #ffffff 0%, #faf8f2 100%) !important;
+  background-color: #ffffff !important;
+  border-color: #e2ded4 !important;
+}
+
+/* Clases de fondos oscuros con opacidades (como bg-[#141414]/90 o bg-[#181818]/60) */
+html.theme-light [class*="bg-[#141414]"],
+html.theme-light [class*="bg-[#151515]"],
+html.theme-light [class*="bg-[#14121a]"],
+html.theme-light [class*="bg-[#191919]"],
+html.theme-light [class*="bg-[#1a1a1a]"],
+html.theme-light [class*="bg-[#1e1e1e]"],
+html.theme-light [class*="bg-[#131313]"],
+html.theme-light [class*="bg-[#181818]"],
+html.theme-light [class*="bg-[#242424]"] {
+  background-color: #ffffff !important;
+}
+
+html.theme-light [class*="border-[#2a2a2a]"],
+html.theme-light [class*="border-[#2d2922]"],
+html.theme-light [class*="border-[#2b2b2b]"] {
+  border-color: #e2ded4 !important;
+}
+
+html.theme-light [class*="from-[#1e1e1e]"],
+html.theme-light [class*="from-[#191919]"] {
+  background-image: linear-gradient(to top, rgba(255, 255, 255, 0.85), transparent) !important;
+}
+
+/* --------------------------------------------------------------------------
+   8. BOTONES EN MODO CLARO: FONDO CLARO Y LETRA NEGRA NÍTIDA
+   -------------------------------------------------------------------------- */
+
+/* Por defecto, todo botón en modo claro tiene letra negra visible y borde claro */
+html.theme-light button {
+  color: #000000 !important;
+}
+
+/* Todos los botones con fondos oscuros se transforman en botones claros con letra negra */
+html.theme-light button.bg-\[\#242424\],
+html.theme-light button.bg-\[\#181818\],
+html.theme-light button.bg-\[\#14131a\],
+html.theme-light button.bg-\[\#18171f\],
+html.theme-light button.bg-\[\#1a1a1a\],
+html.theme-light button.bg-\[\#1e1e1e\],
+html.theme-light button.bg-\[\#222\],
+html.theme-light button.bg-\[\#333\],
+html.theme-light button.bg-\[\#252525\],
+html.theme-light button.bg-\[\#2d2d2d\],
+html.theme-light button.bg-\[\#2e2e2e\],
+html.theme-light button.bg-\[\#131313\],
+html.theme-light button[class*="bg-[#242424]"],
+html.theme-light button[class*="bg-[#181818]"],
+html.theme-light button[class*="bg-[#14131a]"],
+html.theme-light button[class*="bg-[#1e1e1e]"],
+html.theme-light button[class*="bg-[#2e2e2e]"],
+html.theme-light button.bg-neutral-800,
+html.theme-light button.bg-stone-800,
+html.theme-light button.bg-zinc-800 {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.06) !important;
+}
+
+html.theme-light button.bg-\[\#242424\]:hover,
+html.theme-light button.bg-\[\#181818\]:hover,
+html.theme-light button.bg-\[\#14131a\]:hover,
+html.theme-light button.bg-\[\#1e1e1e\]:hover,
+html.theme-light button:hover {
+  background-color: #f1f5f9 !important;
+  color: #000000 !important;
+}
+
+/* Botones principales con degradado dorado Colmena: ámbar dorado luminoso y letra negra */
+html.theme-light button.bg-gradient-to-r.from-\[\#B77900\],
+html.theme-light button.bg-gradient-to-br.from-\[\#B77900\],
+html.theme-light button[class*="from-[#B77900]"],
+html.theme-light button[class*="from-[#d4af37]"],
+html.theme-light button.bg-\[\#B77900\],
+html.theme-light button.bg-\[\#d4af37\],
+html.theme-light button.bg-\[\#D6A21A\] {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b) !important;
+  color: #000000 !important;
+  font-weight: 900 !important;
+  border-color: #d97706 !important;
+  box-shadow: 0 2px 4px 0 rgba(217, 119, 6, 0.25) !important;
+}
+
+/* Botones tipo "Agregar Productos" y botones ámbar secundarios */
+html.theme-light button[class*="from-[#292212]"],
+html.theme-light button[class*="bg-[#292212]"],
+html.theme-light button[class*="bg-[#2b2416]"],
+html.theme-light button[class*="bg-[#1f1b14]"] {
+  background-color: #fef3c7 !important;
+  color: #000000 !important;
+  font-weight: 800 !important;
+  border-color: #f59e0b !important;
+}
+
+/* Textos dentro de botones: asegurar que todos sean negros */
+html.theme-light button span,
+html.theme-light button p,
+html.theme-light button div,
+html.theme-light button span.text-\[\#FFFDF5\],
+html.theme-light button span.text-\[\#fef3c7\],
+html.theme-light button span.text-\[\#d6d3d1\],
+html.theme-light button span.text-\[\#a8a29e\],
+html.theme-light button span.text-zinc-400,
+html.theme-light button span.text-zinc-300,
+html.theme-light button span.text-white:not([class*="bg-"]):not([class*="badge"]),
+html.theme-light button.text-\[\#FFFDF5\],
+html.theme-light button.text-\[\#fef3c7\],
+html.theme-light button.text-\[\#d6d3d1\],
+html.theme-light button.text-\[\#a8a29e\],
+html.theme-light button.text-white:not([class*="bg-emerald"]):not([class*="bg-red"]):not([class*="bg-blue"]) {
+  color: #000000 !important;
+}
+
+/* Pestañas / Filtros activos: fondo crema dorado y letra negra */
+html.theme-light button[class*="border-[#D6A21A]"],
+html.theme-light button[class*="border-[#B77900]"] {
+  background-color: #fef3c7 !important;
+  color: #000000 !important;
+  font-weight: 900 !important;
+  border-color: #d97706 !important;
+}
+
+/* Botones de acción positiva / cobro (Verde): legibilidad garantizada */
+html.theme-light button.bg-emerald-600,
+html.theme-light button[class*="from-emerald-600"],
+html.theme-light button[class*="bg-emerald-600"] {
+  background: linear-gradient(135deg, #10b981, #059669) !important;
+  color: #ffffff !important;
+  font-weight: 900 !important;
+}
+html.theme-light button[class*="from-emerald-600"] span,
+html.theme-light button.bg-emerald-600 span {
+  color: #ffffff !important;
+}
+
+/* Botones secundarios en verde */
+html.theme-light button.bg-emerald-950,
+html.theme-light button[class*="bg-emerald-950"] {
+  background-color: #d1fae5 !important;
+  color: #064e3b !important;
+  border-color: #6ee7b7 !important;
+  font-weight: 800 !important;
+}
+html.theme-light button[class*="bg-emerald-950"] span {
+  color: #064e3b !important;
+}
+
+/* Botones de peligro / anulación / cierre (Rojo) */
+html.theme-light button.bg-red-600,
+html.theme-light button.bg-rose-600,
+html.theme-light button[class*="bg-red-600"] {
+  background-color: #dc2626 !important;
+  color: #ffffff !important;
+  font-weight: 900 !important;
+}
+html.theme-light button.bg-red-950,
+html.theme-light button.bg-rose-950,
+html.theme-light button[class*="bg-red-950"],
+html.theme-light button[class*="bg-rose-950"] {
+  background-color: #fee2e2 !important;
+  color: #991b1b !important;
+  border-color: #fca5a5 !important;
+  font-weight: 800 !important;
+}
+html.theme-light button[class*="bg-red-950"] span,
+html.theme-light button[class*="bg-rose-950"] span {
+  color: #991b1b !important;
+}
+
+/* Botones de avance de despacho (Azul, Púrpura, Naranja) */
+html.theme-light button.bg-blue-950,
+html.theme-light button[class*="bg-blue-950"] {
+  background-color: #dbeafe !important;
+  color: #1e3a8a !important;
+  border-color: #93c5fd !important;
+  font-weight: 800 !important;
+}
+html.theme-light button[class*="bg-blue-950"] span {
+  color: #1e3a8a !important;
+}
+
+html.theme-light button.bg-purple-950,
+html.theme-light button[class*="bg-purple-950"] {
+  background-color: #f3e8ff !important;
+  color: #581c87 !important;
+  border-color: #d8b4fe !important;
+  font-weight: 800 !important;
+}
+html.theme-light button[class*="bg-purple-950"] span {
+  color: #581c87 !important;
+}
+
+html.theme-light button.bg-orange-950,
+html.theme-light button[class*="bg-orange-950"] {
+  background-color: #ffedd5 !important;
+  color: #7c2d12 !important;
+  border-color: #fdba74 !important;
+  font-weight: 800 !important;
+}
+html.theme-light button[class*="bg-orange-950"] span {
+  color: #7c2d12 !important;
+}
+
+/* --------------------------------------------------------------------------
+   9. INSIGNIAS Y CHIPS DE ESTADO (ROJO, VERDE, ÁMBAR, AZUL, PÚRPURA, NARANJA)
+   -------------------------------------------------------------------------- */
+/* Rojo y Rosa / Desactivado / Inactivo / Mesa Ocupada */
+html.theme-light .bg-red-950\/60,
+html.theme-light .bg-red-950\/40,
+html.theme-light .bg-red-950\/80,
+html.theme-light .bg-red-950\/20,
+html.theme-light .bg-red-950,
+html.theme-light .bg-rose-950\/60,
+html.theme-light .bg-rose-950\/40,
+html.theme-light .bg-rose-950\/80,
+html.theme-light .bg-rose-950 {
+  background-color: #fee2e2 !important;
+  color: #991b1b !important;
+  border-color: #fca5a5 !important;
+}
+html.theme-light .text-red-200,
+html.theme-light .text-red-300,
+html.theme-light .text-red-400,
+html.theme-light .text-rose-200,
+html.theme-light .text-rose-300,
+html.theme-light .text-rose-400 {
+  color: #b91c1c !important;
+}
+
+/* Verde y Emerald / Activo / Pagado / Libre */
+html.theme-light .bg-emerald-950\/60,
+html.theme-light .bg-emerald-950\/40,
+html.theme-light .bg-emerald-950\/80,
+html.theme-light .bg-emerald-950,
+html.theme-light .bg-green-950\/60,
+html.theme-light .bg-green-950\/40,
+html.theme-light .bg-green-950 {
+  background-color: #d1fae5 !important;
+  color: #065f46 !important;
+  border-color: #6ee7b7 !important;
+}
+html.theme-light .text-emerald-300,
+html.theme-light .text-emerald-400,
+html.theme-light .text-green-300,
+html.theme-light .text-green-400 {
+  color: #047857 !important;
+}
+
+/* Ámbar / Pendiente / Turno */
+html.theme-light .bg-amber-950\/60,
+html.theme-light .bg-amber-950\/40,
+html.theme-light .bg-amber-950\/80,
+html.theme-light .bg-amber-950\/20,
+html.theme-light .bg-amber-950 {
+  background-color: #fef3c7 !important;
+  color: #92400e !important;
+  border-color: #fcd34d !important;
+}
+html.theme-light .text-amber-300,
+html.theme-light .text-amber-400 {
+  color: #b45309 !important;
+}
+
+/* Azul y Sky / Domicilio / Cuenta pedida / Limpieza */
+html.theme-light .bg-blue-950\/60,
+html.theme-light .bg-blue-950\/40,
+html.theme-light .bg-blue-950\/80,
+html.theme-light .bg-blue-950,
+html.theme-light .bg-sky-950\/60,
+html.theme-light .bg-sky-950\/40,
+html.theme-light .bg-sky-950 {
+  background-color: #dbeafe !important;
+  color: #1e40af !important;
+  border-color: #93c5fd !important;
+}
+html.theme-light .text-blue-300,
+html.theme-light .text-blue-400,
+html.theme-light .text-sky-300,
+html.theme-light .text-sky-400 {
+  color: #1d4ed8 !important;
+}
+
+/* Púrpura y Violeta / Reservada / Layaway */
+html.theme-light .bg-purple-950\/60,
+html.theme-light .bg-purple-950\/40,
+html.theme-light .bg-purple-950\/80,
+html.theme-light .bg-purple-950,
+html.theme-light .bg-violet-950\/60,
+html.theme-light .bg-violet-950\/40,
+html.theme-light .bg-violet-950 {
+  background-color: #f3e8ff !important;
+  color: #6b21a8 !important;
+  border-color: #d8b4fe !important;
+}
+html.theme-light .text-purple-300,
+html.theme-light .text-purple-400,
+html.theme-light .text-violet-300,
+html.theme-light .text-violet-400 {
+  color: #7e22ce !important;
+}
+
+/* Naranja / Despacho */
+html.theme-light .bg-orange-950\/60,
+html.theme-light .bg-orange-950\/40,
+html.theme-light .bg-orange-950\/80,
+html.theme-light .bg-orange-950 {
+  background-color: #ffedd5 !important;
+  color: #9a3412 !important;
+  border-color: #fdba74 !important;
+}
+html.theme-light .text-orange-300,
+html.theme-light .text-orange-400 {
+  color: #c2410c !important;
+}
+
+/* --------------------------------------------------------------------------
+   10. SOMBRAS Y RELIEVE EN MODO CLARO
+   -------------------------------------------------------------------------- */
+html.theme-light .shadow-2xl,
+html.theme-light .shadow-xl {
+  box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04) !important;
+}
+
+html.theme-light .shadow-md,
+html.theme-light .shadow-lg {
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.06), 0 2px 4px -2px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* --------------------------------------------------------------------------
+   11. TABLAS Y ENCABEZADOS DE DATOS
+   -------------------------------------------------------------------------- */
+html.theme-light table th {
+  background-color: #f1f5f9 !important;
+  color: #000000 !important;
+  border-color: #cbd5e1 !important;
+  font-weight: 800 !important;
+}
+
+html.theme-light table td {
+  border-color: #e2e8f0 !important;
+  color: #000000 !important;
+}
+
+html.theme-light table tr:hover td {
+  background-color: rgba(245, 158, 11, 0.08) !important;
+}
+
+/* --------------------------------------------------------------------------
+   12. ETIQUETAS DE CÓDIGO Y SKU (ENT-EMP-002, BADGES, TIEMPOS, CÓDIGOS)
+   -------------------------------------------------------------------------- */
+/* Badges de SKU (ej. ENT-EMP-002, HBG-COL-001) */
+html.theme-light .sku-badge,
+html.theme-light span.sku-badge,
+html.theme-light span.font-mono[class*="border"],
+html.theme-light span.font-mono.border,
+html.theme-light div.font-mono[class*="border"] {
+  background-color: #fef3c7 !important;
+  color: #78350f !important;
+  border-color: #d97706 !important;
+  font-weight: 800 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Badges sobre imágenes en tarjetas (tiempo de preparación) */
+html.theme-light .prep-time-badge,
+html.theme-light div[class*="prep-time-badge"],
+html.theme-light span[class*="prep-time-badge"] {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+  font-weight: 700 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12) !important;
+}
+
+html.theme-light .prep-time-badge *,
+html.theme-light div[class*="prep-time-badge"] * {
+  color: #0f172a !important;
+}
+
+html.theme-light .prep-time-badge svg,
+html.theme-light div[class*="prep-time-badge"] svg {
+  color: #b45309 !important;
+}
+
+/* Badges inactivos o secundarios en tarjetas */
+html.theme-light span.bg-zinc-800.text-zinc-400,
+html.theme-light span[class*="bg-zinc-800"] {
+  background-color: #f1f5f9 !important;
+  color: #334155 !important;
+  border-color: #cbd5e1 !important;
+  font-weight: 800 !important;
+}
+
+/* Códigos font-mono generales en tablas y listas */
+html.theme-light td.font-mono,
+html.theme-light span.font-mono {
+  color: #0f172a !important;
+  font-weight: 700 !important;
+}
+
+/* Códigos de SKU en tablas y modales con color dorado */
+html.theme-light td.font-mono.text-\[\#D6A21A\],
+html.theme-light td.font-mono .text-\[\#D6A21A\],
+html.theme-light span.font-mono.text-\[\#D6A21A\],
+html.theme-light span.font-mono.text-\[\#d4af37\] {
+  color: #78350f !important;
+  font-weight: 800 !important;
+}
+
+/* Respetar estados verde y rojo en mono */
+html.theme-light .font-mono.text-emerald-400,
+html.theme-light .font-mono.text-emerald-500,
+html.theme-light .font-mono.text-emerald-600 {
+  color: #047857 !important;
+}
+
+html.theme-light .font-mono.text-red-400,
+html.theme-light .font-mono.text-red-500,
+html.theme-light .font-mono.text-red-600 {
+  color: #b91c1c !important;
+}
+
+/* Mejor contraste para textos secundarios en tarjetas */
+html.theme-light .text-zinc-400,
+html.theme-light .text-stone-400,
+html.theme-light .text-neutral-400 {
+  color: #1e293b !important;
+}
+
+html.theme-light .text-zinc-500,
+html.theme-light .text-stone-500,
+html.theme-light .text-neutral-500,
+html.theme-light .text-\[\#a8a29e\],
+html.theme-light .text-\[\#78716c\] {
+  color: #334155 !important;
+}
+
+/* Contenedor de miniaturas sobre tarjetas de producto */
+html.theme-light div.absolute[class*="bg-black/70"] {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+/* Inputs con font-mono (SKU, códigos, montos) */
+html.theme-light input.font-mono {
+  color: #0f172a !important;
+  font-weight: 700 !important;
+}
+
+

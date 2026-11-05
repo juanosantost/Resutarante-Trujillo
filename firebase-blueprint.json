@@ -1,0 +1,307 @@
+{
+  "entities": {
+    "Branch": {
+      "title": "Branch",
+      "description": "Sucursal del restaurante con configuración fiscal y de recibos",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 120 },
+        "nit": { "type": "string", "maxLength": 30 },
+        "address": { "type": "string", "maxLength": 200 },
+        "phone": { "type": "string", "maxLength": 50 },
+        "city": { "type": "string", "maxLength": 50 },
+        "logoUrl": { "type": "string" },
+        "taxRate": { "type": "number" },
+        "isActive": { "type": "boolean" },
+        "receiptConfig": { "type": "object" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "nit", "address", "phone", "isActive"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Usuario del sistema con control de roles y sucursales autorizadas",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "firebaseUid": { "type": "string" },
+        "fullName": { "type": "string", "maxLength": 150 },
+        "documentNumber": { "type": "string", "maxLength": 30 },
+        "email": { "type": "string", "maxLength": 150 },
+        "role": { "type": "string", "enum": ["administrador", "supervisor", "cajero", "mesero", "cocina", "domiciliario"] },
+        "authorizedBranchIds": { "type": "array" },
+        "isActive": { "type": "boolean" },
+        "isDeleted": { "type": "boolean" },
+        "deletedAt": { "type": "string" },
+        "deletedBy": { "type": "string" },
+        "deleteReason": { "type": "string", "maxLength": 200 },
+        "createdAt": { "type": "string" },
+        "lastLoginAt": { "type": "string" },
+        "phone": { "type": "string", "maxLength": 30 }
+      },
+      "required": ["id", "fullName", "documentNumber", "email", "role", "authorizedBranchIds", "isActive"]
+    },
+    "Table": {
+      "title": "Table",
+      "description": "Mesa de una sucursal",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "branchId": { "type": "string" },
+        "number": { "type": "integer" },
+        "zone": { "type": "string", "maxLength": 50 },
+        "capacity": { "type": "integer" },
+        "status": { "type": "string", "enum": ["libre", "ocupada", "cuenta_solicitada", "reservada"] },
+        "currentOrderId": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "branchId", "number", "zone", "status"]
+    },
+    "MenuCategory": {
+      "title": "MenuCategory",
+      "description": "Categoría de la carta",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 60 },
+        "order": { "type": "integer" },
+        "icon": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "name"]
+    },
+    "MenuItem": {
+      "title": "MenuItem",
+      "description": "Plato o bebida de la carta",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 120 },
+        "description": { "type": "string", "maxLength": 300 },
+        "categoryId": { "type": "string" },
+        "price": { "type": "number" },
+        "station": { "type": "string", "enum": ["cocina_caliente", "parrilla", "bar_bebidas", "postres"] },
+        "prepTimeMinutes": { "type": "integer" },
+        "recipe": { "type": "array" },
+        "isAvailable": { "type": "boolean" }
+      },
+      "required": ["id", "name", "categoryId", "price", "station", "isAvailable"]
+    },
+    "InventoryItem": {
+      "title": "InventoryItem",
+      "description": "Ingrediente o insumo de inventario por sucursal",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "branchId": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "unit": { "type": "string", "enum": ["kg", "g", "ml", "lt", "und", "porc"] },
+        "currentStock": { "type": "number" },
+        "minStock": { "type": "number" },
+        "costPerUnit": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "branchId", "name", "unit", "currentStock", "minStock"]
+    },
+    "InventoryMovement": {
+      "title": "InventoryMovement",
+      "description": "Kardex de trazabilidad de inventario",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "branchId": { "type": "string" },
+        "itemId": { "type": "string" },
+        "itemName": { "type": "string" },
+        "type": { "type": "string", "enum": ["compra_entrada", "consumo_comanda", "merma", "ajuste_manual"] },
+        "quantity": { "type": "number" },
+        "previousStock": { "type": "number" },
+        "newStock": { "type": "number" },
+        "reason": { "type": "string", "maxLength": 200 },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "branchId", "itemId", "type", "quantity", "previousStock", "newStock", "createdAt"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Pedido comercial",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "branchId": { "type": "string" },
+        "orderNumber": { "type": "integer" },
+        "type": { "type": "string", "enum": ["mesa", "mostrador", "para_llevar", "domicilio"] },
+        "tableId": { "type": "string" },
+        "tableName": { "type": "string" },
+        "customerName": { "type": "string", "maxLength": 100 },
+        "customerPhone": { "type": "string", "maxLength": 30 },
+        "customerAddress": { "type": "string", "maxLength": 200 },
+        "status": { "type": "string", "enum": ["abierto", "facturado", "cancelado"] },
+        "subtotal": { "type": "number" },
+        "tax": { "type": "number" },
+        "tip": { "type": "number" },
+        "total": { "type": "number" },
+        "waiterId": { "type": "string" },
+        "waiterName": { "type": "string" },
+        "notes": { "type": "string", "maxLength": 250 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "branchId", "orderNumber", "type", "status", "subtotal", "total", "createdAt"]
+    },
+    "Comanda": {
+      "title": "Comanda",
+      "description": "Comanda de preparación para cocina por rondas",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "branchId": { "type": "string" },
+        "orderId": { "type": "string" },
+        "orderNumber": { "type": "integer" },
+        "tableName": { "type": "string" },
+        "orderType": { "type": "string" },
+        "roundNumber": { "type": "integer" },
+        "status": { "type": "string", "enum": ["nueva", "en_preparacion", "lista", "servida", "cancelada"] },
+        "items": { "type": "array" },
+        "waiterName": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "branchId", "orderId", "orderNumber", "roundNumber", "status", "items", "createdAt"]
+    },
+    "CashShift": {
+      "title": "CashShift",
+      "description": "Turno de caja para cuadre y arqueo",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "branchId": { "type": "string" },
+        "cashierId": { "type": "string" },
+        "cashierName": { "type": "string" },
+        "openedAt": { "type": "string" },
+        "closedAt": { "type": "string" },
+        "initialCash": { "type": "number" },
+        "salesCash": { "type": "number" },
+        "salesCard": { "type": "number" },
+        "salesTransfer": { "type": "number" },
+        "inflowCash": { "type": "number" },
+        "outflowCash": { "type": "number" },
+        "expectedCash": { "type": "number" },
+        "actualCash": { "type": "number" },
+        "difference": { "type": "number" },
+        "status": { "type": "string", "enum": ["abierto", "cerrado"] },
+        "notes": { "type": "string", "maxLength": 300 }
+      },
+      "required": ["id", "branchId", "cashierId", "openedAt", "initialCash", "status"]
+    },
+    "CashMovement": {
+      "title": "CashMovement",
+      "description": "Ingreso o egreso puntual de caja menor",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "branchId": { "type": "string" },
+        "shiftId": { "type": "string" },
+        "type": { "type": "string", "enum": ["ingreso", "egreso"] },
+        "amount": { "type": "number" },
+        "reason": { "type": "string", "maxLength": 200 },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "branchId", "shiftId", "type", "amount", "reason", "createdAt"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Cobro registrado para una orden",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "branchId": { "type": "string" },
+        "orderId": { "type": "string" },
+        "orderNumber": { "type": "integer" },
+        "shiftId": { "type": "string" },
+        "method": { "type": "string", "enum": ["efectivo", "tarjeta", "nequi_daviplata", "transferencia", "mixto"] },
+        "amountPaid": { "type": "number" },
+        "subtotal": { "type": "number" },
+        "tax": { "type": "number" },
+        "tipAmount": { "type": "number" },
+        "total": { "type": "number" },
+        "change": { "type": "number" },
+        "cashierId": { "type": "string" },
+        "cashierName": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerNitOrCedula": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "branchId", "orderId", "method", "total", "createdAt"]
+    },
+    "MenuConfig": {
+      "title": "MenuConfig",
+      "description": "Configuración de secciones, orden y permisos de roles para los botones de navegación",
+      "type": "object",
+      "properties": {
+        "sections": { "type": "array" },
+        "buttons": { "type": "array" },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["sections", "buttons"]
+    }
+  },
+  "firestore": {
+    "/system_settings/{settingId}": {
+      "schema": { "$ref": "MenuConfig" },
+      "description": "Ajustes globales del sistema, incluyendo menú y botones"
+    },
+    "/branches/{branchId}": {
+      "schema": { "$ref": "Branch" },
+      "description": "Sucursales registradas con NIT y recibos"
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "UserProfile" },
+      "description": "Usuarios, documentos y sucursales autorizadas"
+    },
+    "/tables/{tableId}": {
+      "schema": { "$ref": "Table" },
+      "description": "Mesas del restaurante"
+    },
+    "/menuCategories/{categoryId}": {
+      "schema": { "$ref": "MenuCategory" },
+      "description": "Categorías de la carta"
+    },
+    "/menuItems/{itemId}": {
+      "schema": { "$ref": "MenuItem" },
+      "description": "Platos y productos del menú"
+    },
+    "/inventoryItems/{itemId}": {
+      "schema": { "$ref": "InventoryItem" },
+      "description": "Insumos de inventario"
+    },
+    "/inventoryMovements/{movementId}": {
+      "schema": { "$ref": "InventoryMovement" },
+      "description": "Kardex de inventario"
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "Order" },
+      "description": "Pedidos comerciales"
+    },
+    "/comandas/{comandaId}": {
+      "schema": { "$ref": "Comanda" },
+      "description": "Comandas de cocina"
+    },
+    "/cashShifts/{shiftId}": {
+      "schema": { "$ref": "CashShift" },
+      "description": "Turnos de caja y arqueo"
+    },
+    "/cashMovements/{movementId}": {
+      "schema": { "$ref": "CashMovement" },
+      "description": "Movimientos de caja menor"
+    },
+    "/payments/{paymentId}": {
+      "schema": { "$ref": "Payment" },
+      "description": "Registros de pagos y facturación"
+    }
+  }
+}

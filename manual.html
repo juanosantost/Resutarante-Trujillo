@@ -1,0 +1,1607 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manual de Usuario y Operación · Sistema Colmena Restaurante POS</title>
+  <meta name="description" content="Manual de usuario detallado paso a paso para el funcionamiento integral del Sistema Colmena Restaurante POS.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-main: #0c0b10;
+      --bg-card: #14131a;
+      --bg-elevated: #1a1924;
+      --border-color: #2b2735;
+      --border-gold: #73531b;
+      --gold-primary: #d4af37;
+      --gold-light: #f3e5ab;
+      --gold-dark: #916e16;
+      --text-main: #f5f4f8;
+      --text-muted: #9f9baa;
+      --text-dim: #6c687a;
+      --emerald-accent: #10b981;
+      --emerald-bg: #064e3b;
+      --amber-accent: #f59e0b;
+      --amber-bg: #78350f;
+      --red-accent: #ef4444;
+      --red-bg: #7f1d1d;
+      --blue-accent: #3b82f6;
+      --blue-bg: #1e3a8a;
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background-color: var(--bg-main);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* BARRA SUPERIOR */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(12, 11, 16, 0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-color);
+      padding: 0.75rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .topbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .brand-icon {
+      width: 2.25rem;
+      height: 2.25rem;
+      background: linear-gradient(135deg, #d4af37, #916e16);
+      border-radius: 0.6rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+      color: #0c0b10;
+      font-weight: 900;
+      box-shadow: 0 4px 12px rgba(212, 175, 55, 0.25);
+    }
+
+    .brand-title {
+      font-size: 1rem;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      color: var(--gold-light);
+    }
+
+    .brand-sub {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .search-box {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .search-input {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 0.5rem;
+      padding: 0.5rem 0.75rem 0.5rem 2rem;
+      font-size: 0.8rem;
+      color: var(--text-main);
+      width: 240px;
+      transition: all 0.2s;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: var(--gold-primary);
+      box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.15);
+      width: 300px;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 0.7rem;
+      color: var(--text-dim);
+      font-size: 0.85rem;
+      pointer-events: none;
+    }
+
+    .btn-action {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 0.5rem 0.85rem;
+      border-radius: 0.5rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+
+    .btn-action:hover {
+      border-color: var(--gold-primary);
+      color: var(--gold-light);
+      background: var(--bg-elevated);
+    }
+
+    .btn-action.btn-gold {
+      background: linear-gradient(135deg, #d4af37, #b89728);
+      color: #0c0b10;
+      border-color: #d4af37;
+      font-weight: 800;
+    }
+
+    .btn-action.btn-gold:hover {
+      filter: brightness(1.1);
+      box-shadow: 0 4px 14px rgba(212, 175, 55, 0.3);
+    }
+
+    /* CONTENEDOR PRINCIPAL CON SIDEBAR */
+    .layout-container {
+      display: flex;
+      max-width: 1440px;
+      margin: 0 auto;
+      min-height: calc(100vh - 65px);
+    }
+
+    /* SIDEBAR DE NAVEGACIÓN */
+    .sidebar-nav {
+      width: 290px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 65px;
+      height: calc(100vh - 65px);
+      overflow-y: auto;
+      padding: 1.5rem 1rem 3rem 1.5rem;
+      border-right: 1px solid var(--border-color);
+      background: var(--bg-main);
+    }
+
+    .sidebar-section-title {
+      font-size: 0.65rem;
+      font-weight: 800;
+      color: var(--gold-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin: 1.25rem 0 0.5rem 0.5rem;
+    }
+
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.45rem 0.65rem;
+      border-radius: 0.45rem;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.8rem;
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+
+    .nav-link:hover {
+      color: var(--text-main);
+      background: var(--bg-card);
+      border-left: 2px solid var(--gold-primary);
+    }
+
+    .nav-link.active {
+      color: var(--gold-light);
+      background: var(--bg-card);
+      font-weight: 700;
+      border-left: 2px solid var(--gold-primary);
+    }
+
+    .nav-badge {
+      font-size: 0.65rem;
+      margin-left: auto;
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+    }
+
+    /* CONTENIDO DEL MANUAL */
+    .main-content {
+      flex: 1;
+      padding: 2.5rem 3rem 6rem;
+      max-width: 1050px;
+    }
+
+    /* HERO */
+    .hero-banner {
+      background: linear-gradient(180deg, rgba(212, 175, 55, 0.08) 0%, rgba(20, 19, 26, 0.4) 100%);
+      border: 1px solid var(--border-gold);
+      border-radius: 1rem;
+      padding: 2.5rem;
+      margin-bottom: 3rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-banner::after {
+      content: "⬡";
+      position: absolute;
+      right: -2rem;
+      top: -3rem;
+      font-size: 14rem;
+      color: rgba(212, 175, 55, 0.03);
+      font-weight: 900;
+      pointer-events: none;
+    }
+
+    .hero-tag {
+      font-size: 0.7rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--gold-primary);
+      margin-bottom: 0.75rem;
+      display: inline-block;
+    }
+
+    .hero-title {
+      font-size: 2.25rem;
+      font-weight: 800;
+      line-height: 1.2;
+      color: #fff;
+      margin-bottom: 1rem;
+    }
+
+    .hero-desc {
+      font-size: 1rem;
+      color: var(--text-muted);
+      max-width: 760px;
+      line-height: 1.7;
+      margin-bottom: 1.5rem;
+    }
+
+    .hero-specs {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid rgba(212, 175, 55, 0.2);
+    }
+
+    .spec-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+
+    .spec-label {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .spec-value {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--gold-light);
+    }
+
+    /* SECCIONES Y ENCABEZADOS */
+    .manual-section {
+      margin-bottom: 4rem;
+      scroll-margin-top: 90px;
+    }
+
+    .section-header {
+      margin-bottom: 1.75rem;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 1rem;
+    }
+
+    .section-num {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--gold-primary);
+      display: block;
+      margin-bottom: 0.25rem;
+    }
+
+    .section-title {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 0.5rem;
+    }
+
+    .section-subtitle {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* CAJAS Y TARJETAS */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .card.highlight-gold {
+      border-color: var(--border-gold);
+      background: linear-gradient(180deg, rgba(212, 175, 55, 0.05) 0%, var(--bg-card) 100%);
+    }
+
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--gold-light);
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* PASOS ENUMERADOS */
+    .step-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      margin: 1.5rem 0;
+    }
+
+    .step-item {
+      display: flex;
+      gap: 1.25rem;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-color);
+      border-radius: 0.65rem;
+      padding: 1.25rem;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+
+    .step-item:hover {
+      border-color: rgba(212, 175, 55, 0.5);
+      transform: translateY(-1px);
+    }
+
+    .step-badge {
+      width: 2.25rem;
+      height: 2.25rem;
+      flex-shrink: 0;
+      background: var(--bg-card);
+      border: 1px solid var(--border-gold);
+      border-radius: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      font-weight: 800;
+      color: var(--gold-primary);
+    }
+
+    .step-content {
+      flex: 1;
+    }
+
+    .step-heading {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 0.35rem;
+    }
+
+    .step-text {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* MOCKUPS VISUALES SVG Y SIMULADORES */
+    .mockup-container {
+      background: #09090d;
+      border: 1px solid var(--border-color);
+      border-radius: 0.75rem;
+      overflow: hidden;
+      margin: 1.5rem 0;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    .mockup-header {
+      background: #14131a;
+      border-bottom: 1px solid var(--border-color);
+      padding: 0.6rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .mockup-dots {
+      display: flex;
+      gap: 0.35rem;
+    }
+
+    .mockup-dot {
+      width: 0.65rem;
+      height: 0.65rem;
+      border-radius: 50%;
+      background: #2b2735;
+    }
+
+    .mockup-dot.red { background: #ef4444; }
+    .mockup-dot.yellow { background: #f59e0b; }
+    .mockup-dot.green { background: #10b981; }
+
+    .mockup-title {
+      font-size: 0.7rem;
+      font-family: var(--font-mono);
+      color: var(--text-dim);
+    }
+
+    .mockup-body {
+      padding: 1.25rem;
+    }
+
+    /* TIRILLA TERMICA POS ESTILO REAL */
+    .receipt-paper {
+      background: #fdfcf7;
+      color: #1a1a1a;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      line-height: 1.4;
+      padding: 1.5rem 1.25rem;
+      border-radius: 0.25rem;
+      max-width: 380px;
+      margin: 1.5rem auto;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0,0,0,0.05);
+      position: relative;
+    }
+
+    .receipt-paper::before, .receipt-paper::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 6px;
+      background-size: 12px 6px;
+    }
+
+    .receipt-paper::before {
+      top: -6px;
+      background-image: radial-gradient(circle at 6px 6px, transparent 6px, #fdfcf7 6px);
+    }
+
+    .receipt-paper::after {
+      bottom: -6px;
+      background-image: radial-gradient(circle at 6px 0, transparent 6px, #fdfcf7 6px);
+    }
+
+    .receipt-center {
+      text-align: center;
+    }
+
+    .receipt-logo {
+      font-weight: 900;
+      font-size: 1.1rem;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.2rem;
+    }
+
+    .receipt-divider {
+      border-top: 1px dashed #666;
+      margin: 0.6rem 0;
+    }
+
+    .receipt-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    .receipt-bold {
+      font-weight: 700;
+    }
+
+    .receipt-total {
+      font-size: 0.95rem;
+      font-weight: 900;
+      border-top: 1px solid #1a1a1a;
+      padding-top: 0.3rem;
+      margin-top: 0.3rem;
+    }
+
+    /* TABLAS INFORMATIVAS */
+    .table-wrapper {
+      overflow-x: auto;
+      margin: 1.25rem 0;
+      border: 1px solid var(--border-color);
+      border-radius: 0.65rem;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+      text-align: left;
+    }
+
+    .data-table th {
+      background: var(--bg-elevated);
+      color: var(--gold-light);
+      padding: 0.75rem 1rem;
+      font-weight: 700;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .data-table td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border-color);
+      color: var(--text-muted);
+    }
+
+    .data-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .data-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+      color: var(--text-main);
+    }
+
+    /* CALLOUTS Y AVISOS */
+    .callout {
+      border-left: 3px solid var(--gold-primary);
+      background: rgba(212, 175, 55, 0.06);
+      padding: 1rem 1.25rem;
+      border-radius: 0 0.5rem 0.5rem 0;
+      margin: 1.25rem 0;
+      font-size: 0.85rem;
+    }
+
+    .callout.info {
+      border-left-color: var(--blue-accent);
+      background: rgba(59, 130, 246, 0.06);
+    }
+
+    .callout.warning {
+      border-left-color: var(--amber-accent);
+      background: rgba(245, 158, 11, 0.08);
+    }
+
+    .callout.success {
+      border-left-color: var(--emerald-accent);
+      background: rgba(16, 185, 129, 0.06);
+    }
+
+    .callout-title {
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 0.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    /* ROLES BADGES */
+    .role-tag {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 0.3rem;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .role-admin { background: rgba(212, 175, 55, 0.15); color: var(--gold-light); border: 1px solid var(--border-gold); }
+    .role-mesero { background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.4); }
+    .role-cocina { background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.4); }
+
+    /* BOTON VOLVER ARRIBA */
+    .back-to-top {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--gold-primary);
+      width: 2.75rem;
+      height: 2.75rem;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+      text-decoration: none;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+      transition: all 0.2s;
+    }
+
+    .back-to-top:hover {
+      background: var(--gold-primary);
+      color: #0c0b10;
+      transform: translateY(-3px);
+    }
+
+    /* ESTILOS DE IMPRESIÓN (PDF) */
+    @media print {
+      body {
+        background: #fff !important;
+        color: #111 !important;
+      }
+
+      .topbar, .sidebar-nav, .back-to-top, .btn-action {
+        display: none !important;
+      }
+
+      .layout-container {
+        display: block !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+      }
+
+      .main-content {
+        padding: 0 !important;
+        max-width: 100% !important;
+      }
+
+      .hero-banner {
+        background: #f5f5f5 !important;
+        border: 2px solid #ccc !important;
+        color: #111 !important;
+      }
+
+      .hero-title, .hero-tag, .section-title, .step-heading, .card-title {
+        color: #111 !important;
+      }
+
+      .card, .step-item, .mockup-container {
+        background: #fff !important;
+        border: 1px solid #ddd !important;
+        box-shadow: none !important;
+        color: #111 !important;
+        page-break-inside: avoid;
+      }
+
+      .receipt-paper {
+        border: 1px solid #999 !important;
+        box-shadow: none !important;
+      }
+
+      .callout {
+        background: #f9f9f9 !important;
+        border-left: 3px solid #333 !important;
+        color: #111 !important;
+      }
+    }
+
+    @media (max-width: 900px) {
+      .sidebar-nav {
+        display: none;
+      }
+      .main-content {
+        padding: 1.5rem 1rem;
+      }
+      .search-box {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- BARRA SUPERIOR -->
+  <header class="topbar">
+    <a href="#" class="topbar-brand">
+      <div class="brand-icon">⬡</div>
+      <div>
+        <div class="brand-title">SISTEMA COLMENA POS</div>
+        <div class="brand-sub">Manual Oficial de Usuario · Colombia</div>
+      </div>
+    </a>
+
+    <div class="topbar-actions">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="manualSearch" class="search-input" placeholder="Buscar en el manual (ej: impoconsumo, mesa, DIAN)..." onkeyup="filterManual()">
+      </div>
+      <button class="btn-action btn-gold" onclick="window.print()">
+        <span>🖨️</span>
+        <span>Imprimir / Guardar en PDF</span>
+      </button>
+      <a href="/" class="btn-action">
+        <span>⬅️</span>
+        <span>Volver a la App</span>
+      </a>
+    </div>
+  </header>
+
+  <div class="layout-container">
+
+    <!-- SIDEBAR DE NAVEGACIÓN -->
+    <aside class="sidebar-nav">
+      <div class="sidebar-section-title">General</div>
+      <a href="#intro" class="nav-link active"><span>00.</span> Introducción Colmena</a>
+      <a href="#roles" class="nav-link"><span>01.</span> Roles y Permisos</a>
+      <a href="#login" class="nav-link"><span>02.</span> Acceso y Sucursales</a>
+
+      <div class="sidebar-section-title">Operación en Sala</div>
+      <a href="#mesas" class="nav-link"><span>03.</span> Salones y Mesas</a>
+      <a href="#pedidos" class="nav-link"><span>04.</span> Toma de Pedidos</a>
+      <a href="#rondas" class="nav-link"><span>05.</span> Rondas y Adiciones</a>
+      <a href="#kds" class="nav-link"><span>06.</span> Cocina KDS en Vivo</a>
+
+      <div class="sidebar-section-title">Facturación & Caja</div>
+      <a href="#cobro" class="nav-link"><span>07.</span> Cobro y Facturación</a>
+      <a href="#impoconsumo" class="nav-link"><span>08.</span> Impoconsumo (8% o 0%)</a>
+      <a href="#propina" class="nav-link"><span>09.</span> Propina Voluntaria</a>
+      <a href="#tirilla" class="nav-link"><span>10.</span> Tirilla Térmica POS</a>
+      <a href="#caja" class="nav-link"><span>11.</span> Arqueo y Turno de Caja</a>
+
+      <div class="sidebar-section-title">Gestión Avanzada</div>
+      <a href="#domicilios" class="nav-link"><span>12.</span> Domicilios y Para Llevar</a>
+      <a href="#compras" class="nav-link"><span>13.</span> Compras e Inventario</a>
+      <a href="#separados" class="nav-link"><span>14.</span> Separados y Cartera</a>
+      <a href="#fidelizacion" class="nav-link"><span>15.</span> Fidelización de Clientes</a>
+      <a href="#sucursales-config" class="nav-link"><span>16.</span> Parámetros Sede & DIAN</a>
+    </aside>
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="main-content">
+
+      <!-- HERO BANNER -->
+      <section class="hero-banner" id="intro">
+        <span class="hero-tag">Manual Oficial de Capacitación e Inducción</span>
+        <h1 class="hero-title">Sistema Colmena Restaurante POS</h1>
+        <p class="hero-desc">
+          Guía integral paso a paso para la operación comercial, cocina en tiempo real (KDS), facturación electrónica/POS en Colombia, división de cuentas, liquidación selectiva de impoconsumo y control administrativo multisucursal.
+        </p>
+
+        <div class="hero-specs">
+          <div class="spec-item">
+            <span class="spec-label">Moneda de Operación</span>
+            <span class="spec-value">Pesos Colombianos (COP)</span>
+          </div>
+          <div class="spec-item">
+            <span class="spec-label">Zona Horaria Oficial</span>
+            <span class="spec-value">America/Bogota (UTC-5)</span>
+          </div>
+          <div class="spec-item">
+            <span class="spec-label">Normativa Fiscal</span>
+            <span class="spec-value">Estatuto Tributario & Ley 1935</span>
+          </div>
+          <div class="spec-item">
+            <span class="spec-label">Comprobantes POS</span>
+            <span class="spec-value">58 mm y 80 mm Térmico</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 01. ROLES Y MATRIZ DE PERMISOS -->
+      <section class="manual-section" id="roles">
+        <div class="section-header">
+          <span class="section-num">MÓDULO 01</span>
+          <h2 class="section-title">Roles de Usuario y Matriz de Acceso</h2>
+          <p class="section-subtitle">El sistema opera con tres perfiles jerárquicos diseñados para agilizar el servicio gastronómico y proteger la información financiera.</p>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Rol</th>
+                <th>Módulos Autorizados</th>
+                <th>Responsabilidades Clave</th>
+                <th>Restricciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="role-tag role-admin">Administrador</span></td>
+                <td>Acceso total a todos los módulos: Tablero, Mesas, Cocina, Caja, Compras, Usuarios, Sucursales, DIAN, Informes.</td>
+                <td>Apertura/cierre fiscal, creación de sucursales, auditoría de arqueos, configuración de tarifas de impuestos y cartas.</td>
+                <td>Ninguna restricción operativa.</td>
+              </tr>
+              <tr>
+                <td><span class="role-tag role-mesero">Asesor / Mesero</span></td>
+                <td>Tablero en Vivo, Mesas & Salón, Toma de Pedidos, Adición de Rondas, Domicilios, Facturación de Mesa.</td>
+                <td>Atención al cliente en mesa, envío de comandas a cocina, liquidación de la cuenta y propinas voluntarias.</td>
+                <td>No puede modificar configuración de sucursales, resoluciones DIAN ni eliminar usuarios del personal.</td>
+              </tr>
+              <tr>
+                <td><span class="role-tag role-cocina">Cocinero</span></td>
+                <td>Pantalla KDS de Cocina en Tiempo Real clasificada por estación (Parrilla, Caliente, Bar, Postres).</td>
+                <td>Recepción de órdenes, preparación secuencial por tiempos, despacho de platos y cambio de estados a "Listo".</td>
+                <td>Redirigido automáticamente a la cocina. No accede a caja ni datos comerciales.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 02. INICIO DE SESIÓN Y SUCURSALES -->
+      <section class="manual-section" id="login">
+        <div class="section-header">
+          <span class="section-num">MÓDULO 02</span>
+          <h2 class="section-title">Acceso al Sistema y Selección de Sucursal</h2>
+          <p class="section-subtitle">Procedimiento seguro de ingreso utilizando credenciales registradas en Colombia.</p>
+        </div>
+
+        <div class="step-list">
+          <div class="step-item">
+            <div class="step-badge">1</div>
+            <div class="step-content">
+              <h4 class="step-heading">Ingresar Cédula de Ciudadanía o Correo Registrado</h4>
+              <p class="step-text">
+                En la pantalla de acceso, introduce el número de documento de identidad (ej: <code>1020304050</code>) o el correo corporativo. El sistema valida automáticamente el rol del colaborador en Cloud Firestore.
+              </p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-badge">2</div>
+            <div class="step-content">
+              <h4 class="step-heading">Conmutador Multisucursal</h4>
+              <p class="step-text">
+                En la esquina superior derecha del encabezado se muestra la sede actual de operación (ej: <em>Sede Principal Guadalajara de Buga</em>). Todas las comandas, inventarios, mesas y facturas se aíslan estrictamente por sede comercial.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- MOCKUP LOGIN -->
+        <div class="mockup-container">
+          <div class="mockup-header">
+            <div class="mockup-dots"><span class="mockup-dot red"></span><span class="mockup-dot yellow"></span><span class="mockup-dot green"></span></div>
+            <span class="mockup-title">UI MOCKUP · PANTALLA DE ACCESO AUTENTICADO</span>
+          </div>
+          <div class="mockup-body" style="background:#121117; padding: 2rem; text-align: center;">
+            <div style="max-width: 320px; margin: 0 auto; background: #1a1924; border: 1px solid #383124; border-radius: 12px; padding: 1.5rem;">
+              <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">⬡</div>
+              <div style="font-weight: 800; font-size: 0.95rem; color: #f3e5ab; margin-bottom: 0.2rem;">SISTEMA COLMENA</div>
+              <div style="font-size: 0.7rem; color: #9f9baa; margin-bottom: 1rem;">Multisucursal Colombia</div>
+              <div style="background: #0f0e14; border: 1px solid #2b2735; border-radius: 6px; padding: 0.5rem; text-align: left; font-size: 0.75rem; color: #fff; margin-bottom: 0.75rem; font-family: monospace;">
+                1020304050
+              </div>
+              <div style="background: linear-gradient(135deg, #d4af37, #916e16); color: #0c0b10; font-weight: 800; font-size: 0.75rem; padding: 0.5rem; border-radius: 6px;">
+                Iniciar Sesión
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 03. SALONES Y MESAS -->
+      <section class="manual-section" id="mesas">
+        <div class="section-header">
+          <span class="section-num">MÓDULO 03</span>
+          <h2 class="section-title">Gestión de Salones y Mapa de Mesas</h2>
+          <p class="section-subtitle">Supervisión en vivo de las zonas del restaurante, ocupación de mesas y control de tiempos.</p>
+        </div>
+
+        <div class="card highlight-gold">
+          <h3 class="card-title">Código de Colores de Estados de Mesa</h3>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem;">
+            <div style="background: #092e20; border: 1px solid #10b981; border-radius: 8px; padding: 0.75rem;">
+              <div style="font-weight: 800; font-size: 0.8rem; color: #34d399;">● Mesa Libre (Verde)</div>
+              <div style="font-size: 0.75rem; color: #a7f3d0; margin-top: 0.2rem;">Disponible para recibir clientes inmediatamente. Saldo $0.</div>
+            </div>
+            <div style="background: #3b2006; border: 1px solid #f59e0b; border-radius: 8px; padding: 0.75rem;">
+              <div style="font-weight: 800; font-size: 0.8rem; color: #fbbf24;">● Mesa Ocupada (Ámbar)</div>
+              <div style="font-size: 0.75rem; color: #fde68a; margin-top: 0.2rem;">Cuenta abierta activa. Registra mesero asignado y cronómetro.</div>
+            </div>
+            <div style="background: #0f274a; border: 1px solid #3b82f6; border-radius: 8px; padding: 0.75rem;">
+              <div style="font-weight: 800; font-size: 0.8rem; color: #60a5fa;">● Cuenta Pedida (Azul)</div>
+              <div style="font-size: 0.75rem; color: #bfdbfe; margin-top: 0.2rem;">El comensal solicitó la cuenta. Próxima a facturación en caja.</div>
+            </div>
+            <div style="background: #2b1138; border: 1px solid #a855f7; border-radius: 8px; padding: 0.75rem;">
+              <div style="font-weight: 800; font-size: 0.8rem; color: #c084fc;">● Reservada (Púrpura)</div>
+              <div style="font-size: 0.75rem; color: #e9d5ff; margin-top: 0.2rem;">Mesa bloqueada con anticipación para clientes preferentes.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-list">
+          <div class="step-item">
+            <div class="step-badge">1</div>
+            <div class="step-content">
+              <h4 class="step-heading">Apertura de Mesa</h4>
+              <p class="step-text">
+                Haz clic sobre cualquier mesa en estado <strong>Libre</strong>. Se abrirá la interfaz de pedido vinculando automáticamente el identificador de mesa y el nombre del mesero responsable.
+              </p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-badge">2</div>
+            <div class="step-content">
+              <h4 class="step-heading">Monitoreo de Tiempo de Ocupación</h4>
+              <p class="step-text">
+                Cada tarjeta de mesa muestra el tiempo transcurrido desde su apertura (ej: <code>42 min</code>), facilitando la rotación de comensales y el estándar de servicio en sala.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 04. TOMA DE PEDIDOS -->
+      <section class="manual-section" id="pedidos">
+        <div class="section-header">
+          <span class="section-num">MÓDULO 04</span>
+          <h2 class="section-title">Toma de Pedidos y Personalizaciones</h2>
+          <p class="section-subtitle">Creación ágil de órdenes con modificadores gastronómicos, recetas efectivas y control de notas.</p>
+        </div>
+
+        <div class="step-list">
+          <div class="step-item">
+            <div class="step-badge">1</div>
+            <div class="step-content">
+              <h4 class="step-heading">Selección de Tipo de Servicio</h4>
+              <p class="step-text">
+                Elige entre las modalidades disponibles:
+                <strong>Mesa</strong> (requiere seleccionar número de mesa),
+                <strong>Mostrador</strong> (atención rápida en barra),
+                <strong>Para Llevar</strong> (con nombre del cliente) o
+                <strong>Domicilio</strong> (con dirección y teléfono de entrega).
+              </p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-badge">2</div>
+            <div class="step-content">
+              <h4 class="step-heading">Personalización de Productos (Modificadores)</h4>
+              <p class="step-text">
+                Al seleccionar un producto (ej: <em>Hamburguesa Colmena Signature</em>), se abre el modal de personalización que permite especificar:
+                término de carne (3/4, medio, bien cocido), exclusión de ingredientes (sin cebolla, sin salsas), adiciones con recargo (tocineta extra, queso cheddar) y salsas preferentes.
+              </p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-badge">3</div>
+            <div class="step-content">
+              <h4 class="step-heading">Envío de Comanda</h4>
+              <p class="step-text">
+                Al presionar <strong>"Confirmar y Despachar Pedido"</strong>, el pedido se guarda en la base de datos y se dispara inmediatamente la comanda en pantalla para las estaciones de cocina KDS.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout success">
+          <div class="callout-title">Descuento Automático de Inventario</div>
+          Cada producto ordenado descuenta de forma proporcional las materias primas configuradas en su receta técnica (gramos de carne, pan, queso, vegetales) en la sucursal correspondiente.
+        </div>
+      </section>
+
+      <!-- 05. RONDAS Y ADICIONES -->
+      <section class="manual-section" id="rondas">
+        <div class="section-header">
+          <span class="section-num">MÓDULO 05</span>
+          <h2 class="section-title">Adición de Rondas sin Duplicar Comandas</h2>
+          <p class="section-subtitle">Mecanismo patentado para añadir bebidas, platos fuertes o postres a una mesa abierta.</p>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">¿Cómo funcionan las Rondas en Colmena?</h3>
+          <p style="font-size:0.85rem; color:var(--text-muted); line-height: 1.6; margin-bottom: 1rem;">
+            En un restaurante, los clientes suelen pedir primero bebidas y entradas (Ronda 1), luego platos adicionales (Ronda 2) y al final postres o cafés (Ronda 3).
+            Para evitar que la cocina vuelva a preparar los platos de la primera ronda, Colmena aísla cada comanda:
+          </p>
+          <div class="step-list">
+            <div class="step-item">
+              <div class="step-badge">A</div>
+              <div class="step-content">
+                <h4 class="step-heading">Pulsar "Agregar Productos / Ronda"</h4>
+                <p class="step-text">Desde el tablero o la tarjeta de la mesa, presiona el botón de adición.</p>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-badge">B</div>
+              <div class="step-content">
+                <h4 class="step-heading">Seleccionar solo los nuevos productos</h4>
+                <p class="step-text">El carrito de adición se abre vacío. Agrega únicamente las nuevas bebidas o platos solicitados.</p>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-badge">C</div>
+              <div class="step-content">
+                <h4 class="step-heading">Despacho exclusivo a cocina</h4>
+                <p class="step-text">La cocina recibe únicamente el ticket de <em>"Ronda #2"</em> con los nuevos productos, mientras la cuenta global de la mesa se consolida automáticamente.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 06. COCINA KDS EN TIEMPO REAL -->
+      <section class="manual-section" id="kds">
+        <div class="section-header">
+          <span class="section-num">MÓDULO 06</span>
+          <h2 class="section-title">Pantalla de Cocina (KDS) por Estaciones</h2>
+          <p class="section-subtitle">Gestión visual sin papel para parrilleros, cocineros, bartenders y baristas.</p>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Estación</th>
+                <th>Productos Asignados</th>
+                <th>Tiempo Estándar</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Parrilla</strong></td>
+                <td>Cortes de carne, hamburguesas al carbón, cortes premium.</td>
+                <td>15 - 20 minutos</td>
+              </tr>
+              <tr>
+                <td><strong>Cocina Caliente</strong></td>
+                <td>Papas rústicas, alitas, entradas fritas, salsas calientes.</td>
+                <td>10 - 15 minutos</td>
+              </tr>
+              <tr>
+                <td><strong>Bar & Bebidas</strong></td>
+                <td>Cervezas artesanales, jugos naturales, limonadas, cócteles.</td>
+                <td>3 - 7 minutos</td>
+              </tr>
+              <tr>
+                <td><strong>Postres & Café</strong></td>
+                <td>Tortas artesanales, café espresso, postres de la casa.</td>
+                <td>5 - 8 minutos</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mockup-container">
+          <div class="mockup-header">
+            <div class="mockup-dots"><span class="mockup-dot red"></span><span class="mockup-dot yellow"></span><span class="mockup-dot green"></span></div>
+            <span class="mockup-title">UI MOCKUP · TICKET EN PANTALLA KDS (RONDA #1)</span>
+          </div>
+          <div class="mockup-body" style="background:#0e0d13; padding: 1.5rem;">
+            <div style="background:#1a1924; border: 1px solid #73531b; border-radius: 8px; padding: 1rem; max-width: 340px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 0.5rem;">
+                <span style="font-weight: 800; font-size: 0.85rem; color: #f3e5ab;">Mesa 4 · Ronda 1</span>
+                <span style="background: #78350f; color: #fde68a; font-size: 0.65rem; font-weight:700; padding: 0.15rem 0.4rem; border-radius: 4px;">⏱️ 08:34 min</span>
+              </div>
+              <div style="font-size: 0.75rem; color: #d4af37; font-weight: 700; margin-bottom: 0.5rem;">Mesero: Carlos Mario</div>
+              <div style="border-top: 1px dashed #383124; padding-top: 0.5rem; font-size: 0.8rem; color: #fff;">
+                <div style="display:flex; justify-content:space-between; margin-bottom: 0.25rem;">
+                  <span><strong>2x</strong> Hamburguesa Colmena</span>
+                  <span style="font-size:0.7rem; color:#9f9baa;">Término 3/4</span>
+                </div>
+                <div style="font-size:0.7rem; color:#fca5a5; margin-bottom: 0.4rem;">↳ Sin cebolla, tocineta extra</div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span><strong>1x</strong> Papas Rústicas Queso</span>
+                  <span style="font-size:0.7rem; color:#9f9baa;">Caliente</span>
+                </div>
+              </div>
+              <div style="margin-top: 0.8rem; background: #064e3b; color: #a7f3d0; text-align: center; font-weight: 800; font-size: 0.75rem; padding: 0.4rem; border-radius: 6px; cursor: pointer;">
+                ✓ Marcar Comanda Lista
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 07. COBRO Y FACTURACIÓN -->
+      <section class="manual-section" id="cobro">
+        <div class="section-header">
+          <span class="section-num">MÓDULO 07</span>
+          <h2 class="section-title">Cobro, División de Cuentas y Selección Parcial</h2>
+          <p class="section-subtitle">Opciones avanzadas para cobrar toda la mesa, dividir entre personas o cobrar ítems independientes.</p>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">Modalidades de Cobro en Caja</h3>
+          <div class="step-list">
+            <div class="step-item">
+              <div class="step-badge">1</div>
+              <div class="step-content">
+                <h4 class="step-heading">Cobro Completo de la Orden</h4>
+                <p class="step-text">Se seleccionan todos los productos pendientes. Se define el medio de pago (Efectivo, Tarjeta, Transferencia o Mixto) y se liquida la cuenta en una sola tirilla.</p>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-badge">2</div>
+              <div class="step-content">
+                <h4 class="step-heading">Selección Parcial de Ítems (Pago por Persona)</h4>
+                <p class="step-text">
+                  Si un cliente de la mesa se va antes o desea pagar solo su consumo, el cajero desmarca los demás productos y selecciona <strong>únicamente los ítems de ese cliente</strong>.
+                  El sistema genera la factura individual, marca esos platos como <code>Pagados</code> y mantiene la mesa abierta con el saldo restante exacto.
+                </p>
+              </div>
+            </div>
+            <div class="step-item">
+              <div class="step-badge">3</div>
+              <div class="step-content">
+                <h4 class="step-heading">División Equitativa (Split)</h4>
+                <p class="step-text">Calcula automáticamente el valor exacto por persona ingresando el número de comensales (ej: cuenta de $120.000 entre 4 personas = $30.000 cada una).</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 08. IMPOCONSUMO (8% O 0%) -->
+      <section class="manual-section" id="impoconsumo">
+        <div class="section-header">
+          <span class="section-num">MÓDULO 08</span>
+          <h2 class="section-title">Articulación y Control de Impoconsumo (8% o 0%)</h2>
+          <p class="section-subtitle">Cumplimiento tributario con libertad de configuración por sucursal comercial.</p>
+        </div>
+
+        <div class="callout warning">
+          <div class="callout-title">Regla de Negocio Crítica de Colmena</div>
+          Cuando en la configuración de la sucursal se <strong>desmarca la casilla de Impoconsumo</strong>, el sistema garantiza que:
+          <ol style="margin-left: 1.5rem; margin-top: 0.5rem; font-size: 0.85rem; line-height: 1.6;">
+            <li>La tasa efectiva de impuesto pasa a ser estrictamente <strong>0% ($0 COP)</strong>.</li>
+            <li>En los pedidos nuevos, rondas y cobros, <strong>NO se suma ningún impuesto al total</strong> (<code>Total = Subtotal + Propina</code>).</li>
+            <li>En la tirilla física y en pantalla, no se imprime cobro de impoconsumo, respetando el régimen no responsable del establecimiento.</li>
+          </ol>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Estado en la Sucursal</th>
+                <th>Subtotal de Comida</th>
+                <th>Impoconsumo Liquidado</th>
+                <th>Propina Sugerida (10%)</th>
+                <th>Total a Pagar</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Casilla Marcada (8% Activo)</strong><br><span style="font-size:0.7rem; color:var(--emerald-accent);">Régimen con Impoconsumo</span></td>
+                <td>$ 50.000 COP</td>
+                <td><strong style="color:var(--gold-light);">$ 4.000 COP (8%)</strong></td>
+                <td>$ 5.000 COP</td>
+                <td><strong>$ 59.000 COP</strong></td>
+              </tr>
+              <tr>
+                <td><strong>Casilla Desmarcada (0% Inactivo)</strong><br><span style="font-size:0.7rem; color:var(--amber-accent);">Sin Impoconsumo / Régimen Simple</span></td>
+                <td>$ 50.000 COP</td>
+                <td><strong style="color:var(--text-dim);">$ 0 COP (No Totaliza)</strong></td>
+                <td>$ 5.000 COP</td>
+                <td><strong style="color:var(--emerald-accent);">$ 55.000 COP</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="step-list">
+          <div class="step-item">
+            <div class="step-badge">⚙️</div>
+            <div class="step-content">
+              <h4 class="step-heading">¿Cómo activar o desmarcar el Impoconsumo en tu Sede?</h4>
+              <p class="step-text">
+                1. Dirígete en el menú a <strong>Administración &gt; Sucursales &amp; Facturación</strong>.<br>
+                2. En tu sede, haz clic en <strong>"Editar datos, logotipo y tirilla"</strong>.<br>
+                3. En la sección <em>4. Parámetros DIAN y Resolución POS</em>, marca o desmarca la casilla <strong>"Cobrar y discriminar Impoconsumo (8%)"</strong>.<br>
+                4. Guarda los cambios. Desde ese instante, todos los pedidos de la sucursal operarán bajo la nueva configuración.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 09. PROPINA VOLUNTARIA -->
+      <section class="manual-section" id="propina">
+        <div class="section-header">
+          <span class="section-num">MÓDULO 09</span>
+          <h2 class="section-title">Propina Voluntaria (Ley 1935 de 2018)</h2>
+          <p class="section-subtitle">Gestión ética y transparente de la gratificación para el equipo de servicio.</p>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">Directrices Legales en Colombia</h3>
+          <p style="font-size:0.85rem; color:var(--text-muted); line-height: 1.6; margin-bottom: 1rem;">
+            En Colombia, la propina es 100% voluntaria. El sistema Colmena calcula por defecto el <strong>10% sugerido</strong> sobre el subtotal neto de alimentos y bebidas, pero ofrece total flexibilidad en el momento del pago:
+          </p>
+          <ul style="margin-left: 1.5rem; font-size: 0.85rem; color: var(--text-muted); line-height: 1.7;">
+            <li><strong>Aceptar Propina Completa (10%):</strong> Se suma automáticamente a la liquidación.</li>
+            <li><strong>Monto Personalizado:</strong> El cliente o mesero puede digitar un valor voluntario superior o inferior.</li>
+            <li><strong>Rechazar Propina:</strong> Al desmarcar la casilla, la propina queda en $0 COP sin generar ningún bloqueo en la orden.</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- 10. TIRILLA TERMICA POS -->
+      <section class="manual-section" id="tirilla">
+        <div class="section-header">
+          <span class="section-num">MÓDULO 10</span>
+          <h2 class="section-title">Comprobante y Tirilla Térmica POS</h2>
+          <p class="section-subtitle">Estructura oficial para impresoras térmicas de 80 mm (estándar) y 58 mm (compactas).</p>
+        </div>
+
+        <div style="display: flex; gap: 2rem; flex-wrap: wrap; justify-content: center; align-items: flex-start;">
+
+          <!-- MOCKUP TIRILLA CON IMPUESTO -->
+          <div class="receipt-paper">
+            <div class="receipt-center">
+              <div class="receipt-logo">SISTEMA COLMENA</div>
+              <div class="receipt-bold">SEDE PRINCIPAL BUGA</div>
+              <div>NIT: 901.458.920-4</div>
+              <div>Cl. 4 # 13 - 28 · Guadalajara de Buga</div>
+              <div>Tel: +57 (602) 237-4589</div>
+              <div class="receipt-divider"></div>
+              <div style="font-size:0.7rem;">FACTURA POS No. BUG-1024</div>
+              <div style="font-size:0.7rem;">Resolución DIAN No. 18764000129 de 2026</div>
+              <div style="font-size:0.7rem;">Prefijo: BUG- del 1 al 100000</div>
+              <div style="font-size:0.7rem;">Fecha: 29/10/2026 09:15 AM</div>
+              <div class="receipt-divider"></div>
+              <div class="receipt-row receipt-bold">
+                <span>MESA 4</span>
+                <span>MESERO: CARLOS M.</span>
+              </div>
+              <div class="receipt-row" style="font-size:0.7rem;">
+                <span>CLIENTE: JUAN PÉREZ</span>
+                <span>C.C. 1020304050</span>
+              </div>
+            </div>
+
+            <div class="receipt-divider"></div>
+
+            <div>
+              <div class="receipt-row">
+                <span>2x Hamburguesa Colmena</span>
+                <span>$ 72.000</span>
+              </div>
+              <div class="receipt-row">
+                <span>1x Papas Rústicas Queso</span>
+                <span>$ 14.000</span>
+              </div>
+              <div class="receipt-row">
+                <span>2x Cerveza Club Colombia</span>
+                <span>$ 18.000</span>
+              </div>
+            </div>
+
+            <div class="receipt-divider"></div>
+
+            <div>
+              <div class="receipt-row">
+                <span>Subtotal Neto:</span>
+                <span>$ 104.000</span>
+              </div>
+              <div class="receipt-row">
+                <span>Impoconsumo (8%):</span>
+                <span>$ 8.320</span>
+              </div>
+              <div class="receipt-row">
+                <span>Propina Voluntaria (10%):</span>
+                <span>$ 10.400</span>
+              </div>
+              <div class="receipt-row receipt-total">
+                <span>TOTAL A PAGAR:</span>
+                <span>$ 122.720 COP</span>
+              </div>
+            </div>
+
+            <div class="receipt-divider"></div>
+
+            <div class="receipt-center" style="font-size:0.65rem;">
+              <div>Medio de Pago: TRANSFERENCIA (NEQUI)</div>
+              <div style="margin-top:0.4rem;">¡Gracias por su visita!</div>
+              <div>Propina voluntaria según Ley 1935 de 2018.</div>
+              <div style="margin-top:0.3rem; font-weight:700;">Software: Sistema Colmena POS</div>
+            </div>
+          </div>
+
+          <!-- MOCKUP TIRILLA SIN IMPUESTO -->
+          <div class="receipt-paper" style="border-top: 3px solid #f59e0b;">
+            <div class="receipt-center">
+              <div style="font-size:0.65rem; background:#f59e0b; color:#000; font-weight:800; padding:2px; margin-bottom:4px;">SEDE SIN IMPOCONSUMO (0%)</div>
+              <div class="receipt-logo">SISTEMA COLMENA</div>
+              <div class="receipt-bold">SEDE CAMPESTRE</div>
+              <div>NIT: 901.458.920-4</div>
+              <div class="receipt-divider"></div>
+              <div style="font-size:0.7rem;">FACTURA POS No. CMP-0582</div>
+              <div style="font-size:0.7rem;">Régimen No Responsable de Impoconsumo</div>
+            </div>
+
+            <div class="receipt-divider"></div>
+
+            <div>
+              <div class="receipt-row">
+                <span>2x Hamburguesa Colmena</span>
+                <span>$ 72.000</span>
+              </div>
+              <div class="receipt-row">
+                <span>1x Limonada Natural</span>
+                <span>$ 8.000</span>
+              </div>
+            </div>
+
+            <div class="receipt-divider"></div>
+
+            <div>
+              <div class="receipt-row">
+                <span>Subtotal Neto:</span>
+                <span>$ 80.000</span>
+              </div>
+              <div class="receipt-row" style="color:#666;">
+                <span>Impoconsumo (0%):</span>
+                <span>$ 0 (No Aplica)</span>
+              </div>
+              <div class="receipt-row">
+                <span>Propina Voluntaria (10%):</span>
+                <span>$ 8.000</span>
+              </div>
+              <div class="receipt-row receipt-total" style="color:#064e3b;">
+                <span>TOTAL A PAGAR:</span>
+                <span>$ 88.000 COP</span>
+              </div>
+            </div>
+
+            <div class="receipt-divider"></div>
+
+            <div class="receipt-center" style="font-size:0.65rem;">
+              <div>Medio de Pago: EFECTIVO</div>
+              <div>Recibido: $ 100.000 · Cambio: $ 12.000</div>
+              <div style="margin-top:0.4rem;">¡Gracias por su visita!</div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- 11. ARQUEO Y TURNO DE CAJA -->
+      <section class="manual-section" id="caja">
+        <div class="section-header">
+          <span class="section-num">MÓDULO 11</span>
+          <h2 class="section-title">Control de Caja y Cuadre Ciego</h2>
+          <p class="section-subtitle">Gestión de turnos de cajeros, base en efectivo y arqueos de cierre sin descuadres.</p>
+        </div>
+
+        <div class="step-list">
+          <div class="step-item">
+            <div class="step-badge">1</div>
+            <div class="step-content">
+              <h4 class="step-heading">Apertura de Turno con Base Inicial</h4>
+              <p class="step-text">Al iniciar el turno, el cajero digita el fondo de cambio en efectivo (ej: <code>$ 200.000 COP</code>). La caja queda en estado <em>Abierta</em>.</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-badge">2</div>
+            <div class="step-content">
+              <h4 class="step-heading">Registro de Entradas y Gastos Menores</h4>
+              <p class="step-text">Permite asentar egresos de caja menor (compra de hielo, propinas pagadas, transporte) justificando el motivo y conservando el recibo soporte.</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-badge">3</div>
+            <div class="step-content">
+              <h4 class="step-heading">Cierre de Caja y Arqueo Ciego</h4>
+              <p class="step-text">
+                El cajero realiza el conteo físico de los billetes y monedas sin ver el total acumulado por el sistema. Al confirmar, el sistema genera el informe comparativo revelando:
+                Total Sistema vs Total Físico, Diferencia (Sobrante / Faltante) y desglose por cada medio de pago electrónico.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 12. DOMICILIOS Y PARA LLEVAR -->
+      <section class="manual-section" id="domicilios">
+        <div class="section-header">
+          <span class="section-num">MÓDULO 12</span>
+          <h2 class="section-title">Domicilios & Pedidos Para Llevar</h2>
+          <p class="section-subtitle">Control logístico desde la llamada del cliente hasta la entrega y cobro contraentrega.</p>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">Flujo de Estados de Entrega</h3>
+          <div style="display:flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem;">
+            <div style="background:#1e1b4b; border:1px solid #4338ca; border-radius:6px; padding:0.5rem 0.75rem; font-size:0.75rem; color:#c7d2fe;">
+              <strong>1. Recibido:</strong> Orden ingresada en sistema.
+            </div>
+            <div style="background:#78350f; border:1px solid #d97706; border-radius:6px; padding:0.5rem 0.75rem; font-size:0.75rem; color:#fde68a;">
+              <strong>2. En Cocina:</strong> En preparación activa en KDS.
+            </div>
+            <div style="background:#1e3a8a; border:1px solid #2563eb; border-radius:6px; padding:0.5rem 0.75rem; font-size:0.75rem; color:#bfdbfe;">
+              <strong>3. Despachado:</strong> En ruta con el domiciliario.
+            </div>
+            <div style="background:#064e3b; border:1px solid #059669; border-radius:6px; padding:0.5rem 0.75rem; font-size:0.75rem; color:#a7f3d0;">
+              <strong>4. Entregado / Pagado:</strong> Liquidado exitosamente.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 13. COMPRAS E INVENTARIO -->
+      <section class="manual-section" id="compras">
+        <div class="section-header">
+          <span class="section-num">MÓDULO 13</span>
+          <h2 class="section-title">Compras, Proveedores y Stock Mínimo</h2>
+          <p class="section-subtitle">Abastecimiento, cálculo de costo promedio ponderado y alertas de agotamiento.</p>
+        </div>
+
+        <div class="step-list">
+          <div class="step-item">
+            <div class="step-badge">📦</div>
+            <div class="step-content">
+              <h4 class="step-heading">Recepción de Mercancía con Factura de Proveedor</h4>
+              <p class="step-text">Al asentar una compra, el inventario se incrementa en tiempo real y se recalcula el <strong>Costo Promedio Ponderado</strong> de cada ingrediente para garantizar márgenes precisos en el menú.</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-badge">⚠️</div>
+            <div class="step-content">
+              <h4 class="step-heading">Alertas de Stock Crítico</h4>
+              <p class="step-text">El sistema notifica automáticamente cuando un insumo fundamental (ej: carne molida, queso costeño) se encuentra por debajo del umbral mínimo de seguridad.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 14. SEPARADOS Y CARTERA -->
+      <section class="manual-section" id="separados">
+        <div class="section-header">
+          <span class="section-num">MÓDULO 14</span>
+          <h2 class="section-title">Separados (Layaway) y Cartera de Créditos</h2>
+          <p class="section-subtitle">Gestión de apartados para eventos y cuentas por cobrar a clientes autorizados.</p>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">Módulo de Separados y Abonos Progresivos</h3>
+          <p style="font-size:0.85rem; color:var(--text-muted); line-height: 1.6;">
+            Ideal para cenas navideñas, tortas para eventos o banquetes. Permite al cliente apartar su pedido abonando un porcentaje inicial (ej: 30%) y programar abonos sucesivos hasta el retiro final.
+            En el módulo de <strong>Cartera</strong>, se controlan los clientes empresariales o frecuentes con crédito activo, emitiendo estados de cuenta y recibos de caja por cada abono.
+          </p>
+        </div>
+      </section>
+
+      <!-- 15. FIDELIZACIÓN -->
+      <section class="manual-section" id="fidelizacion">
+        <div class="section-header">
+          <span class="section-num">MÓDULO 15</span>
+          <h2 class="section-title">CRM y Puntos de Fidelización (Loyalty)</h2>
+          <p class="section-subtitle">Premia la lealtad de tus clientes con acumulación de puntos por compras.</p>
+        </div>
+
+        <div class="card highlight-gold">
+          <h3 class="card-title">Reglas de Acumulación y Canje</h3>
+          <ul style="margin-left: 1.5rem; font-size: 0.85rem; color: var(--text-muted); line-height: 1.7;">
+            <li><strong>Acumulación automática:</strong> Por cada $1.000 COP pagados en cualquier sede, el cliente acumula puntos según la tasa configurada por la administración.</li>
+            <li><strong>Identificación sin fricción:</strong> Solo se requiere el número de celular o cédula al facturar.</li>
+            <li><strong>Redención en caja:</strong> Los puntos se descuentan en pesos colombianos como saldo a favor en compras posteriores.</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- 16. CONFIGURACION SEDE & DIAN -->
+      <section class="manual-section" id="sucursales-config">
+        <div class="section-header">
+          <span class="section-num">MÓDULO 16</span>
+          <h2 class="section-title">Administración de Sede, DIAN y Tirilla Térmica</h2>
+          <p class="section-subtitle">Control maestro de parámetros legales, consecutivos y logotipo.</p>
+        </div>
+
+        <div class="step-list">
+          <div class="step-item">
+            <div class="step-badge">1</div>
+            <div class="step-content">
+              <h4 class="step-heading">Carga de Logotipo Propio</h4>
+              <p class="step-text">Cada sede puede cargar su logotipo en formato PNG, JPG o WEBP (hasta 2.5 MB), el cual se imprime centrado en el encabezado de las tirillas térmicas.</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-badge">2</div>
+            <div class="step-content">
+              <h4 class="step-heading">Resolución DIAN y Consecutivo Oficial</h4>
+              <p class="step-text">Registra el número de resolución de facturación POS, fecha de vigencia, prefijo autorizado (ej: <code>BUG-</code>) y número siguiente para mantener la numeración correlativa estricta.</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-badge">3</div>
+            <div class="step-content">
+              <h4 class="step-heading">Vista Previa en Vivo</h4>
+              <p class="step-text">Antes de guardar, puedes pulsar <strong>"Vista Previa del Comprobante"</strong> para comprobar cómo saldrá la impresión tanto en papel estrecho de 58 mm como en 80 mm estándar.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SOPORTE Y CONTACTO -->
+      <section style="background:var(--bg-elevated); border:1px solid var(--border-gold); border-radius:1rem; padding:2rem; text-align:center; margin-top:3rem;">
+        <div style="font-size:2rem; margin-bottom:0.5rem;">⬡</div>
+        <h3 style="font-size:1.25rem; font-weight:800; color:var(--gold-light); margin-bottom:0.5rem;">Sistema Colmena · Soporte Operativo y Técnico</h3>
+        <p style="font-size:0.85rem; color:var(--text-muted); max-width:600px; margin:0 auto 1.25rem;">
+          Para capacitaciones presenciales, configuración de nuevas impresoras térmicas ESC/POS en red o apertura de nuevas sucursales, comunícate con el administrador de tu cuenta.
+        </p>
+        <div style="display:flex; justify-content:center; gap:1rem; flex-wrap:wrap;">
+          <button class="btn-action btn-gold" onclick="window.print()">
+            <span>🖨️</span>
+            <span>Imprimir Manual Completo</span>
+          </button>
+          <a href="/" class="btn-action">
+            <span>🚀</span>
+            <span>Ingresar a la Plataforma</span>
+          </a>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <a href="#" class="back-to-top" title="Volver arriba">↑</a>
+
+  <script>
+    // Buscador interactivo de temas en el manual
+    function filterManual() {
+      const query = document.getElementById('manualSearch').value.toLowerCase();
+      const sections = document.querySelectorAll('.manual-section');
+      
+      sections.forEach(section => {
+        const text = section.innerText.toLowerCase();
+        if (text.includes(query) || query === '') {
+          section.style.display = 'block';
+        } else {
+          section.style.display = 'none';
+        }
+      });
+    }
+
+    // Resaltado de navegación activa según scroll
+    window.addEventListener('scroll', () => {
+      const scrollPos = window.scrollY + 120;
+      const sections = document.querySelectorAll('.manual-section');
+      const navLinks = document.querySelectorAll('.nav-link');
+
+      sections.forEach(section => {
+        const top = section.offsetTop;
+        const height = section.offsetHeight;
+        const id = section.getAttribute('id');
+
+        if (scrollPos >= top && scrollPos < top + height) {
+          navLinks.forEach(link => {
+            link.classList.remove('active');
+            if (link.getAttribute('href') === '#' + id) {
+              link.classList.add('active');
+            }
+          });
+        }
+      });
+    });
+  </script>
+</body>
+</html>
