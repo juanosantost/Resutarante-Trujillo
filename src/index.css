@@ -47,7 +47,13 @@
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
+  body > *:not(.fixed):not([class*="print:"]) {
+    display: none !important;
+  }
   aside, nav, .no-print {
+    display: none !important;
+  }
+  .fixed:not(:has(#colmena-printable-receipt)):not(:has(#printable-kitchen-pos-ticket)):not(:has(#thermal-abono-ticket)):not(:has(#printable-pos-ticket-preview)) {
     display: none !important;
   }
   .receipt-logo-container img {
