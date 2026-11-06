@@ -15,7 +15,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db, initializeAuthAndConnection, handleFirestoreError, OperationType, sanitizeFirestoreData } from '../services/firebase';
-import { checkAndSeedInitialData, INITIAL_BRANCHES } from '../services/dbSeed';
+import { checkAndSeedInitialData, INITIAL_BRANCHES, INITIAL_MENU_ITEMS, INITIAL_CATEGORIES } from '../services/dbSeed';
 import {
   Branch,
   UserRole,
@@ -544,7 +544,6 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         await checkAndSeedInitialData();
         // Cargar semillas iniciales de Módulo 03 si las colecciones aún no han emitido
         const { INITIAL_PRODUCTS, INITIAL_PRODUCT_CATEGORIES, INITIAL_MODIFIER_GROUPS } = await import('../services/catalogSeed');
-        const { INITIAL_MENU_ITEMS, INITIAL_CATEGORIES } = await import('../services/dbSeed');
         if (isMounted) {
           setProducts((prev) => (prev.length === 0 ? INITIAL_PRODUCTS : prev));
           setCatalogCategories((prev) => (prev.length === 0 ? INITIAL_PRODUCT_CATEGORIES : prev));
