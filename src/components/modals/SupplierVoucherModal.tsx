@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Branch, BranchReceiptSnapshot } from '../../types';
 import { BranchReceiptHeader } from '../common/BranchReceiptHeader';
 import { formatCOP, formatColombiaDateTime } from '../../utils/calculations';
@@ -41,6 +42,16 @@ export const SupplierVoucherModal: React.FC<SupplierVoucherModalProps> = ({
   voucher,
   branch,
 }) => {
+  useEffect(() => {
+    if (!isOpen || !voucher) return;
+    document.body.classList.add('printing-pos-ticket');
+    return () => {
+      if (document.querySelectorAll('.colmena-ticket-print-portal').length <= 1) {
+        document.body.classList.remove('printing-pos-ticket');
+      }
+    };
+  }, [isOpen, voucher]);
+
   if (!isOpen || !voucher) return null;
 
   const isAnulado = voucher.status === 'anulado';
@@ -82,9 +93,9 @@ export const SupplierVoucherModal: React.FC<SupplierVoucherModalProps> = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto print:p-0 print:bg-white">
-      <div className="relative bg-[#181818] border border-[#B77900]/40 rounded-3xl max-w-md w-full shadow-2xl overflow-hidden print:border-none print:shadow-none print:max-w-none print:w-auto print:bg-white print:text-black">
+  return createPortal(
+    <div className="colmena-ticket-print-portal fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto print:static print:p-0 print:bg-white print:overflow-visible">
+      <div className="relative bg-[#181818] border border-[#B77900]/40 rounded-3xl max-w-md w-full shadow-2xl overflow-hidden print:static print:border-none print:shadow-none print:max-w-none print:w-full print:bg-white print:text-black print:overflow-visible">
         
         {/* Encabezado Modal (Oculto al imprimir) */}
         <div className="flex items-center justify-between p-4 border-b border-[#333333] print:hidden bg-[#1f1e24]">
@@ -104,7 +115,7 @@ export const SupplierVoucherModal: React.FC<SupplierVoucherModalProps> = ({
         </div>
 
         {/* Contenido Imprimible (Tirilla Térmica POS) */}
-        <div className={`p-6 bg-white text-black font-mono text-xs shadow-inner mx-auto ${is58mm ? 'max-w-[240px]' : 'max-w-[320px]'} relative`}>
+        <div className={`colmena-printable-ticket p-6 bg-white text-black font-mono text-xs shadow-inner mx-auto ${is58mm ? 'max-w-[240px]' : 'max-w-[320px]'} relative`}>
           
           {/* Marca de Agua de Anulado */}
           {isAnulado && (
@@ -263,6 +274,8 @@ export const SupplierVoucherModal: React.FC<SupplierVoucherModalProps> = ({
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
+

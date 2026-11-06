@@ -39,49 +39,92 @@
     margin: 0mm;
     size: 80mm auto;
   }
+
+  html,
   body {
     background: white !important;
     color: black !important;
     padding: 0 !important;
     margin: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
-  body > *:not(.fixed):not([class*="print:"]) {
+
+  /* When a POS ticket portal modal is open, hide #root completely so the 3-page dashboard does not paginate */
+  body.printing-pos-ticket > #root,
+  body:has(.colmena-ticket-print-portal) > #root {
     display: none !important;
   }
-  aside, nav, .no-print {
+
+  /* Make the ticket portal static and normal-flow so it prints ONLY 1 copy (never repeats across pages) */
+  body > .colmena-ticket-print-portal {
+    position: static !important;
+    display: block !important;
+    inset: auto !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    backdrop-filter: none !important;
+  }
+
+  aside,
+  nav,
+  header,
+  footer,
+  .no-print,
+  .print\:hidden {
     display: none !important;
   }
-  .fixed:not(:has(#colmena-printable-receipt)):not(:has(#printable-kitchen-pos-ticket)):not(:has(#thermal-abono-ticket)):not(:has(#printable-pos-ticket-preview)) {
-    display: none !important;
-  }
+
   .receipt-logo-container img {
     max-width: 100% !important;
     height: auto !important;
     filter: contrast(150%) !important;
   }
-  #printable-kitchen-pos-ticket {
+
+  #colmena-printable-receipt,
+  #printable-kitchen-pos-ticket,
+  #thermal-abono-ticket,
+  #printable-pos-ticket-preview,
+  .colmena-printable-ticket {
+    position: static !important;
     background: white !important;
     color: black !important;
     border: none !important;
     box-shadow: none !important;
     margin: 0 auto !important;
-    padding: 1mm !important;
+    padding: 1.5mm !important;
     width: 100% !important;
-    max-width: 80mm !important;
+    max-width: 78mm !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
   }
+
   #printable-kitchen-pos-ticket * {
     color: black !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
+
   #printable-kitchen-pos-ticket .bg-black {
     background-color: black !important;
     color: white !important;
   }
+
   #printable-kitchen-pos-ticket .bg-black * {
     color: white !important;
   }
 }
+
 

@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { formatCOP, formatColombiaDateTime } from '../../utils/calculations';
 import { PaperWidth, DEFAULT_BRANCH_PRINT_CONFIG } from '../../types';
-import { Printer, X, Receipt, CheckCircle2 } from 'lucide-react';
+import { Printer, X, Receipt } from 'lucide-react';
 
 export interface IncomeReceiptData {
   consecutivo: string;
@@ -34,6 +35,16 @@ export const IncomeReceiptModal: React.FC<IncomeReceiptModalProps> = ({
   const { currentBranch } = useRestaurant();
   const [paperWidth, setPaperWidth] = useState<PaperWidth>('80mm');
 
+  useEffect(() => {
+    if (!isOpen || !data) return;
+    document.body.classList.add('printing-pos-ticket');
+    return () => {
+      if (document.querySelectorAll('.colmena-ticket-print-portal').length <= 1) {
+        document.body.classList.remove('printing-pos-ticket');
+      }
+    };
+  }, [isOpen, data]);
+
   if (!isOpen || !data) return null;
 
   const branchConfig = currentBranch?.printConfig || DEFAULT_BRANCH_PRINT_CONFIG;
@@ -57,12 +68,12 @@ export const IncomeReceiptModal: React.FC<IncomeReceiptModalProps> = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-      <div className="relative bg-[#181818] border border-amber-600/60 rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden my-6 text-[#FFFDF5] flex flex-col max-h-[92vh]">
+  return createPortal(
+    <div className="colmena-ticket-print-portal fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto print:static print:p-0 print:bg-white print:overflow-visible">
+      <div className="relative bg-[#181818] border border-amber-600/60 rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden my-6 text-[#FFFDF5] flex flex-col max-h-[92vh] print:static print:border-none print:shadow-none print:my-0 print:max-w-none print:max-h-none print:w-full print:bg-white print:text-black print:overflow-visible">
         
         {/* Cabecera del Modal */}
-        <div className="p-4 sm:p-5 border-b border-[#333333] flex items-center justify-between bg-gradient-to-r from-[#181818] to-[#242424]">
+        <div className="p-4 sm:p-5 border-b border-[#333333] flex items-center justify-between bg-gradient-to-r from-[#181818] to-[#242424] print:hidden">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-950/80 border border-amber-600/60 text-[#D6A21A] flex items-center justify-center">
               <Receipt className="w-5 h-5" />
@@ -110,9 +121,9 @@ export const IncomeReceiptModal: React.FC<IncomeReceiptModalProps> = ({
         </div>
 
         {/* Vista previa del Comprobante Térmico */}
-        <div className="p-4 sm:p-6 overflow-y-auto flex-1 bg-[#121214] flex justify-center">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1 bg-[#121214] flex justify-center print:block print:p-0 print:bg-white print:overflow-visible">
           <div
-            className={`bg-[#FFFDF5] text-[#181818] p-5 rounded-2xl shadow-xl font-mono text-xs border border-amber-900/30 transition-all ${
+            className={`colmena-printable-ticket bg-[#FFFDF5] text-[#181818] p-5 rounded-2xl shadow-xl font-mono text-xs border border-amber-900/30 transition-all print:shadow-none print:border-none print:p-0 ${
               paperWidth === '58mm' ? 'w-[280px]' : 'w-[360px]'
             }`}
           >
@@ -217,7 +228,7 @@ export const IncomeReceiptModal: React.FC<IncomeReceiptModalProps> = ({
         </div>
 
         {/* Acciones */}
-        <div className="p-4 border-t border-[#333333] flex items-center justify-between bg-[#181818]">
+        <div className="p-4 border-t border-[#333333] flex items-center justify-between bg-[#181818] print:hidden">
           <button
             type="button"
             onClick={handlePrint}
@@ -237,6 +248,8 @@ export const IncomeReceiptModal: React.FC<IncomeReceiptModalProps> = ({
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
+

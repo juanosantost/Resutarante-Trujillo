@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Abono, Branch } from '../../types';
 import { BranchReceiptHeader } from '../common/BranchReceiptHeader';
 import { formatCOP, formatColombiaDateTime } from '../../utils/calculations';
-import { Printer, X, AlertTriangle, CheckCircle, ShieldAlert } from 'lucide-react';
+import { Printer, X, ShieldAlert } from 'lucide-react';
 
 interface AbonoReceiptModalProps {
   isOpen: boolean;
@@ -21,6 +22,16 @@ export const AbonoReceiptModal: React.FC<AbonoReceiptModalProps> = ({
   remainingBalance,
   branch,
 }) => {
+  useEffect(() => {
+    if (!isOpen || !abono) return;
+    document.body.classList.add('printing-pos-ticket');
+    return () => {
+      if (document.querySelectorAll('.colmena-ticket-print-portal').length <= 1) {
+        document.body.classList.remove('printing-pos-ticket');
+      }
+    };
+  }, [isOpen, abono]);
+
   if (!isOpen || !abono) return null;
 
   const isAnulado = abono.status === 'anulado';
@@ -46,9 +57,9 @@ export const AbonoReceiptModal: React.FC<AbonoReceiptModalProps> = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto print:p-0 print:bg-white">
-      <div className="relative bg-[#181818] border border-[#B77900]/40 rounded-3xl max-w-md w-full shadow-2xl overflow-hidden print:border-none print:shadow-none print:max-w-none print:w-auto print:bg-white print:text-black">
+  return createPortal(
+    <div className="colmena-ticket-print-portal fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto print:static print:p-0 print:bg-white print:overflow-visible">
+      <div className="relative bg-[#181818] border border-[#B77900]/40 rounded-3xl max-w-md w-full shadow-2xl overflow-hidden print:static print:border-none print:shadow-none print:max-w-none print:w-full print:bg-white print:text-black print:overflow-visible">
         
         {/* Encabezado Modal (Oculto al imprimir) */}
         <div className="flex items-center justify-between p-4 border-b border-[#333333] print:hidden bg-[#1f1e24]">
@@ -68,10 +79,10 @@ export const AbonoReceiptModal: React.FC<AbonoReceiptModalProps> = ({
         </div>
 
         {/* Contenido Imprimible (Tirilla Térmica POS) */}
-        <div className="p-6 overflow-y-auto max-h-[75vh] flex justify-center bg-[#121214] print:p-0 print:bg-white print:max-h-none">
+        <div className="p-6 overflow-y-auto max-h-[75vh] flex justify-center bg-[#121214] print:block print:p-0 print:bg-white print:max-h-none print:overflow-visible">
           <div
             id="thermal-abono-ticket"
-            className={`bg-[#FFFDF5] text-[#181818] p-5 rounded-2xl shadow-md border border-neutral-200 font-mono text-xs print:p-2 print:border-none print:shadow-none print:rounded-none ${
+            className={`colmena-printable-ticket bg-[#FFFDF5] text-[#181818] p-5 rounded-2xl shadow-md border border-neutral-200 font-mono text-xs print:p-2 print:border-none print:shadow-none print:rounded-none ${
               is58mm ? 'w-[260px] text-[10px]' : 'w-[320px] text-[11px]'
             }`}
           >
@@ -224,6 +235,8 @@ export const AbonoReceiptModal: React.FC<AbonoReceiptModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
+

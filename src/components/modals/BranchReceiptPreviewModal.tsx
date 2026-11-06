@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Branch, BranchPrintConfig, DEFAULT_BRANCH_PRINT_CONFIG, PaperWidth } from '../../types';
 import { BranchReceiptHeader } from '../common/BranchReceiptHeader';
 import { formatCOP } from '../../utils/calculations';
@@ -8,7 +9,6 @@ import {
   Sparkles,
   Eye,
   Sliders,
-  Check,
   Smartphone,
   MapPin,
   FileText,
@@ -42,6 +42,15 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
   onClose,
   onUpdatePrintConfig,
 }) => {
+  useEffect(() => {
+    document.body.classList.add('printing-pos-ticket');
+    return () => {
+      if (document.querySelectorAll('.colmena-ticket-print-portal').length <= 1) {
+        document.body.classList.remove('printing-pos-ticket');
+      }
+    };
+  }, []);
+
   const initialPrintConfig: BranchPrintConfig =
     overrideData?.printConfig ||
     branch?.printConfig ||
@@ -95,9 +104,9 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
 
   const is58mm = selectedWidth === '58mm';
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto print:p-0 print:bg-white print:fixed print:inset-0">
-      <div className="bg-[#181818] border border-[#B77900] rounded-3xl w-full max-w-4xl shadow-2xl text-[#FFFDF5] overflow-hidden flex flex-col max-h-[92vh] print:border-none print:shadow-none print:bg-white print:max-w-none print:max-h-none">
+  return createPortal(
+    <div className="colmena-ticket-print-portal fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto print:static print:p-0 print:bg-white print:overflow-visible">
+      <div className="bg-[#181818] border border-[#B77900] rounded-3xl w-full max-w-4xl shadow-2xl text-[#FFFDF5] overflow-hidden flex flex-col max-h-[92vh] print:static print:border-none print:shadow-none print:bg-white print:max-w-none print:max-h-none print:w-full print:overflow-visible">
         
         {/* Cabecera del modal (oculta al imprimir) */}
         <div className="p-4 sm:p-5 border-b border-[#333333] flex items-center justify-between bg-[#1f1f1f] print:hidden">
@@ -432,6 +441,8 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
+

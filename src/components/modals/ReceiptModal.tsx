@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Payment, Order } from '../../types';
 import { formatCOP, formatColombiaDateTime } from '../../utils/calculations';
 import { useRestaurant } from '../../context/RestaurantContext';
@@ -21,6 +22,15 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
   const { currentBranch: currentContextBranch } = useRestaurant();
   const { branches } = useAuth();
 
+  useEffect(() => {
+    document.body.classList.add('printing-pos-ticket');
+    return () => {
+      if (document.querySelectorAll('.colmena-ticket-print-portal').length <= 1) {
+        document.body.classList.remove('printing-pos-ticket');
+      }
+    };
+  }, []);
+
   // Resolución estricta de la sucursal de origen:
   // 1. Snapshot histórico grabado al momento de la transacción
   // 2. Sucursal original por payment.branchId o order.branchId
@@ -42,9 +52,9 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
     window.print();
   };
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto print:p-0 print:bg-white print:fixed print:inset-0">
-      <div className="bg-[#121117] border border-[#3f3521] rounded-2xl w-full max-w-md shadow-2xl text-[#faf5ee] overflow-hidden flex flex-col print:border-none print:shadow-none print:bg-white print:max-w-none print:w-full">
+  return createPortal(
+    <div className="colmena-ticket-print-portal fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto print:static print:p-0 print:bg-white print:overflow-visible">
+      <div className="bg-[#121117] border border-[#3f3521] rounded-2xl w-full max-w-md shadow-2xl text-[#faf5ee] overflow-hidden flex flex-col print:static print:border-none print:shadow-none print:bg-white print:max-w-none print:w-full print:overflow-visible">
         
         {/* Cabecera modal (oculta en impresión) */}
         <div className="p-4 border-b border-[#2d281e] flex items-center justify-between bg-[#17161f] print:hidden">
@@ -63,11 +73,11 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
         </div>
 
         {/* Tirilla de Factura / Voucher Imprimible */}
-        <div className="flex justify-center p-4 bg-[#0a0a0c] print:bg-white print:p-0">
+        <div className="flex justify-center p-4 bg-[#0a0a0c] print:block print:bg-white print:p-0">
           <div
             id="colmena-printable-receipt"
             data-testid="colmena-printable-receipt"
-            className={`p-5 bg-[#fffdfa] text-[#1c1917] font-mono shadow-inner select-all rounded-sm transition-all print:shadow-none print:p-0 print:m-0 ${
+            className={`colmena-printable-ticket p-5 bg-[#fffdfa] text-[#1c1917] font-mono shadow-inner select-all rounded-sm transition-all print:shadow-none print:p-0 print:m-0 ${
               is58mm ? 'w-full max-w-[270px] text-[10px]' : 'w-full max-w-[360px] text-[11px]'
             }`}
           >
@@ -203,6 +213,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
+
