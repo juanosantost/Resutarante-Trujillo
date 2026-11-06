@@ -159,7 +159,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   const pendingComandas = activeComandas.filter(
     (c) => c.status === 'nueva' || c.status === 'en_preparacion'
   ).length;
-  const lowStockItems = inventory.filter((i) => i.currentStock <= i.minStock).length;
+  const lowStockItems = inventory.filter((i) => !i.isDeleted && i.currentStock <= i.minStock).length;
 
   const handleLogout = async () => {
     try {

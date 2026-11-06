@@ -672,7 +672,7 @@ export const InventoryItemModal: React.FC<InventoryItemModalProps> = ({
                     className="flex-1 px-3 py-2 bg-[#121117] border border-[#2d281e] rounded-xl text-xs text-[#fef3c7]"
                   >
                     <option value="">-- Seleccionar materia prima / ingrediente --</option>
-                    {inventory.map((inv) => (
+                    {inventory.filter((i) => !i.isDeleted).map((inv) => (
                       <option key={inv.id} value={inv.id}>
                         {inv.name} ({inv.unit}) — {formatCOP(inv.costPerUnit)}
                       </option>

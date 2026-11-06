@@ -534,6 +534,10 @@ export interface InventoryItem {
   productionRecipe?: RecipeIngredient[];
   isProducible?: boolean;
   linkedProductId?: string;
+  isDeleted?: boolean;
+  deletedAt?: string;
+  deletedBy?: string;
+  deleteReason?: string;
   updatedAt: string;
   createdAt?: string;
 }

@@ -7,6 +7,7 @@ import { AddRoundModal } from '../modals/AddRoundModal';
 import { CheckoutModal } from '../modals/CheckoutModal';
 import { ReceiptModal } from '../modals/ReceiptModal';
 import { NewOrderModal } from '../modals/NewOrderModal';
+import { KitchenTicketModal } from '../modals/KitchenTicketModal';
 import {
   ClipboardList,
   Search,
@@ -23,6 +24,8 @@ import {
   Trash2,
   AlertTriangle,
   X,
+  Printer,
+  ChefHat,
 } from 'lucide-react';
 
 export const OrdersView: React.FC = () => {
@@ -37,6 +40,7 @@ export const OrdersView: React.FC = () => {
   const [showNewOrderModal, setShowNewOrderModal] = useState<boolean>(false);
   const [selectedOrderForRound, setSelectedOrderForRound] = useState<Order | null>(null);
   const [selectedOrderForCheckout, setSelectedOrderForCheckout] = useState<Order | null>(null);
+  const [selectedOrderForKitchenPrint, setSelectedOrderForKitchenPrint] = useState<Order | null>(null);
   const [receiptPayment, setReceiptPayment] = useState<any | null>(null);
   const [orderToCancel, setOrderToCancel] = useState<Order | null>(null);
   const [cancelReason, setCancelReason] = useState<string>('Cancelación solicitada por cliente');
@@ -190,7 +194,9 @@ export const OrdersView: React.FC = () => {
                       </span>
                     </div>
 
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusBadge.classes}`}>
+                    <span
+                      className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full shrink-0 whitespace-nowrap ${statusBadge.classes}`}
+                    >
                       {statusBadge.label}
                     </span>
                   </div>
@@ -289,23 +295,33 @@ export const OrdersView: React.FC = () => {
                   </div>
 
                   {/* Acciones del Pedido */}
-                  <div className="mt-4 pt-3 border-t border-[#2d281e] flex items-center gap-2">
+                  <div className="mt-4 pt-3 border-t border-[#2d281e] flex items-center gap-2 flex-wrap">
                     {isAbierto ? (
                       <>
                         <button
                           type="button"
+                          onClick={() => setSelectedOrderForKitchenPrint(order)}
+                          className="py-2 px-2.5 rounded-xl bg-[#292212] hover:bg-[#3d3219] text-[#d4af37] border border-[#d4af37]/60 text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-sm shrink-0"
+                          title="Imprimir comanda POS para cocina (Letra Grande)"
+                        >
+                          <Printer className="w-4 h-4 text-[#d4af37]" />
+                          <span>POS Cocina</span>
+                        </button>
+
+                        <button
+                          type="button"
                           onClick={() => setSelectedOrderForRound(order)}
-                          className="flex-1 py-2 px-2.5 rounded-xl bg-gradient-to-r from-[#292212] to-[#3a2f16] hover:bg-[#d4af37] text-[#fef3c7] hover:text-[#0e0e12] border border-[#d4af37]/60 text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-sm"
+                          className="flex-1 py-2 px-2.5 rounded-xl bg-gradient-to-r from-[#292212] to-[#3a2f16] hover:bg-[#d4af37] text-[#fef3c7] hover:text-[#0e0e12] border border-[#d4af37]/60 text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-sm min-w-[120px]"
                           title="Agregar productos o nueva ronda a este pedido en curso"
                         >
                           <Plus className="w-4 h-4 text-[#d4af37]" />
-                          <span>Agregar Productos</span>
+                          <span>Agregar</span>
                         </button>
 
                         <button
                           type="button"
                           onClick={() => setSelectedOrderForCheckout(order)}
-                          className="flex-1 py-2 px-2.5 rounded-xl bg-emerald-950 text-emerald-400 border border-emerald-700/50 hover:bg-emerald-900 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer transition-all"
+                          className="flex-1 py-2 px-2.5 rounded-xl bg-emerald-950 text-emerald-400 border border-emerald-700/50 hover:bg-emerald-900 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer transition-all min-w-[90px]"
                         >
                           <Receipt className="w-3.5 h-3.5" />
                           <span>Cobrar</span>
@@ -329,8 +345,19 @@ export const OrdersView: React.FC = () => {
                         ✕ Pedido Anulado {order.cancellationReason ? `· ${order.cancellationReason}` : ''}
                       </div>
                     ) : (
-                      <div className="w-full text-center py-1 text-xs text-emerald-400 font-bold bg-[#13261a] rounded-lg border border-emerald-800/40">
-                        ✓ Pedido Completado y Facturado
+                      <div className="w-full flex items-center gap-2">
+                        <div className="flex-1 text-center py-1.5 text-xs text-emerald-400 font-bold bg-[#13261a] rounded-lg border border-emerald-800/40">
+                          ✓ Pedido Completado y Facturado
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedOrderForKitchenPrint(order)}
+                          className="py-1.5 px-3 rounded-lg bg-[#292212] hover:bg-[#3d3219] text-[#d4af37] border border-[#d4af37]/50 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all shrink-0"
+                          title="Reimprimir comanda POS de cocina para este pedido"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          <span>POS Cocina</span>
+                        </button>
                       </div>
                     )}
                   </div>
@@ -375,6 +402,14 @@ export const OrdersView: React.FC = () => {
           payment={receiptPayment}
           order={orders.find((o) => o.id === receiptPayment.orderId)}
           onClose={() => setReceiptPayment(null)}
+        />
+      )}
+
+      {/* Modal de Impresión POS Cocina con Letra Grande */}
+      {selectedOrderForKitchenPrint && (
+        <KitchenTicketModal
+          order={selectedOrderForKitchenPrint}
+          onClose={() => setSelectedOrderForKitchenPrint(null)}
         />
       )}
 

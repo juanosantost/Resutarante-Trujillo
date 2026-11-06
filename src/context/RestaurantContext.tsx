@@ -264,6 +264,8 @@ interface RestaurantContextType {
   }) => Promise<string>;
   produceInventoryItem: (itemId: string, unitsToProduce: number, notes?: string) => Promise<void>;
   cancelProductionLog: (productionId: string, reason?: string) => Promise<void>;
+  deleteInventoryItem: (itemId: string, permanent?: boolean) => Promise<void>;
+  restoreInventoryItem: (itemId: string) => Promise<void>;
   updateTableStatus: (tableId: string, status: TableStatus) => Promise<void>;
 
   // Módulo 11: Compras, Proveedores y Gastos
@@ -2176,6 +2178,93 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       });
     } catch (error) {
       console.error('Error canceling production log:', error);
+      throw error;
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // OPERACIÓN: Eliminar Artículo de Inventario (Papelera / Eliminación Suave o Permanente)
+  const deleteInventoryItem = async (itemId: string, permanent: boolean = false): Promise<void> => {
+    setActionLoading(true);
+    try {
+      const now = new Date().toISOString();
+      const targetItem = inventory.find((i) => i.id === itemId);
+      const itemName = targetItem?.name || itemId;
+
+      if (permanent) {
+        // Eliminación física definitiva de Firestore
+        await deleteDoc(doc(db, 'inventoryItems', itemId)).catch((delErr) => {
+          console.warn('Error eliminando doc inventoryItems:', delErr);
+        });
+        setInventory((prev) => prev.filter((i) => i.id !== itemId));
+
+        await logAuditAction({
+          entityType: 'product',
+          entityId: itemId,
+          entityName: itemName,
+          action: 'delete',
+          details: `Artículo de inventario "${itemName}" purgado permanentemente del sistema`,
+        });
+      } else {
+        // Envío a la papelera (Soft Delete recuperable)
+        await updateDoc(doc(db, 'inventoryItems', itemId), {
+          isDeleted: true,
+          deletedAt: now,
+          deletedBy: staffName,
+          updatedAt: now,
+        });
+
+        setInventory((prev) =>
+          prev.map((i) => (i.id === itemId ? { ...i, isDeleted: true, deletedAt: now, deletedBy: staffName, updatedAt: now } : i))
+        );
+
+        await logAuditAction({
+          entityType: 'product',
+          entityId: itemId,
+          entityName: itemName,
+          action: 'delete',
+          details: `Artículo de inventario "${itemName}" movido al espacio de eliminados / papelera`,
+        });
+      }
+    } catch (error) {
+      console.error('Error deleting inventory item:', error);
+      handleFirestoreError(error, OperationType.DELETE, 'inventoryItems');
+      throw error;
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // OPERACIÓN: Recuperar / Restaurar Artículo de Inventario desde la Papelera
+  const restoreInventoryItem = async (itemId: string): Promise<void> => {
+    setActionLoading(true);
+    try {
+      const now = new Date().toISOString();
+      const targetItem = inventory.find((i) => i.id === itemId);
+      const itemName = targetItem?.name || itemId;
+
+      await updateDoc(doc(db, 'inventoryItems', itemId), {
+        isDeleted: false,
+        deletedAt: null,
+        deletedBy: null,
+        updatedAt: now,
+      });
+
+      setInventory((prev) =>
+        prev.map((i) => (i.id === itemId ? { ...i, isDeleted: false, deletedAt: undefined, deletedBy: undefined, updatedAt: now } : i))
+      );
+
+      await logAuditAction({
+        entityType: 'product',
+        entityId: itemId,
+        entityName: itemName,
+        action: 'update',
+        details: `Artículo de inventario "${itemName}" restaurado/recuperado de la papelera`,
+      });
+    } catch (error) {
+      console.error('Error restoring inventory item:', error);
+      handleFirestoreError(error, OperationType.UPDATE, 'inventoryItems');
       throw error;
     } finally {
       setActionLoading(false);
@@ -4863,6 +4952,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         createInventoryItem,
         produceInventoryItem,
         cancelProductionLog,
+        deleteInventoryItem,
+        restoreInventoryItem,
         updateTableStatus,
 
         // Módulo 11: Compras y Proveedores

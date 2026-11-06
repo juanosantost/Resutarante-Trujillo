@@ -9,6 +9,7 @@ import {
   validateTableStatusTransition,
 } from '../../utils/tableOperations';
 import { formatCOP } from '../../utils/calculations';
+import { KitchenTicketModal } from './KitchenTicketModal';
 import {
   X,
   Users,
@@ -22,6 +23,7 @@ import {
   RefreshCw,
   Trash2,
   Layers,
+  Printer,
 } from 'lucide-react';
 
 interface TableDetailModalProps {
@@ -51,6 +53,7 @@ export const TableDetailModal: React.FC<TableDetailModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [showCancelModal, setShowCancelModal] = useState<boolean>(false);
+  const [showKitchenTicket, setShowKitchenTicket] = useState<boolean>(false);
   const [cancelReason, setCancelReason] = useState<string>('Cancelación por el cliente');
 
   // Buscar comanda / pedido abierto si existe
@@ -326,7 +329,16 @@ export const TableDetailModal: React.FC<TableDetailModalProps> = ({
                 ))}
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-2 pt-2">
+              <div className="flex flex-col sm:flex-row gap-2 pt-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setShowKitchenTicket(true)}
+                  className="py-2 px-3 rounded-xl bg-[#292212] hover:bg-[#382e17] border border-[#d4af37]/60 text-[#d4af37] text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shrink-0"
+                  title="Imprimir comanda POS para cocina con letra grande para cocineros mayores"
+                >
+                  <Printer className="w-4 h-4 text-[#d4af37]" />
+                  <span>POS Cocina</span>
+                </button>
                 {onAddRound && (
                   <button
                     type="button"
@@ -337,7 +349,7 @@ export const TableDetailModal: React.FC<TableDetailModalProps> = ({
                     className="flex-1 py-2 px-3 rounded-xl bg-[#292212] border border-[#B77900]/60 text-[#D6A21A] text-xs font-bold hover:brightness-110 flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
                   >
                     <Plus className="w-4 h-4 stroke-[2.5]" />
-                    <span>+ Agregar Productos</span>
+                    <span>+ Agregar</span>
                   </button>
                 )}
                 {onCheckout && (
@@ -350,7 +362,7 @@ export const TableDetailModal: React.FC<TableDetailModalProps> = ({
                     className="flex-1 py-2 px-3 rounded-xl bg-gradient-to-r from-[#B77900] to-[#D6A21A] text-[#181818] text-xs font-black hover:brightness-110 flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
                   >
                     <Receipt className="w-3.5 h-3.5" />
-                    <span>Cobrar Cuenta</span>
+                    <span>Cobrar</span>
                   </button>
                 )}
                 <button
@@ -360,7 +372,7 @@ export const TableDetailModal: React.FC<TableDetailModalProps> = ({
                   title="Anular este pedido y liberar la mesa"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  <span>Anular Pedido</span>
+                  <span>Anular</span>
                 </button>
               </div>
             </div>
@@ -497,6 +509,13 @@ export const TableDetailModal: React.FC<TableDetailModalProps> = ({
               </div>
             </div>
           </div>
+        )}
+
+        {showKitchenTicket && activeOrder && (
+          <KitchenTicketModal
+            order={activeOrder}
+            onClose={() => setShowKitchenTicket(false)}
+          />
         )}
       </div>
     </div>

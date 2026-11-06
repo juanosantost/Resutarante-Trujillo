@@ -631,7 +631,7 @@ export const ProductManagementModal: React.FC<ProductManagementModalProps> = ({
                 className="flex-1 w-full px-3 py-2 bg-[#121117] border border-[#2d281e] rounded-xl text-xs text-[#fef3c7] focus:outline-none focus:border-[#d4af37]"
               >
                 <option value="">-- Seleccionar artículo de inventario a descontar --</option>
-                {inventory.map((inv) => (
+                {inventory.filter((i) => !i.isDeleted).map((inv) => (
                   <option key={inv.id} value={inv.id}>
                     {inv.name} (Stock: {inv.currentStock} {inv.unit}) — Costo unit: {formatCOP(inv.costPerUnit)}
                   </option>
@@ -938,7 +938,7 @@ export const ProductManagementModal: React.FC<ProductManagementModalProps> = ({
                               className="w-full px-2 py-1 bg-[#121117] border border-[#2d281e] rounded-md text-[11px] text-[#a8a29e]"
                             >
                               <option value="">(Sin impacto en inventario)</option>
-                              {inventory.map((inv) => (
+                              {inventory.filter((i) => !i.isDeleted).map((inv) => (
                                 <option key={inv.id} value={inv.id}>
                                   Insumo: {inv.name}
                                 </option>

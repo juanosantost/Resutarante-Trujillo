@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { Comanda, KitchenStation, ComandaStatus, ComandaItemStatus } from '../../types';
 import { formatColombiaDateTime } from '../../utils/calculations';
+import { KitchenTicketModal } from '../modals/KitchenTicketModal';
 import {
   Flame,
   Clock,
@@ -15,6 +16,7 @@ import {
   Cake,
   Bell,
   RefreshCw,
+  Printer,
 } from 'lucide-react';
 
 export const KitchenKDSView: React.FC = () => {
@@ -26,6 +28,7 @@ export const KitchenKDSView: React.FC = () => {
   } = useRestaurant();
 
   const [selectedStation, setSelectedStation] = useState<string>('todas');
+  const [selectedComandaForPrint, setSelectedComandaForPrint] = useState<Comanda | null>(null);
   const [nowTime, setNowTime] = useState<number>(Date.now());
 
   // Ticker para actualizar los minutos transcurridos en tiempo real
@@ -172,10 +175,22 @@ export const KitchenKDSView: React.FC = () => {
                     </span>
                   </div>
 
-                  {/* Tiempo transcurrido */}
-                  <div className={`px-2 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 ${elapsedBadge.classes}`}>
-                    <Clock className="w-3 h-3" />
-                    <span>{elapsedBadge.text}</span>
+                  {/* Acciones y Tiempo transcurrido */}
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedComandaForPrint(comanda)}
+                      className="p-1.5 rounded-lg bg-[#292212] hover:bg-[#3d3219] text-[#d4af37] border border-[#d4af37]/40 cursor-pointer transition-all flex items-center gap-1 text-[11px] font-bold"
+                      title="Imprimir comanda POS para cocina con letra grande para cocineros mayores"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">POS Cocina</span>
+                    </button>
+
+                    <div className={`px-2 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 ${elapsedBadge.classes}`}>
+                      <Clock className="w-3 h-3" />
+                      <span>{elapsedBadge.text}</span>
+                    </div>
                   </div>
                 </div>
 
@@ -280,6 +295,14 @@ export const KitchenKDSView: React.FC = () => {
             );
           })}
         </div>
+      )}
+
+      {/* Modal de Impresión POS Cocina con Letra Grande */}
+      {selectedComandaForPrint && (
+        <KitchenTicketModal
+          comanda={selectedComandaForPrint}
+          onClose={() => setSelectedComandaForPrint(null)}
+        />
       )}
 
     </div>

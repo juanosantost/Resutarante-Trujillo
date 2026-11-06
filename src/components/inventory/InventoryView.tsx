@@ -21,6 +21,8 @@ import {
   ArrowDownRight,
   Filter,
   Eye,
+  Trash2,
+  RotateCcw,
 } from 'lucide-react';
 
 export const InventoryView: React.FC = () => {
@@ -30,11 +32,13 @@ export const InventoryView: React.FC = () => {
     productionLogs,
     products,
     updateInventoryStock,
+    deleteInventoryItem,
+    restoreInventoryItem,
     currentBranch,
     actionLoading,
   } = useRestaurant();
 
-  const [activeTab, setActiveTab] = useState<'insumos' | 'recetas' | 'producciones' | 'kardex'>('insumos');
+  const [activeTab, setActiveTab] = useState<'insumos' | 'recetas' | 'producciones' | 'kardex' | 'papelera'>('insumos');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [categoryFilter, setCategoryFilter] = useState<string>('todos');
 
@@ -43,16 +47,24 @@ export const InventoryView: React.FC = () => {
   const [itemToProduce, setItemToProduce] = useState<InventoryItem | null>(null);
   const [selectedProductionLog, setSelectedProductionLog] = useState<ProductionLog | null>(null);
 
+  // Modal de confirmación de borrado
+  const [itemToDelete, setItemToDelete] = useState<InventoryItem | null>(null);
+  const [isPermanentDelete, setIsPermanentDelete] = useState<boolean>(false);
+
   // Modal de ajuste / entrada manual
   const [selectedItemForAdjust, setSelectedItemForAdjust] = useState<InventoryItem | null>(null);
   const [adjustType, setAdjustType] = useState<InventoryMovementType>('compra_entrada');
   const [adjustQuantity, setAdjustQuantity] = useState<number>(100);
   const [adjustReason, setAdjustReason] = useState<string>('');
 
-  // Categorías únicas de inventario
-  const categoriesList = Array.from(new Set(inventory.map((i) => i.category || 'General')));
+  // Separación de inventario activo vs papelera de eliminados
+  const activeInventory = inventory.filter((i) => !i.isDeleted);
+  const deletedInventory = inventory.filter((i) => Boolean(i.isDeleted));
 
-  const filteredInventory = inventory.filter((item) => {
+  // Categorías únicas de inventario activo
+  const categoriesList = Array.from(new Set(activeInventory.map((i) => i.category || 'General')));
+
+  const filteredInventory = activeInventory.filter((item) => {
     if (categoryFilter !== 'todos' && (item.category || 'General') !== categoryFilter) {
       return false;
     }
@@ -65,10 +77,20 @@ export const InventoryView: React.FC = () => {
     return matchName || matchCat || matchRef || matchCode;
   });
 
-  const lowStockItems = inventory.filter((i) => i.currentStock <= i.minStock);
+  const filteredDeletedInventory = deletedInventory.filter((item) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    const matchName = item.name.toLowerCase().includes(q);
+    const matchCat = (item.category || '').toLowerCase().includes(q);
+    const matchRef = (item.reference || '').toLowerCase().includes(q);
+    const matchCode = (item.barcode || '').toLowerCase().includes(q);
+    return matchName || matchCat || matchRef || matchCode;
+  });
+
+  const lowStockItems = activeInventory.filter((i) => i.currentStock <= i.minStock);
 
   // Valor total del inventario en COP
-  const totalInventoryValue = inventory.reduce(
+  const totalInventoryValue = activeInventory.reduce(
     (sum, i) => sum + i.currentStock * (i.costPerUnit || 0),
     0
   );
@@ -116,11 +138,23 @@ export const InventoryView: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="bg-[#14131a] p-4 rounded-2xl border border-[#2d281e]">
-          <span className="text-[10px] text-[#a8a29e] uppercase font-bold tracking-wider">
-            Artículos Registrados
-          </span>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-[#a8a29e] uppercase font-bold tracking-wider">
+              Artículos Activos
+            </span>
+            {deletedInventory.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('papelera')}
+                className="text-[10px] font-bold text-rose-400 hover:text-rose-300 flex items-center gap-1 cursor-pointer"
+              >
+                <Trash2 className="w-3 h-3" />
+                <span>{deletedInventory.length} en papelera</span>
+              </button>
+            )}
+          </div>
           <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-xl font-black text-[#fef3c7]">{inventory.length}</span>
+            <span className="text-xl font-black text-[#fef3c7]">{activeInventory.length}</span>
             <span className="text-xs text-[#a8a29e]">artículos en inventario</span>
           </div>
         </div>
@@ -159,7 +193,7 @@ export const InventoryView: React.FC = () => {
           }`}
         >
           <Boxes className="w-4 h-4" />
-          <span>Artículos ({inventory.length})</span>
+          <span>Artículos Activos ({activeInventory.length})</span>
         </button>
 
         <button
@@ -199,6 +233,19 @@ export const InventoryView: React.FC = () => {
         >
           <History className="w-4 h-4" />
           <span>Kardex / Trazabilidad ({inventoryMovements.length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('papelera')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            activeTab === 'papelera'
+              ? 'bg-[#2b2416] text-[#d4af37] border border-[#d4af37]'
+              : 'bg-[#14131a] text-[#a8a29e] border border-[#24211a] hover:bg-[#1a1922]'
+          }`}
+        >
+          <Trash2 className="w-4 h-4 text-rose-400" />
+          <span>Papelera ({deletedInventory.length})</span>
         </button>
       </div>
 
@@ -330,6 +377,19 @@ export const InventoryView: React.FC = () => {
                                 className="px-2.5 py-1.5 rounded-lg bg-[#1e1c26] text-[#a8a29e] hover:text-white border border-[#383124] hover:bg-[#282633] text-xs font-bold cursor-pointer"
                               >
                                 Ajustar / Entrar
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setItemToDelete(item);
+                                  setIsPermanentDelete(false);
+                                }}
+                                className="p-1.5 rounded-lg bg-[#2a1717] hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-900/40 text-xs font-bold cursor-pointer transition-colors shadow-xs"
+                                title="Enviar a la papelera / espacio de eliminados"
+                                aria-label={`Borrar ${item.name}`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           </td>
@@ -604,6 +664,158 @@ export const InventoryView: React.FC = () => {
         </div>
       )}
 
+      {/* PESTAÑA 5: PAPELERA / ARTÍCULOS ELIMINADOS */}
+      {activeTab === 'papelera' && (
+        <div className="space-y-4">
+          {/* Cabecera explicativa de la papelera */}
+          <div className="p-4 rounded-2xl bg-[#14131a] border border-[#2d281e] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-950/60 border border-rose-800/40 text-rose-300 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-[#fef3c7] flex items-center gap-2">
+                  <span>Espacio de Artículos Eliminados (Papelera)</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-950 text-rose-300 border border-rose-800/50 font-mono">
+                    {deletedInventory.length} archivados
+                  </span>
+                </h3>
+                <p className="text-xs text-[#a8a29e]">
+                  Los artículos en este espacio no afectan el stock activo ni recetas. Puedes recuperarlos en cualquier momento.
+                </p>
+              </div>
+            </div>
+
+            {/* Buscador dentro de papelera */}
+            {deletedInventory.length > 0 && (
+              <div className="relative w-full sm:w-64">
+                <Search className="w-4 h-4 text-[#a8a29e] absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Buscar en papelera..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-[#18171f] border border-[#383124] rounded-xl pl-9 pr-3 py-2 text-xs text-[#fef3c7] focus:outline-none focus:border-[#d4af37]"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Tabla de artículos en papelera */}
+          <div className="rounded-2xl border border-[#2d281e] bg-[#14131a] overflow-hidden shadow-xl">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-[#2d281e] text-[10px] uppercase font-bold text-[#a8a29e] bg-[#18171f]">
+                    <th className="p-3.5">Artículo Eliminado</th>
+                    <th className="p-3.5">Categoría</th>
+                    <th className="p-3.5">Último Stock</th>
+                    <th className="p-3.5">Costo Unit.</th>
+                    <th className="p-3.5">Fecha de Eliminación</th>
+                    <th className="p-3.5 text-right">Acciones de Recuperación</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#24211a]">
+                  {filteredDeletedInventory.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-12 text-center text-[#78716c]">
+                        <div className="max-w-sm mx-auto space-y-2">
+                          <Trash2 className="w-10 h-10 text-zinc-600 mx-auto opacity-40" />
+                          <div className="font-bold text-sm text-[#d6d3d1]">
+                            {deletedInventory.length === 0
+                              ? 'La papelera de inventario está vacía'
+                              : 'No hay artículos eliminados que coincidan con la búsqueda'}
+                          </div>
+                          <p className="text-xs text-[#78716c]">
+                            {deletedInventory.length === 0
+                              ? 'Cuando elimines artículos de inventario, se guardarán aquí de forma segura para que puedas restaurarlos cuando los necesites.'
+                              : 'Prueba cambiando los términos de búsqueda.'}
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredDeletedInventory.map((item) => (
+                      <tr key={item.id} className="hover:bg-[#1a1922] transition-colors">
+                        <td className="p-3.5 font-bold text-[#fef3c7]">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-[#121117] border border-[#2d281e] overflow-hidden shrink-0 flex items-center justify-center opacity-70">
+                              {item.images && item.images.length > 0 ? (
+                                <img src={item.images[0]} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <Boxes className="w-4 h-4 text-[#d4af37]/50" />
+                              )}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="line-through text-[#a8a29e]">{item.name}</span>
+                                <span className="text-[9px] uppercase font-bold px-1.5 py-0.2 rounded bg-rose-950/60 text-rose-300 border border-rose-800/40">
+                                  En Papelera
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-[#78716c] block font-mono">
+                                Ref: {item.reference || 'N/A'} {item.barcode ? `· QR: ${item.barcode}` : ''}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-3.5 text-[#a8a29e]">{item.category || 'General'}</td>
+                        <td className="p-3.5 text-[#d6d3d1] font-mono">
+                          {item.currentStock.toLocaleString('es-CO')} {item.unit}
+                        </td>
+                        <td className="p-3.5 font-mono text-[#d4af37]">
+                          {formatCOP(item.costPerUnit)}
+                        </td>
+                        <td className="p-3.5 text-[#a8a29e] text-[11px]">
+                          <div>{item.deletedAt ? formatColombiaDateTime(item.deletedAt) : 'Fecha no registrada'}</div>
+                          {item.deletedBy && (
+                            <div className="text-[10px] text-[#78716c]">Por: {item.deletedBy}</div>
+                          )}
+                        </td>
+                        <td className="p-3.5 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              disabled={actionLoading}
+                              onClick={async () => {
+                                try {
+                                  await restoreInventoryItem(item.id);
+                                } catch (err) {
+                                  console.error('Error restaurando artículo:', err);
+                                }
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-emerald-950/80 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-700/50 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow-sm"
+                              title="Restaurar artículo de inventario y reincorporarlo al stock activo"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              <span>Recuperar</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={actionLoading}
+                              onClick={() => {
+                                setItemToDelete(item);
+                                setIsPermanentDelete(true);
+                              }}
+                              className="p-1.5 rounded-lg bg-[#2a1717] hover:bg-red-700 text-red-400 hover:text-white border border-red-900/50 text-xs font-bold cursor-pointer transition-colors"
+                              title="Eliminar permanentemente de la base de datos"
+                              aria-label={`Eliminar definitivamente ${item.name}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL DETALLE DE PRODUCCIÓN */}
       {selectedProductionLog && (
         <ProductionDetailModal
@@ -700,6 +912,88 @@ export const InventoryView: React.FC = () => {
         </div>
       )}
 
+      {/* MODAL DE CONFIRMACIÓN DE BORRADO / PAPELERA */}
+      {itemToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#18171f] border border-[#2d281e] rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
+                  isPermanentDelete
+                    ? 'bg-red-950/80 text-red-400 border border-red-600/40'
+                    : 'bg-amber-950/80 text-[#d4af37] border border-[#d4af37]/40'
+                }`}
+              >
+                {isPermanentDelete ? <AlertTriangle className="w-6 h-6" /> : <Trash2 className="w-6 h-6" />}
+              </div>
+              <div>
+                <h3 className="text-base font-black text-[#fef3c7]">
+                  {isPermanentDelete ? '¿Eliminar Definitivamente?' : '¿Mover a la Papelera?'}
+                </h3>
+                <p className="text-xs text-[#a8a29e]">
+                  {isPermanentDelete
+                    ? 'Esta acción es permanente e irreversible'
+                    : 'Podrás restaurarlo cuando lo desees desde la papelera'}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-[#14131a] border border-[#2d281e] space-y-1.5 text-xs">
+              <div className="font-bold text-[#fef3c7] flex items-center gap-2">
+                <Boxes className="w-4 h-4 text-[#d4af37]" />
+                <span>{itemToDelete.name}</span>
+              </div>
+              <div className="flex items-center justify-between text-[#a8a29e] text-[11px] pt-1 border-t border-[#2d281e]">
+                <span>Referencia: {itemToDelete.reference || 'Sin Ref'}</span>
+                <span>Stock Actual: {itemToDelete.currentStock} {itemToDelete.unit}</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-[#d6d3d1] leading-relaxed">
+              {isPermanentDelete
+                ? 'El artículo se eliminará completamente de la base de datos de la sucursal. Los movimientos de Kardex históricos se conservarán pero el insumo dejará de existir en la aplicación.'
+                : 'El artículo dejará de aparecer en la lista activa de inventario, recetas y producción, pero permanecerá guardado en la pestaña "Papelera" para recuperarlo con 1 solo clic.'}
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={() => {
+                  setItemToDelete(null);
+                  setIsPermanentDelete(false);
+                }}
+                className="px-4 py-2.5 rounded-xl border border-[#383124] text-xs font-bold text-[#a8a29e] hover:bg-[#201e28] cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={async () => {
+                  try {
+                    await deleteInventoryItem(itemToDelete.id, isPermanentDelete);
+                    setItemToDelete(null);
+                    setIsPermanentDelete(false);
+                  } catch (err) {
+                    console.error('Error al procesar eliminación:', err);
+                  }
+                }}
+                className={`px-5 py-2.5 rounded-xl font-black text-xs cursor-pointer flex items-center gap-2 shadow-lg transition-all ${
+                  isPermanentDelete
+                    ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-900/30'
+                    : 'bg-[#2a1717] hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-800 shadow-rose-950/40'
+                }`}
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>{isPermanentDelete ? 'Sí, Eliminar Definitivamente' : 'Sí, Mover a Papelera'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
+

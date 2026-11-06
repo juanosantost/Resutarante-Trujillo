@@ -20,7 +20,7 @@ export const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab 
   const { tables, activeOrders, activeComandas, inventory } = useRestaurant();
 
   const occupiedTablesCount = tables.filter((t) => t.status === 'ocupada' || t.status === 'cuenta_solicitada').length;
-  const lowStockCount = inventory.filter((i) => i.currentStock <= i.minStock).length;
+  const lowStockCount = inventory.filter((i) => !i.isDeleted && i.currentStock <= i.minStock).length;
   const newKitchenComandasCount = activeComandas.filter((c) => c.status === 'nueva' || c.status === 'en_preparacion').length;
 
   const navItems = [

@@ -154,7 +154,16 @@ html.theme-light .bg-\[\#3b2a12\],
 html.theme-light .bg-\[\#3d3119\],
 html.theme-light .bg-\[\#3d331e\],
 html.theme-light .bg-\[\#3d321d\],
-html.theme-light .bg-\[\#3d331f\] {
+html.theme-light .bg-\[\#3d331f\],
+html.theme-light [class*="bg-[#2b2416]"],
+html.theme-light [class*="bg-[#292212]"],
+html.theme-light [class*="bg-[#2a2213]"],
+html.theme-light [class*="bg-[#252016]"],
+html.theme-light [class*="bg-[#352c1b]"],
+html.theme-light [class*="bg-[#382f1d]"],
+html.theme-light [class*="bg-[#3d321d]"],
+html.theme-light [class*="bg-[#3d3119]"],
+html.theme-light [class*="bg-[#383124]"] {
   background-color: #fef9ee !important;
 }
 
@@ -400,6 +409,55 @@ html.theme-light span.w-12.h-12.rounded-2xl {
 }
 
 /* --------------------------------------------------------------------------
+   CONTENEDOR DE "CUENTA ABIERTA" EN MESAS & SALÓN Y MODALES
+   -------------------------------------------------------------------------- */
+html.theme-light .table-open-tab-container,
+html.theme-light div[class*="bg-[#292212]"],
+html.theme-light .bg-\[\#292212\]\/90,
+html.theme-light .bg-\[\#292212\]\/80,
+html.theme-light .bg-\[\#292212\]\/70,
+html.theme-light .bg-\[\#292212\] {
+  background-color: #fef3c7 !important;
+  border-color: #f59e0b !important;
+  box-shadow: 0 1px 3px 0 rgba(217, 119, 6, 0.12) !important;
+}
+
+html.theme-light .table-open-tab-container div,
+html.theme-light .table-open-tab-container span,
+html.theme-light div[class*="bg-[#292212]"] div,
+html.theme-light div[class*="bg-[#292212]"] span,
+html.theme-light .bg-\[\#292212\]\/90 div,
+html.theme-light .bg-\[\#292212\]\/90 span {
+  color: #78350f !important;
+  font-weight: 800 !important;
+}
+
+html.theme-light .table-open-tab-container svg,
+html.theme-light div[class*="bg-[#292212]"] svg,
+html.theme-light .bg-\[\#292212\]\/90 svg {
+  color: #b45309 !important;
+}
+
+/* Valor numérico de la cuenta abierta: máxima legibilidad en mono */
+html.theme-light .table-open-tab-container span.font-mono,
+html.theme-light .table-open-tab-container .font-mono,
+html.theme-light div[class*="bg-[#292212]"] span.font-mono,
+html.theme-light div[class*="bg-[#292212]"] .font-mono,
+html.theme-light .bg-\[\#292212\]\/90 span.font-mono,
+html.theme-light .bg-\[\#292212\]\/90 .font-mono {
+  color: #0f172a !important;
+  font-weight: 900 !important;
+}
+
+/* Insignias o chips de "Cuenta Abierta" en modales o listas */
+html.theme-light span[class*="bg-[#292212]"] {
+  background-color: #fef3c7 !important;
+  border-color: #f59e0b !important;
+  color: #78350f !important;
+  font-weight: 800 !important;
+}
+
+/* --------------------------------------------------------------------------
    6. CONTROLES DE FORMULARIO (INPUTS, TEXTAREAS, SELECTS)
    -------------------------------------------------------------------------- */
 html.theme-light input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]),
@@ -482,7 +540,30 @@ html.theme-light [class*="from-[#191919]"] {
 
 /* Por defecto, todo botón en modo claro tiene letra negra visible y borde claro */
 html.theme-light button {
+  color: #0f172a !important;
+}
+
+/* Modal Close Buttons (w-8 h-8, w-9 h-9, etc.) */
+html.theme-light button[class*="bg-[#24222e]"],
+html.theme-light button[class*="bg-[#252525]"].rounded-full,
+html.theme-light button[class*="bg-[#242424]"].rounded-full,
+html.theme-light button[class*="bg-[#1c1a24]"].rounded-xl {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
+}
+html.theme-light button[class*="bg-[#24222e]"]:hover,
+html.theme-light button[class*="bg-[#252525]"].rounded-full:hover,
+html.theme-light button[class*="bg-[#242424]"].rounded-full:hover,
+html.theme-light button[class*="bg-[#1c1a24]"].rounded-xl:hover {
+  background-color: #e2e8f0 !important;
   color: #000000 !important;
+}
+html.theme-light button[class*="bg-[#24222e]"] svg,
+html.theme-light button[class*="bg-[#252525]"].rounded-full svg,
+html.theme-light button[class*="bg-[#242424]"].rounded-full svg,
+html.theme-light button[class*="bg-[#1c1a24]"].rounded-xl svg {
+  color: #0f172a !important;
 }
 
 /* Todos los botones con fondos oscuros se transforman en botones claros con letra negra */
@@ -495,30 +576,87 @@ html.theme-light button.bg-\[\#1e1e1e\],
 html.theme-light button.bg-\[\#222\],
 html.theme-light button.bg-\[\#333\],
 html.theme-light button.bg-\[\#252525\],
+html.theme-light button.bg-\[\#2b2b2b\],
 html.theme-light button.bg-\[\#2d2d2d\],
 html.theme-light button.bg-\[\#2e2e2e\],
 html.theme-light button.bg-\[\#131313\],
 html.theme-light button[class*="bg-[#242424]"],
 html.theme-light button[class*="bg-[#181818]"],
+html.theme-light button[class*="bg-[#1a1a1a]"],
 html.theme-light button[class*="bg-[#14131a]"],
 html.theme-light button[class*="bg-[#1e1e1e]"],
+html.theme-light button[class*="bg-[#252525]"],
+html.theme-light button[class*="bg-[#2b2b2b]"],
+html.theme-light button[class*="bg-[#2d2d2d]"],
 html.theme-light button[class*="bg-[#2e2e2e]"],
+html.theme-light button[class*="bg-[#303030]"],
+html.theme-light button[class*="bg-[#333]"],
+html.theme-light button[class*="bg-[#383838]"],
+html.theme-light button[class*="bg-[#121117]"],
+html.theme-light button[class*="bg-[#18171f]"],
+html.theme-light button[class*="bg-[#18171d]"],
+html.theme-light button[class*="bg-[#17161f]"],
+html.theme-light button[class*="bg-[#17171f]"],
+html.theme-light button[class*="bg-[#14141b]"],
+html.theme-light button[class*="bg-[#1e1b26]"],
+html.theme-light button[class*="bg-[#1b1924]"],
+html.theme-light button[class*="bg-[#1a1922]"],
+html.theme-light button[class*="bg-[#1a1924]"],
+html.theme-light button[class*="bg-[#181611]"],
+html.theme-light button[class*="bg-[#201e28]"],
+html.theme-light button[class*="bg-[#282633]"],
+html.theme-light button[class*="bg-[#1f1f24]"],
+html.theme-light button[class*="bg-[#131313]"],
+html.theme-light button[class*="bg-[#222]"],
+html.theme-light button[class*="bg-[#24222e]"],
 html.theme-light button.bg-neutral-800,
 html.theme-light button.bg-stone-800,
-html.theme-light button.bg-zinc-800 {
+html.theme-light button.bg-zinc-800,
+html.theme-light button[class*="bg-neutral-800"],
+html.theme-light button[class*="bg-stone-800"],
+html.theme-light button[class*="bg-zinc-800"] {
   background-color: #ffffff !important;
-  color: #000000 !important;
+  color: #0f172a !important;
   border-color: #cbd5e1 !important;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.06) !important;
 }
 
+/* Botones secundarios con borde oscuro (como Cancelar, Cerrar, etc.) */
+html.theme-light button[class*="border-[#383124]"],
+html.theme-light button[class*="border-[#383838]"],
+html.theme-light button[class*="border-[#444]"],
+html.theme-light button[class*="border-[#444444]"],
+html.theme-light button[class*="border-[#2d2d2d]"],
+html.theme-light button[class*="border-[#2d281e]"] {
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+/* Hover de botones neutros en modo claro: fondo gris claro y texto nítido */
 html.theme-light button.bg-\[\#242424\]:hover,
 html.theme-light button.bg-\[\#181818\]:hover,
 html.theme-light button.bg-\[\#14131a\]:hover,
 html.theme-light button.bg-\[\#1e1e1e\]:hover,
+html.theme-light button[class*="hover:bg-[#2e2e2e]"]:hover,
+html.theme-light button[class*="hover:bg-[#2d2d2d]"]:hover,
+html.theme-light button[class*="hover:bg-[#333]"]:hover,
+html.theme-light button[class*="hover:bg-[#322f3f]"]:hover,
+html.theme-light button[class*="hover:bg-[#1a1922]"]:hover,
+html.theme-light button[class*="hover:bg-[#2b2b2b]"]:hover,
+html.theme-light button[class*="hover:bg-[#201e28]"]:hover,
+html.theme-light button[class*="hover:bg-[#282633]"]:hover,
+html.theme-light button[class*="hover:bg-[#242424]"]:hover,
+html.theme-light button[class*="hover:bg-[#303030]"]:hover,
+html.theme-light button[class*="hover:bg-[#383838]"]:hover,
+html.theme-light button[class*="hover:bg-[#181818]"]:hover,
+html.theme-light button[class*="hover:bg-[#14131a]"]:hover,
+html.theme-light button[class*="hover:bg-[#1e1e1e]"]:hover,
+html.theme-light button[class*="hover:bg-[#121117]"]:hover,
+html.theme-light button[class*="hover:bg-[#252525]"]:hover,
 html.theme-light button:hover {
   background-color: #f1f5f9 !important;
-  color: #000000 !important;
+  color: #0f172a !important;
+  border-color: #94a3b8 !important;
 }
 
 /* Botones principales con degradado dorado Colmena: ámbar dorado luminoso y letra negra */
@@ -528,7 +666,10 @@ html.theme-light button[class*="from-[#B77900]"],
 html.theme-light button[class*="from-[#d4af37]"],
 html.theme-light button.bg-\[\#B77900\],
 html.theme-light button.bg-\[\#d4af37\],
-html.theme-light button.bg-\[\#D6A21A\] {
+html.theme-light button.bg-\[\#D6A21A\],
+html.theme-light button[class*="bg-[#B77900]"],
+html.theme-light button[class*="bg-[#d4af37]"],
+html.theme-light button[class*="bg-[#D6A21A]"] {
   background: linear-gradient(135deg, #fbbf24, #f59e0b) !important;
   color: #000000 !important;
   font-weight: 900 !important;
@@ -536,18 +677,65 @@ html.theme-light button.bg-\[\#D6A21A\] {
   box-shadow: 0 2px 4px 0 rgba(217, 119, 6, 0.25) !important;
 }
 
-/* Botones tipo "Agregar Productos" y botones ámbar secundarios */
+/* Botones secundarios ámbar (Agregar Productos, Cobrar Todos, Cambiar Mesa, Filtros activos, etc.) */
 html.theme-light button[class*="from-[#292212]"],
 html.theme-light button[class*="bg-[#292212]"],
 html.theme-light button[class*="bg-[#2b2416]"],
-html.theme-light button[class*="bg-[#1f1b14]"] {
+html.theme-light button[class*="bg-[#2a2213]"],
+html.theme-light button[class*="bg-[#252016]"],
+html.theme-light button[class*="bg-[#352c1b]"],
+html.theme-light button[class*="bg-[#382f1d]"],
+html.theme-light button[class*="bg-[#3d321d]"],
+html.theme-light button[class*="bg-[#3d331f]"],
+html.theme-light button[class*="from-[#201c14]"],
+html.theme-light button[class*="bg-[#1f1b14]"],
+html.theme-light button[class*="bg-[#1c1a24]"][class*="text-[#d4af37]"],
+html.theme-light button[class*="bg-[#1c1a24]"][class*="text-[#D6A21A]"] {
   background-color: #fef3c7 !important;
-  color: #000000 !important;
+  color: #78350f !important;
   font-weight: 800 !important;
-  border-color: #f59e0b !important;
+  border-color: #d97706 !important;
+}
+html.theme-light button[class*="from-[#292212]"] span,
+html.theme-light button[class*="bg-[#292212]"] span,
+html.theme-light button[class*="bg-[#2b2416]"] span,
+html.theme-light button[class*="bg-[#2a2213]"] span,
+html.theme-light button[class*="bg-[#252016]"] span,
+html.theme-light button[class*="bg-[#352c1b]"] span,
+html.theme-light button[class*="bg-[#1c1a24]"][class*="text-[#d4af37]"] span {
+  color: #78350f !important;
 }
 
-/* Textos dentro de botones: asegurar que todos sean negros */
+/* Hover de botones ámbar secundarios */
+html.theme-light button[class*="from-[#292212]"]:hover,
+html.theme-light button[class*="bg-[#292212]"]:hover,
+html.theme-light button[class*="bg-[#2b2416]"]:hover,
+html.theme-light button[class*="hover:bg-[#2b2416]"]:hover,
+html.theme-light button[class*="hover:bg-[#3d321d]"]:hover,
+html.theme-light button[class*="hover:bg-[#382f1d]"]:hover,
+html.theme-light button[class*="hover:bg-[#292212]"]:hover {
+  background-color: #fde68a !important;
+  color: #78350f !important;
+  border-color: #b45309 !important;
+}
+
+/* Badges / Contadores dentro de botones (por ejemplo, cantidades en pestañas de categoría) */
+html.theme-light button span[class*="bg-[#292929]"],
+html.theme-light button span[class*="bg-[#181818]"],
+html.theme-light button span[class*="bg-[#242424]"],
+html.theme-light button span[class*="bg-[#1a1a1a]"] {
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+/* Insignia dentro de pestaña de categoría seleccionada */
+html.theme-light button[class*="bg-[#B77900]"] span[class*="bg-[#181818]"],
+html.theme-light button[class*="border-[#B77900]"] span[class*="bg-[#181818]"] {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+  color: #78350f !important;
+  font-weight: 800 !important;
+}
+
+/* Textos dentro de botones: asegurar que todos sean de alto contraste */
 html.theme-light button span,
 html.theme-light button p,
 html.theme-light button div,
@@ -563,16 +751,40 @@ html.theme-light button.text-\[\#fef3c7\],
 html.theme-light button.text-\[\#d6d3d1\],
 html.theme-light button.text-\[\#a8a29e\],
 html.theme-light button.text-white:not([class*="bg-emerald"]):not([class*="bg-red"]):not([class*="bg-blue"]) {
-  color: #000000 !important;
+  color: #0f172a !important;
 }
 
-/* Pestañas / Filtros activos: fondo crema dorado y letra negra */
+/* Iconos SVG dentro de botones neutros */
+html.theme-light button:not([class*="bg-emerald"]):not([class*="bg-red"]):not([class*="bg-rose"]):not([class*="from-emerald"]):not([class*="from-red"]):not([class*="bg-gradient-to-r"]) svg:not([class*="text-emerald"]):not([class*="text-red"]):not([class*="text-amber"]):not([class*="text-[#D6A21A]"]):not([class*="text-[#d4af37]"]) {
+  color: #0f172a !important;
+}
+
+/* Pestañas / Filtros activos: fondo crema dorado y letra ámbar oscura nítida */
 html.theme-light button[class*="border-[#D6A21A]"],
 html.theme-light button[class*="border-[#B77900]"] {
   background-color: #fef3c7 !important;
-  color: #000000 !important;
+  color: #78350f !important;
   font-weight: 900 !important;
   border-color: #d97706 !important;
+}
+
+/* Botón de acción verde secundario (e.g. Incomes) */
+html.theme-light button[class*="bg-[#1e2a1e]"],
+html.theme-light button.bg-emerald-950,
+html.theme-light button[class*="bg-emerald-950"] {
+  background-color: #d1fae5 !important;
+  color: #064e3b !important;
+  border-color: #6ee7b7 !important;
+  font-weight: 800 !important;
+}
+html.theme-light button[class*="bg-[#1e2a1e]"]:hover,
+html.theme-light button[class*="hover:bg-[#253525]"]:hover {
+  background-color: #a7f3d0 !important;
+  color: #064e3b !important;
+}
+html.theme-light button[class*="bg-[#1e2a1e]"] span,
+html.theme-light button[class*="bg-emerald-950"] span {
+  color: #064e3b !important;
 }
 
 /* Botones de acción positiva / cobro (Verde): legibilidad garantizada */
@@ -588,18 +800,6 @@ html.theme-light button.bg-emerald-600 span {
   color: #ffffff !important;
 }
 
-/* Botones secundarios en verde */
-html.theme-light button.bg-emerald-950,
-html.theme-light button[class*="bg-emerald-950"] {
-  background-color: #d1fae5 !important;
-  color: #064e3b !important;
-  border-color: #6ee7b7 !important;
-  font-weight: 800 !important;
-}
-html.theme-light button[class*="bg-emerald-950"] span {
-  color: #064e3b !important;
-}
-
 /* Botones de peligro / anulación / cierre (Rojo) */
 html.theme-light button.bg-red-600,
 html.theme-light button.bg-rose-600,
@@ -611,16 +811,34 @@ html.theme-light button[class*="bg-red-600"] {
 html.theme-light button.bg-red-950,
 html.theme-light button.bg-rose-950,
 html.theme-light button[class*="bg-red-950"],
-html.theme-light button[class*="bg-rose-950"] {
+html.theme-light button[class*="bg-rose-950"],
+html.theme-light button[class*="bg-[#2a1717]"] {
   background-color: #fee2e2 !important;
   color: #991b1b !important;
   border-color: #fca5a5 !important;
   font-weight: 800 !important;
 }
 html.theme-light button[class*="bg-red-950"] span,
-html.theme-light button[class*="bg-rose-950"] span {
+html.theme-light button[class*="bg-rose-950"] span,
+html.theme-light button[class*="bg-[#2a1717]"] span {
   color: #991b1b !important;
 }
+html.theme-light button[class*="bg-[#2a1717]"] svg {
+  color: #dc2626 !important;
+}
+html.theme-light button[class*="bg-[#2a1717]"]:hover,
+html.theme-light button[class*="hover:bg-rose-600"]:hover {
+  background-color: #dc2626 !important;
+  color: #ffffff !important;
+  border-color: #b91c1c !important;
+}
+html.theme-light button[class*="bg-[#2a1717]"]:hover svg,
+html.theme-light button[class*="hover:bg-rose-600"]:hover svg,
+html.theme-light button[class*="bg-[#2a1717]"]:hover span,
+html.theme-light button[class*="hover:bg-rose-600"]:hover span {
+  color: #ffffff !important;
+}
+
 
 /* Botones de avance de despacho (Azul, Púrpura, Naranja) */
 html.theme-light button.bg-blue-950,
@@ -660,6 +878,8 @@ html.theme-light button[class*="bg-orange-950"] span {
    9. INSIGNIAS Y CHIPS DE ESTADO (ROJO, VERDE, ÁMBAR, AZUL, PÚRPURA, NARANJA)
    -------------------------------------------------------------------------- */
 /* Rojo y Rosa / Desactivado / Inactivo / Mesa Ocupada */
+html.theme-light [class*="bg-red-950"],
+html.theme-light [class*="bg-rose-950"],
 html.theme-light .bg-red-950\/60,
 html.theme-light .bg-red-950\/40,
 html.theme-light .bg-red-950\/80,
@@ -683,9 +903,13 @@ html.theme-light .text-rose-400 {
 }
 
 /* Verde y Emerald / Activo / Pagado / Libre */
+html.theme-light [class*="bg-emerald-950"],
+html.theme-light [class*="bg-green-950"],
 html.theme-light .bg-emerald-950\/60,
 html.theme-light .bg-emerald-950\/40,
 html.theme-light .bg-emerald-950\/80,
+html.theme-light .bg-emerald-950\/30,
+html.theme-light .bg-emerald-950\/20,
 html.theme-light .bg-emerald-950,
 html.theme-light .bg-green-950\/60,
 html.theme-light .bg-green-950\/40,
@@ -701,7 +925,9 @@ html.theme-light .text-green-400 {
   color: #047857 !important;
 }
 
-/* Ámbar / Pendiente / Turno */
+/* Ámbar / Pendiente / Turno / Cuenta */
+html.theme-light [class*="bg-amber-950"],
+html.theme-light .bg-amber-950\/70,
 html.theme-light .bg-amber-950\/60,
 html.theme-light .bg-amber-950\/40,
 html.theme-light .bg-amber-950\/80,
@@ -717,10 +943,13 @@ html.theme-light .text-amber-400 {
 }
 
 /* Azul y Sky / Domicilio / Cuenta pedida / Limpieza */
+html.theme-light [class*="bg-blue-950"],
+html.theme-light [class*="bg-sky-950"],
 html.theme-light .bg-blue-950\/60,
 html.theme-light .bg-blue-950\/40,
 html.theme-light .bg-blue-950\/80,
 html.theme-light .bg-blue-950,
+html.theme-light .bg-sky-950\/70,
 html.theme-light .bg-sky-950\/60,
 html.theme-light .bg-sky-950\/40,
 html.theme-light .bg-sky-950 {
@@ -736,6 +965,9 @@ html.theme-light .text-sky-400 {
 }
 
 /* Púrpura y Violeta / Reservada / Layaway */
+html.theme-light [class*="bg-purple-950"],
+html.theme-light [class*="bg-violet-950"],
+html.theme-light .bg-purple-950\/70,
 html.theme-light .bg-purple-950\/60,
 html.theme-light .bg-purple-950\/40,
 html.theme-light .bg-purple-950\/80,
@@ -782,22 +1014,72 @@ html.theme-light .shadow-lg {
 }
 
 /* --------------------------------------------------------------------------
-   11. TABLAS Y ENCABEZADOS DE DATOS
+   11. TABLAS Y ENCABEZADOS DE DATOS (MODO CLARO)
    -------------------------------------------------------------------------- */
+html.theme-light table {
+  color: #0f172a !important;
+}
+
+html.theme-light table thead,
 html.theme-light table th {
   background-color: #f1f5f9 !important;
-  color: #000000 !important;
+  color: #0f172a !important;
   border-color: #cbd5e1 !important;
   font-weight: 800 !important;
 }
 
-html.theme-light table td {
-  border-color: #e2e8f0 !important;
-  color: #000000 !important;
+html.theme-light table tbody {
+  background-color: #ffffff !important;
 }
 
-html.theme-light table tr:hover td {
-  background-color: rgba(245, 158, 11, 0.08) !important;
+html.theme-light table td {
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+/* Hover en filas y celdas td de tablas: fondo claro suave y letra oscura de alto contraste */
+html.theme-light table tr:hover,
+html.theme-light table tbody tr:hover,
+html.theme-light tr[class*="hover:bg-"]:hover,
+html.theme-light tr.hover\:bg-\[\#1f1f1f\]:hover,
+html.theme-light tr.hover\:bg-\[\#222222\]:hover,
+html.theme-light tr.hover\:bg-\[\#212121\]:hover,
+html.theme-light tr.hover\:bg-\[\#1a1922\]:hover,
+html.theme-light tr.hover\:bg-\[\#1f1e24\]:hover,
+html.theme-light tr.hover\:bg-\[\#1f1d24\]:hover,
+html.theme-light tr.hover\:bg-\[\#1a1a1c\]:hover {
+  background-color: #fef9ee !important;
+  color: #0f172a !important;
+}
+
+html.theme-light table tr:hover td,
+html.theme-light table tbody tr:hover td,
+html.theme-light table td:hover,
+html.theme-light tr[class*="hover:bg-"]:hover td,
+html.theme-light tr.hover\:bg-\[\#1f1f1f\]:hover td,
+html.theme-light tr.hover\:bg-\[\#222222\]:hover td,
+html.theme-light tr.hover\:bg-\[\#212121\]:hover td,
+html.theme-light tr.hover\:bg-\[\#1a1922\]:hover td,
+html.theme-light tr.hover\:bg-\[\#1f1e24\]:hover td,
+html.theme-light tr.hover\:bg-\[\#1f1d24\]:hover td,
+html.theme-light tr.hover\:bg-\[\#1a1a1c\]:hover td {
+  background-color: #fef9ee !important;
+  color: #0f172a !important;
+  border-color: #fde68a !important;
+}
+
+/* Textos e íconos dentro de td al pasar el mouse por encima */
+html.theme-light table tr:hover td div,
+html.theme-light table tr:hover td span:not([class*="bg-"]):not([class*="badge"]):not([class*="sku"]),
+html.theme-light table tr:hover td p {
+  color: #0f172a !important;
+}
+
+/* Título o nombre destacado en la fila hovered (ej. nombre del plato o producto) */
+html.theme-light table tr:hover td div.font-bold,
+html.theme-light table tr:hover td span.font-bold,
+html.theme-light table tr:hover td div[class*="group-hover:text-"] {
+  color: #b45309 !important;
 }
 
 /* --------------------------------------------------------------------------
@@ -901,5 +1183,19 @@ html.theme-light input.font-mono {
   color: #0f172a !important;
   font-weight: 700 !important;
 }
+
+/* Preservar alto contraste en tirilla térmica de cocina */
+html.theme-light #printable-kitchen-pos-ticket {
+  background-color: #fffdfa !important;
+  color: #0a0a0a !important;
+}
+html.theme-light #printable-kitchen-pos-ticket .bg-black {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+}
+html.theme-light #printable-kitchen-pos-ticket .bg-black * {
+  color: #ffffff !important;
+}
+
 
 

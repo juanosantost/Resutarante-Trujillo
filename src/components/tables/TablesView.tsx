@@ -12,6 +12,7 @@ import { NewOrderModal } from '../modals/NewOrderModal';
 import { AddRoundModal } from '../modals/AddRoundModal';
 import { CheckoutModal } from '../modals/CheckoutModal';
 import { ReceiptModal } from '../modals/ReceiptModal';
+import { KitchenTicketModal } from '../modals/KitchenTicketModal';
 import { RestaurantConfigView } from '../config/RestaurantConfigView';
 import {
   Users,
@@ -30,6 +31,7 @@ import {
   User,
   Coffee,
   RotateCcw,
+  Printer,
 } from 'lucide-react';
 
 export const TablesView: React.FC = () => {
@@ -49,6 +51,7 @@ export const TablesView: React.FC = () => {
   const [newOrderTable, setNewOrderTable] = useState<Table | null>(null);
   const [addRoundOrder, setAddRoundOrder] = useState<Order | null>(null);
   const [checkoutOrder, setCheckoutOrder] = useState<Order | null>(null);
+  const [kitchenTicketOrder, setKitchenTicketOrder] = useState<Order | null>(null);
   const [lastPayment, setLastPayment] = useState<any | null>(null);
 
   // Áreas disponibles
@@ -338,7 +341,7 @@ export const TablesView: React.FC = () => {
                 {/* Distinción Explícita: Ocupación Física vs Cuenta Abierta */}
                 <div className="my-2.5">
                   {hasOpenTab ? (
-                    <div className="p-2.5 rounded-xl bg-[#292212]/90 border border-[#B77900]/40 flex items-center justify-between">
+                    <div className="table-open-tab-container p-2.5 rounded-xl bg-[#292212]/90 border border-[#B77900]/40 flex items-center justify-between shadow-sm">
                       <div className="flex items-center gap-1.5 text-xs text-[#D6A21A] font-bold">
                         <Receipt className="w-3.5 h-3.5 shrink-0" />
                         <span>Cuenta Abierta</span>
@@ -401,7 +404,19 @@ export const TablesView: React.FC = () => {
                 )}
 
                 {order ? (
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setKitchenTicketOrder(order);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-[#292212] hover:bg-[#3d3119] border border-[#d4af37]/60 text-[#d4af37] text-[11px] font-black flex items-center gap-1 transition-all cursor-pointer shadow-sm"
+                      title="Imprimir comanda POS Cocina con letra grande"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-[#d4af37]" />
+                      <span>POS Cocina</span>
+                    </button>
                     <button
                       type="button"
                       onClick={(e) => {
@@ -550,6 +565,14 @@ export const TablesView: React.FC = () => {
           payment={lastPayment}
           order={orders.find((o) => o.id === lastPayment.orderId)}
           onClose={() => setLastPayment(null)}
+        />
+      )}
+
+      {/* Modal de Impresión POS Cocina con Letra Grande */}
+      {kitchenTicketOrder && (
+        <KitchenTicketModal
+          order={kitchenTicketOrder}
+          onClose={() => setKitchenTicketOrder(null)}
         />
       )}
     </div>

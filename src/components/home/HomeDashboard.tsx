@@ -24,6 +24,7 @@ import { AddRoundModal } from '../modals/AddRoundModal';
 import { CheckoutModal } from '../modals/CheckoutModal';
 import { ReceiptModal } from '../modals/ReceiptModal';
 import { NewOrderModal } from '../modals/NewOrderModal';
+import { KitchenTicketModal } from '../modals/KitchenTicketModal';
 
 import {
   ClipboardList,
@@ -55,6 +56,7 @@ import {
   XCircle,
   BookmarkCheck,
   CreditCard,
+  Printer,
 } from 'lucide-react';
 
 interface HomeDashboardProps {
@@ -83,6 +85,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
   const [showNewOrderModal, setShowNewOrderModal] = useState<boolean>(false);
   const [selectedOrderForRound, setSelectedOrderForRound] = useState<Order | null>(null);
   const [selectedOrderForCheckout, setSelectedOrderForCheckout] = useState<Order | null>(null);
+  const [selectedOrderForKitchenPrint, setSelectedOrderForKitchenPrint] = useState<Order | null>(null);
   const [receiptPayment, setReceiptPayment] = useState<Payment | null>(null);
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
 
@@ -628,25 +631,35 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
                 {/* 5. Barra de Acciones Directas Requeridas */}
                 <div className="pt-3 border-t border-[#2e2e2e] space-y-2">
                   
-                  {/* Fila 1: Botón Agregar Productos & Botón Cobrar/Pagar */}
-                  <div className="grid grid-cols-2 gap-2">
+                  {/* Fila 1: Botón POS Cocina, Agregar Productos & Botón Cobrar/Pagar */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOrderForKitchenPrint(order)}
+                      className="py-2.5 px-3 rounded-xl bg-[#292212] hover:bg-[#3d3219] text-[#d4af37] border border-[#d4af37]/60 font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm shrink-0"
+                      title="Imprimir comanda POS para cocina con letra grande para cocineros mayores"
+                    >
+                      <Printer className="w-4 h-4 text-[#d4af37]" />
+                      <span>POS Cocina</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => setSelectedOrderForRound(order)}
-                      className="py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#292212] to-[#3a2f16] hover:bg-[#D6A21A] text-[#fef3c7] hover:text-[#181818] border border-[#D6A21A]/60 font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                      className="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#292212] to-[#3a2f16] hover:bg-[#D6A21A] text-[#fef3c7] hover:text-[#181818] border border-[#D6A21A]/60 font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm min-w-[110px]"
                       title="Agregar productos o nueva ronda a este pedido en curso"
                     >
                       <Plus className="w-4 h-4 text-[#D6A21A]" />
-                      <span>Agregar Productos</span>
+                      <span>Agregar</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setSelectedOrderForCheckout(order)}
-                      className="py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:brightness-110 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow cursor-pointer transition-all"
+                      className="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:brightness-110 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow cursor-pointer transition-all min-w-[110px]"
                     >
                       <Receipt className="w-3.5 h-3.5" />
-                      <span>Cobrar / Pagar</span>
+                      <span>Cobrar</span>
                     </button>
                   </div>
 
@@ -766,7 +779,13 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
         />
       )}
 
-
+      {/* MODAL 5: Impresión POS Cocina con Letra Grande */}
+      {selectedOrderForKitchenPrint && (
+        <KitchenTicketModal
+          order={selectedOrderForKitchenPrint}
+          onClose={() => setSelectedOrderForKitchenPrint(null)}
+        />
+      )}
 
       {/* MODAL 6: Anulación de Pedido */}
       {orderToCancel && (
