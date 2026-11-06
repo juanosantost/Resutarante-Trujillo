@@ -3,6 +3,7 @@ import { Order, OrderItem, Comanda, PaperWidth } from '../../types';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatColombiaDateTime } from '../../utils/calculations';
+import { BranchReceiptHeader } from '../common/BranchReceiptHeader';
 import {
   Printer,
   X,
@@ -370,19 +371,19 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
                 is58mm ? 'w-full max-w-[290px]' : 'w-full max-w-[390px]'
               }`}
             >
-              {/* ENCABEZADO DE COMANDA */}
-              <div className="text-center pb-2 border-b-2 border-dashed border-black">
-                <div className="text-xs font-black uppercase tracking-wider text-black">
-                  {branch?.name || 'SISTEMA COLMENA RESTAURANTE'}
-                </div>
-                
-                <div className="my-1.5 py-1 px-2 bg-black text-white font-black tracking-widest text-center uppercase rounded-xs">
-                  <span className={typographyClasses.headerBadge}>*** COMANDA DE COCINA ***</span>
-                </div>
+              {/* ENCABEZADO DINÁMICO DE SUCURSAL (CONFIGURADO EN CONFIGURACIÓN) */}
+              <div className="pb-2 border-b border-dashed border-[#a8a29e]">
+                <BranchReceiptHeader
+                  branch={branch}
+                  snapshot={order?.branchSnapshot}
+                  paperWidth={selectedWidth}
+                  showDianResolution={false}
+                />
+              </div>
 
-                <div className="text-[10px] font-bold text-neutral-700">
-                  {orderType === 'mesa' ? 'SALÓN Y MESAS' : orderType.replace('_', ' ').toUpperCase()}
-                </div>
+              {/* TÍTULO DE COMANDA DE COCINA */}
+              <div className="my-2 py-1.5 px-2 bg-black text-white font-black tracking-widest text-center uppercase rounded-xs">
+                <span className={typographyClasses.headerBadge}>*** COMANDA DE COCINA ***</span>
               </div>
 
               {/* DESTINO GIGANTE: MESA O MODALIDAD */}
