@@ -1223,9 +1223,9 @@ html.theme-light table tr:hover td div[class*="group-hover:text-"] {
 /* Badges de SKU (ej. ENT-EMP-002, HBG-COL-001) */
 html.theme-light .sku-badge,
 html.theme-light span.sku-badge,
-html.theme-light span.font-mono[class*="border"],
-html.theme-light span.font-mono.border,
-html.theme-light div.font-mono[class*="border"] {
+html.theme-light span.font-mono[class*="border"]:not(.colmena-printable-ticket):not(.colmena-printable-ticket *),
+html.theme-light span.font-mono.border:not(.colmena-printable-ticket):not(.colmena-printable-ticket *),
+html.theme-light div.font-mono[class*="border"]:not(.colmena-printable-ticket):not(.colmena-printable-ticket *) {
   background-color: #fef3c7 !important;
   color: #78350f !important;
   border-color: #d97706 !important;
@@ -1319,20 +1319,24 @@ html.theme-light input.font-mono {
   font-weight: 700 !important;
 }
 
-/* Preservar alto contraste en todas las tirillas térmicas POS (vista previa en pantalla en Modo Claro) */
+/* Preservar fondo blanco puro y letra negra en todas las tirillas térmicas POS */
 html.theme-light #printable-kitchen-pos-ticket,
+html.theme-light #colmena-printable-receipt,
+html.theme-light #printable-pos-ticket-preview,
 html.theme-light .colmena-printable-ticket {
-  background-color: #fffdfa !important;
-  color: #0a0a0a !important;
+  background-color: #ffffff !important;
+  color: #000000 !important;
 }
-html.theme-light #printable-kitchen-pos-ticket .bg-black,
-html.theme-light .colmena-printable-ticket .bg-black,
-html.theme-light .colmena-printable-ticket .bg-\[\#181818\] {
+html.theme-light #colmena-printable-receipt *,
+html.theme-light #printable-pos-ticket-preview * {
+  background-color: transparent !important;
+  color: #000000 !important;
+}
+html.theme-light #printable-kitchen-pos-ticket .bg-black {
   background-color: #000000 !important;
   color: #ffffff !important;
 }
-html.theme-light #printable-kitchen-pos-ticket .bg-black *,
-html.theme-light .colmena-printable-ticket .bg-black *,
-html.theme-light .colmena-printable-ticket .bg-\[\#181818\] * {
+html.theme-light #printable-kitchen-pos-ticket .bg-black * {
   color: #ffffff !important;
 }
+
