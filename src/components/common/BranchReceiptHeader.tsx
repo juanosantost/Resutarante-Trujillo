@@ -108,8 +108,8 @@ export const BranchReceiptHeader: React.FC<BranchReceiptHeaderProps> = ({
   return (
     <header
       data-testid="branch-receipt-header"
-      className={`branch-receipt-header text-center flex flex-col items-center justify-center font-mono ${
-        is58mm ? 'text-[10px] space-y-0.5' : 'text-xs space-y-1'
+      className={`branch-receipt-header text-center flex flex-col items-center justify-center font-mono text-black ${
+        is58mm ? 'text-[11px] space-y-0.5' : 'text-xs space-y-1'
       } ${className}`}
     >
       {/* 1. Logotipo de la Sucursal */}
@@ -120,7 +120,7 @@ export const BranchReceiptHeader: React.FC<BranchReceiptHeaderProps> = ({
             alt={name || 'Logotipo Sucursal'}
             className={`object-contain max-w-full ${
               is58mm ? 'max-h-12 max-w-[120px]' : 'max-h-16 max-w-[170px]'
-            } filter contrast-125`}
+            } filter contrast-150`}
             style={{ imageRendering: 'crisp-edges' }}
             onError={(e) => {
               // Ocultar suavemente si falla carga de imagen
@@ -133,8 +133,8 @@ export const BranchReceiptHeader: React.FC<BranchReceiptHeaderProps> = ({
       {/* 2. Nombre Comercial */}
       {printConfig.showTradeName && name.trim() && (
         <div
-          className={`font-black tracking-tight text-neutral-900 uppercase leading-snug break-words max-w-full ${
-            is58mm ? 'text-xs' : 'text-sm'
+          className={`font-black tracking-tight text-black uppercase leading-tight break-words max-w-full ${
+            is58mm ? 'text-sm' : 'text-base sm:text-lg'
           }`}
         >
           {name.trim()}
@@ -143,28 +143,28 @@ export const BranchReceiptHeader: React.FC<BranchReceiptHeaderProps> = ({
 
       {/* 3. NIT */}
       {printConfig.showNit && nit.trim() && (
-        <div className="font-semibold text-neutral-800 break-words max-w-full">
+        <div className="font-black text-black break-words max-w-full">
           NIT: {nit.trim()}
         </div>
       )}
 
       {/* 4. Dirección */}
       {printConfig.showAddress && address.trim() && (
-        <div className="text-neutral-700 leading-tight break-words max-w-full">
+        <div className="font-bold text-black leading-tight break-words max-w-full">
           {address.trim()}
         </div>
       )}
 
       {/* 5. Celular / Teléfono */}
       {printConfig.showPhone && phone.trim() && (
-        <div className="text-neutral-700 leading-tight break-words max-w-full">
+        <div className="font-bold text-black leading-tight break-words max-w-full">
           Tel: {phone.trim()}
         </div>
       )}
 
       {/* Resolución DIAN Opcional en el encabezado */}
       {showDianResolution && resolutionDian && (
-        <div className="text-[9px] text-neutral-600 italic pt-0.5 border-t border-neutral-300 mt-1 max-w-full break-words">
+        <div className="text-[10px] font-bold text-black pt-0.5 border-t border-black mt-1 max-w-full break-words">
           {resolutionDian}
         </div>
       )}

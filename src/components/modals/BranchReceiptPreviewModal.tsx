@@ -300,67 +300,122 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
             <div
               id="printable-pos-ticket-preview"
               data-testid="pos-ticket-preview"
-              className={`bg-[#fffdfa] text-[#1c1917] font-mono shadow-2xl rounded-sm p-4 sm:p-5 border-t-8 border-b-8 border-dashed border-[#e7e5e4] transition-all select-all print:shadow-none print:border-none print:m-0 print:p-0 ${
-                is58mm ? 'w-full max-w-[270px] text-[10px]' : 'w-full max-w-[360px] text-[11px]'
+              className={`colmena-printable-ticket bg-[#fffdfa] text-[#0a0a0a] font-mono shadow-2xl rounded-sm p-4 sm:p-5 border-t-8 border-b-8 border-dashed border-[#e7e5e4] transition-all select-all print:shadow-none print:border-none print:m-0 print:p-0 print:text-black print:bg-white ${
+                is58mm ? 'w-full max-w-[270px]' : 'w-full max-w-[360px]'
               }`}
             >
-              {/* Encabezado Dinámico Reutilizable */}
-              <BranchReceiptHeader
-                branch={branch}
-                overrideData={{
-                  name,
-                  nit,
-                  address,
-                  phone,
-                  logoUrl,
-                  printConfig: activeConfig,
-                  resolutionDian,
-                }}
-                paperWidth={selectedWidth}
-                showDianResolution={false}
-              />
+              {/* 1. Encabezado Dinámico Reutilizable */}
+              <div className="pb-2 border-b-2 border-dashed border-black">
+                <BranchReceiptHeader
+                  branch={branch}
+                  overrideData={{
+                    name,
+                    nit,
+                    address,
+                    phone,
+                    logoUrl,
+                    printConfig: activeConfig,
+                    resolutionDian,
+                  }}
+                  paperWidth={selectedWidth}
+                  showDianResolution={false}
+                />
+              </div>
 
-              {/* Información del Documento de Simulación */}
-              <div className="py-2.5 my-2 border-y border-dashed border-[#a8a29e] space-y-1 text-[10px] text-neutral-800">
-                <div className="flex justify-between">
-                  <span>Factura de Venta POS:</span>
-                  <span className="font-bold">{prefix}{currentNumber}</span>
+              {/* 2. Título de Comprobante POS */}
+              <div className="my-2 py-1.5 px-2 bg-black text-white font-black tracking-widest text-center uppercase rounded-xs">
+                <span className={is58mm ? 'text-xs font-black' : 'text-sm font-black'}>
+                  *** COMPROBANTE DE VENTA POS ***
+                </span>
+              </div>
+
+              {/* 3. Recuadro destacado de Factura y Cliente */}
+              <div className="my-2 py-2 px-2.5 border-2 border-black rounded-xs bg-neutral-100 text-black space-y-1">
+                <div className="flex justify-between items-center border-b border-black pb-1">
+                  <span className="text-[11px] font-black uppercase">FACTURA POS:</span>
+                  <span className={`${is58mm ? 'text-base' : 'text-lg'} font-black tracking-tight`}>
+                    {prefix}{currentNumber}
+                  </span>
                 </div>
-                <div className="flex justify-between">
-                  <span>Fecha:</span>
-                  <span>{new Date().toLocaleDateString('es-CO')} {new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</span>
+                <div className="flex justify-between items-start text-xs font-black pt-0.5">
+                  <span className="shrink-0 pr-2">CLIENTE:</span>
+                  <span className="text-right uppercase">CONSUMIDOR FINAL</span>
                 </div>
-                <div className="flex justify-between">
-                  <span>Cajero:</span>
-                  <span>Cajero General / POS</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Cliente:</span>
-                  <span>Consumidor Final (222222222222)</span>
+                <div className="flex justify-between items-center text-xs font-bold">
+                  <span>NIT / CC:</span>
+                  <span className="font-black">222222222222</span>
                 </div>
               </div>
 
-              {/* Items simulados */}
-              <div className="py-2 border-b border-dashed border-[#a8a29e] space-y-1.5">
-                <div className="flex justify-between text-[10px] font-bold text-neutral-900 pb-1 border-b border-neutral-300">
-                  <span>CANT / PRODUCTO</span>
+              {/* 4. Metadatos de Caja */}
+              <div className="py-1.5 border-b-2 border-dashed border-black text-xs font-bold text-black space-y-0.5">
+                <div className="flex justify-between items-center">
+                  <span className="font-black">FECHA / HORA:</span>
+                  <span className="font-bold">
+                    {new Date().toLocaleDateString('es-CO')} {new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="font-black">CAJERO(A):</span>
+                  <span className="font-black uppercase">CAJERO GENERAL / POS</span>
+                </div>
+              </div>
+
+              {/* 5. Items simulados */}
+              <div className="py-2 border-b-2 border-dashed border-black">
+                <div className="flex justify-between items-center text-xs font-black text-black mb-2 pb-1 border-b-2 border-black uppercase">
+                  <span>CANT / DESCRIPCIÓN</span>
                   <span>TOTAL</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="truncate pr-2">1x Hamburguesa Colmena Especial</span>
-                  <span className="font-semibold shrink-0">{formatCOP(32000)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="truncate pr-2">1x Papas Rústicas con Queso</span>
-                  <span className="font-semibold shrink-0">{formatCOP(12000)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="truncate pr-2">2x Limonada de Hierbabuena</span>
-                  <span className="font-semibold shrink-0">{formatCOP(16000)}</span>
+                <div className="space-y-2 text-black">
+                  <div className="pb-1.5 border-b border-dashed border-neutral-400 flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-1.5 flex-1 min-w-0">
+                      <span className="bg-black text-white font-black text-xs px-1.5 py-0.5 rounded-xs shrink-0 min-w-[26px] text-center">
+                        1X
+                      </span>
+                      <div className={`${is58mm ? 'text-xs' : 'text-sm'} font-black text-black uppercase leading-snug break-words`}>
+                        HAMBURGUESA COLMENA ESPECIAL
+                      </div>
+                    </div>
+                    <span className={`${is58mm ? 'text-xs' : 'text-sm'} font-black text-black shrink-0 pt-0.5`}>
+                      {formatCOP(32000)}
+                    </span>
+                  </div>
+                  <div className="pb-1.5 border-b border-dashed border-neutral-400 flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-1.5 flex-1 min-w-0">
+                      <span className="bg-black text-white font-black text-xs px-1.5 py-0.5 rounded-xs shrink-0 min-w-[26px] text-center">
+                        1X
+                      </span>
+                      <div className={`${is58mm ? 'text-xs' : 'text-sm'} font-black text-black uppercase leading-snug break-words`}>
+                        PAPAS RÚSTICAS CON QUESO
+                      </div>
+                    </div>
+                    <span className={`${is58mm ? 'text-xs' : 'text-sm'} font-black text-black shrink-0 pt-0.5`}>
+                      {formatCOP(12000)}
+                    </span>
+                  </div>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-1.5 flex-1 min-w-0">
+                      <span className="bg-black text-white font-black text-xs px-1.5 py-0.5 rounded-xs shrink-0 min-w-[26px] text-center">
+                        2X
+                      </span>
+                      <div>
+                        <div className={`${is58mm ? 'text-xs' : 'text-sm'} font-black text-black uppercase leading-snug break-words`}>
+                          LIMONADA DE HIERBABUENA
+                        </div>
+                        <div className="text-[11px] font-bold text-black">
+                          2 x {formatCOP(8000)} c/u
+                        </div>
+                      </div>
+                    </div>
+                    <span className={`${is58mm ? 'text-xs' : 'text-sm'} font-black text-black shrink-0 pt-0.5`}>
+                      {formatCOP(16000)}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {/* Totales */}
+              {/* 6. Totales */}
               {(() => {
                 const effectiveShowTax =
                   overrideData?.showTax !== undefined
@@ -373,50 +428,54 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
                 const taxRatePercent = Math.round(((branch?.taxRate ?? 0.08) || 0.08) * 100);
 
                 return (
-                  <div className="py-2.5 border-b border-dashed border-[#a8a29e] space-y-1">
-                    <div className="flex justify-between text-neutral-700">
-                      <span>Subtotal:</span>
-                      <span>{formatCOP(subtotal)}</span>
+                  <div className="py-2 border-b-2 border-dashed border-black space-y-1 text-xs font-bold text-black">
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold uppercase">SUBTOTAL:</span>
+                      <span className="font-black">{formatCOP(subtotal)}</span>
                     </div>
                     {effectiveShowTax && (
-                      <div className="flex justify-between text-neutral-700">
-                        <span>Impoconsumo ({taxRatePercent}%):</span>
-                        <span>{formatCOP(tax)}</span>
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold uppercase">IMPOCONSUMO ({taxRatePercent}%):</span>
+                        <span className="font-black">{formatCOP(tax)}</span>
                       </div>
                     )}
-                    <div className="flex justify-between text-emerald-800 font-semibold">
-                      <span>Propina Voluntaria (10%):</span>
-                      <span>{formatCOP(tip)}</span>
+                    <div className="flex justify-between items-center">
+                      <span className="font-black uppercase">PROPINA VOLUNTARIA (10%):</span>
+                      <span className="font-black">{formatCOP(tip)}</span>
                     </div>
-                    <div className="flex justify-between font-black text-sm pt-1.5 border-t border-neutral-400 text-neutral-900">
-                      <span>TOTAL:</span>
-                      <span>{formatCOP(total)}</span>
+                    <div className="mt-1.5 py-2 px-2.5 bg-black text-white rounded-xs flex justify-between items-center">
+                      <span className="text-xs sm:text-sm font-black uppercase tracking-wide">
+                        TOTAL PAGADO:
+                      </span>
+                      <span className={`${is58mm ? 'text-base' : 'text-lg'} font-black`}>
+                        {formatCOP(total)}
+                      </span>
                     </div>
                   </div>
                 );
               })()}
 
-              {/* Medios de Pago */}
-              <div className="py-2 border-b border-dashed border-[#a8a29e] text-[10px] space-y-0.5 text-neutral-800">
-                <div className="flex justify-between">
-                  <span>Forma de Pago:</span>
-                  <span className="font-bold">Efectivo</span>
+              {/* 7. Medios de Pago */}
+              <div className="py-2 border-b-2 border-dashed border-black space-y-1 text-xs font-bold text-black">
+                <div className="flex justify-between items-center">
+                  <span className="font-black uppercase">MEDIO DE PAGO:</span>
+                  <span className="font-black uppercase">EFECTIVO</span>
                 </div>
-                <div className="flex justify-between">
-                  <span>Efectivo Recibido:</span>
-                  <span>{formatCOP(70000)}</span>
+                <div className="flex justify-between items-center">
+                  <span className="font-bold uppercase">EFECTIVO RECIBIDO:</span>
+                  <span className="font-black">{formatCOP(75000)}</span>
                 </div>
-                <div className="flex justify-between font-bold text-emerald-800">
-                  <span>Cambio / Vueltas:</span>
-                  <span>{formatCOP(4000)}</span>
+                <div className="mt-1 py-1 px-2 border-2 border-black bg-neutral-100 rounded-xs flex justify-between items-center text-black">
+                  <span className="font-black uppercase">CAMBIO / VUELTAS:</span>
+                  <span className="text-sm font-black">{formatCOP(4200)}</span>
                 </div>
               </div>
 
-              {/* Pie de Página y Resolución DIAN */}
-              <div className="pt-3 text-center space-y-1 text-[9px] text-neutral-600">
-                <p className="font-semibold text-neutral-900">{footerText}</p>
-                <p className="italic">{resolutionDian}</p>
-                <p className="text-[8px] text-neutral-500 mt-1 uppercase tracking-widest">
+              {/* 8. Pie de Página y Resolución DIAN */}
+              <div className="pt-2.5 text-center space-y-1 text-black">
+                <p className="text-xs font-black text-black uppercase leading-snug">{footerText}</p>
+                <p className="text-[11px] font-bold text-black leading-snug">{resolutionDian}</p>
+                <p className="text-[10px] font-black text-black mt-1 uppercase tracking-widest">
                   *** COMPROBANTE DE PRUEBA POS ***
                 </p>
               </div>

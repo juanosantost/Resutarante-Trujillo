@@ -98,7 +98,7 @@
   .colmena-printable-ticket {
     position: static !important;
     background: white !important;
-    color: black !important;
+    color: #000000 !important;
     border: none !important;
     box-shadow: none !important;
     margin: 0 auto !important;
@@ -109,21 +109,33 @@
     break-inside: avoid !important;
     page-break-after: avoid !important;
     break-after: avoid !important;
+    -webkit-font-smoothing: antialiased !important;
+    text-rendering: optimizeLegibility !important;
   }
 
-  #printable-kitchen-pos-ticket * {
-    color: black !important;
+  #colmena-printable-receipt *,
+  #printable-kitchen-pos-ticket *,
+  #printable-pos-ticket-preview *,
+  .colmena-printable-ticket * {
+    color: #000000 !important;
+    border-color: #000000 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  #printable-kitchen-pos-ticket .bg-black {
-    background-color: black !important;
-    color: white !important;
+  #colmena-printable-receipt .bg-black,
+  #printable-kitchen-pos-ticket .bg-black,
+  #printable-pos-ticket-preview .bg-black,
+  .colmena-printable-ticket .bg-black {
+    background-color: #000000 !important;
+    color: #ffffff !important;
   }
 
-  #printable-kitchen-pos-ticket .bg-black * {
-    color: white !important;
+  #colmena-printable-receipt .bg-black *,
+  #printable-kitchen-pos-ticket .bg-black *,
+  #printable-pos-ticket-preview .bg-black *,
+  .colmena-printable-ticket .bg-black * {
+    color: #ffffff !important;
   }
 }
 
