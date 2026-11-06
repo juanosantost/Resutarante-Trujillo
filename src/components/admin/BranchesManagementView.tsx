@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useAuth, DEFAULT_RECEIPT_CONFIG } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { Branch, ReceiptConfig, BranchPrintConfig, DEFAULT_BRANCH_PRINT_CONFIG, PaperWidth } from '../../types';
+import { Branch, ReceiptConfig, BranchPrintConfig, DEFAULT_BRANCH_PRINT_CONFIG, PaperWidth, KitchenFontSize } from '../../types';
 import { BranchReceiptHeader } from '../common/BranchReceiptHeader';
 import { BranchReceiptPreviewModal } from '../modals/BranchReceiptPreviewModal';
 import { formatColombiaDateTime } from '../../utils/calculations';
@@ -30,6 +30,7 @@ import {
   Calendar,
   AlertCircle,
   Hash,
+  ChefHat,
 } from 'lucide-react';
 
 export const BranchesManagementView: React.FC = () => {
@@ -68,6 +69,8 @@ export const BranchesManagementView: React.FC = () => {
   const [showAddress, setShowAddress] = useState<boolean>(true);
   const [showPhone, setShowPhone] = useState<boolean>(true);
   const [paperWidth, setPaperWidth] = useState<PaperWidth>('80mm');
+  const [kitchenFontSize, setKitchenFontSize] = useState<KitchenFontSize>('grande');
+  const [includeKitchenPrices, setIncludeKitchenPrices] = useState<boolean>(false);
 
   // Form state: Configuración DIAN
   const [headerText, setHeaderText] = useState<string>('SISTEMA COLMENA RESTAURANTE');
@@ -137,7 +140,7 @@ export const BranchesManagementView: React.FC = () => {
     setLogoUrl(b.logoUrl || '');
     setLogoError('');
 
-    // 5 Controles de impresión
+    // Impresión y Preferencias de Cocina
     const printConfig = b.printConfig || DEFAULT_BRANCH_PRINT_CONFIG;
     setShowLogo(printConfig.showLogo ?? true);
     setShowTradeName(printConfig.showTradeName ?? true);
@@ -145,6 +148,8 @@ export const BranchesManagementView: React.FC = () => {
     setShowAddress(printConfig.showAddress ?? true);
     setShowPhone(printConfig.showPhone ?? true);
     setPaperWidth(printConfig.paperWidth || '80mm');
+    setKitchenFontSize(printConfig.kitchenFontSize || 'grande');
+    setIncludeKitchenPrices(printConfig.includeKitchenPrices ?? false);
 
     // DIAN
     setHeaderText(b.receiptConfig?.headerText || 'SISTEMA COLMENA RESTAURANTE');
@@ -230,6 +235,8 @@ export const BranchesManagementView: React.FC = () => {
         showAddress,
         showPhone,
         paperWidth,
+        kitchenFontSize,
+        includeKitchenPrices,
       };
 
       const receiptConfig: ReceiptConfig = {
@@ -1021,6 +1028,59 @@ export const BranchesManagementView: React.FC = () => {
                       />
                     </label>
                   </div>
+                </div>
+
+                {/* Preferencias de Cocina (Tamaño de letra por defecto y precios) */}
+                <div className="p-3.5 rounded-2xl bg-[#222222] border border-[#333333] space-y-3">
+                  <label className="block text-xs font-bold text-[#FFFDF5] flex items-center gap-1.5">
+                    <ChefHat className="w-4 h-4 text-[#D6A21A]" />
+                    <span>Preferencias de Impresión para Cocina (POS Cocina)</span>
+                  </label>
+                  <p className="text-[11px] text-[#a8a29e]">
+                    Configura el tamaño de letra predeterminado para el personal de cocina y si se deben incluir los precios unitarios en el ticket de cocina.
+                  </p>
+
+                  <div className="space-y-2">
+                    <span className="block text-[11px] font-bold text-[#d6d3d1]">
+                      Tamaño de Letra Predeterminado:
+                    </span>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { id: 'compacto', label: 'Normal (14px)' },
+                        { id: 'grande', label: 'Grande (18px)' },
+                        { id: 'extragrande', label: 'Extra Grande (22px)' },
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setKitchenFontSize(item.id as KitchenFontSize)}
+                          className={`p-2 rounded-xl border text-xs font-bold text-center transition-all cursor-pointer ${
+                            kitchenFontSize === item.id
+                              ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] font-black shadow-sm'
+                              : 'bg-[#181818] text-[#a8a29e] border-[#383838] hover:border-[#B77900]'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <label className="flex items-center justify-between p-3 rounded-xl bg-[#181818] border border-[#333333] hover:border-[#B77900]/60 cursor-pointer transition-all mt-2">
+                    <div className="flex items-center gap-2.5">
+                      <Receipt className="w-4 h-4 text-[#D6A21A]" />
+                      <div>
+                        <span className="text-xs font-semibold text-[#FFFDF5] block">Incluir precios de venta en el ticket de cocina</span>
+                        <span className="text-[10px] text-[#a8a29e]">Desactivado por defecto para que cocina solo vea insumos y cantidades</span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={includeKitchenPrices}
+                      onChange={(e) => setIncludeKitchenPrices(e.target.checked)}
+                      className="w-4 h-4 accent-[#B77900] cursor-pointer"
+                    />
+                  </label>
                 </div>
 
                 {/* Previsualización en vivo integrada del encabezado en el formulario */}

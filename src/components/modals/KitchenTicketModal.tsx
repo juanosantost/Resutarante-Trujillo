@@ -39,14 +39,18 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
   const originBranchId = order?.branchId || comanda?.branchId || currentBranch?.id;
   const branch = branches.find((b) => b.id === originBranchId) || currentBranch;
 
-  // Estados de configuración de visualización para el personal de cocina
-  // Por defecto 'grande' para garantizar legibilidad inmediata a personas mayores
-  const [fontSize, setFontSize] = useState<KitchenFontSize>('grande');
+  // Estados de configuración de visualización para el personal de cocina tomados de la configuración de sucursal
+  const branchPrintConfig = branch?.printConfig;
+  const [fontSize, setFontSize] = useState<KitchenFontSize>(
+    branchPrintConfig?.kitchenFontSize || 'grande'
+  );
   const [selectedWidth, setSelectedWidth] = useState<PaperWidth>(
-    order?.branchSnapshot?.printConfig?.paperWidth || branch?.printConfig?.paperWidth || '80mm'
+    order?.branchSnapshot?.printConfig?.paperWidth || branchPrintConfig?.paperWidth || '80mm'
   );
   const [selectedRound, setSelectedRound] = useState<number | 'all'>(initialRound);
-  const [includePrices, setIncludePrices] = useState<boolean>(false);
+  const [includePrices, setIncludePrices] = useState<boolean>(
+    branchPrintConfig?.includeKitchenPrices ?? false
+  );
 
   // Normalizar ítems a imprimir
   const orderNumber = order?.orderNumber ?? comanda?.orderNumber ?? 0;
@@ -187,176 +191,13 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
           </div>
         </div>
 
-        {/* CUERPO: PANEL DE CONTROLES + VISTA PREVIA DEL TICKET */}
-        <div className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-12 gap-6 overflow-y-auto print:block print:p-0 print:overflow-visible">
-          
-          {/* PANEL DE CONTROLES (OCULTO AL IMPRIMIR) */}
-          <div className="md:col-span-5 space-y-4 print:hidden">
-            
-            {/* Control de Tamaño de Letra Especial para Adultos Mayores */}
-            <div className="p-4 rounded-2xl bg-[#18171f] border border-[#2d281e] space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-black uppercase tracking-wider text-[#d4af37] flex items-center gap-1.5">
-                  <ZoomIn className="w-4 h-4" />
-                  Tamaño de Letra para Cocina
-                </label>
-                <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-600/40">
-                  Alta Legibilidad
-                </span>
-              </div>
-              <p className="text-[11px] text-[#a8a29e]">
-                Diseñado para que los cocineros mayores lean las comandas a distancia sin forzar la vista:
-              </p>
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setFontSize('compacto')}
-                  className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all text-center cursor-pointer ${
-                    fontSize === 'compacto'
-                      ? 'bg-[#292212] border-[#d4af37] text-[#fef3c7] shadow'
-                      : 'bg-[#14131a] border-[#2d281e] text-[#a8a29e] hover:bg-[#201e28]'
-                  }`}
-                >
-                  <span className="block text-[10px] text-[#78716c]">14 px</span>
-                  Normal
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setFontSize('grande')}
-                  className={`py-2 px-2 rounded-xl text-xs font-black border transition-all text-center cursor-pointer relative ${
-                    fontSize === 'grande'
-                      ? 'bg-gradient-to-r from-[#2b2210] to-[#3a2e15] border-[#d4af37] text-[#fef3c7] shadow-md ring-1 ring-[#d4af37]'
-                      : 'bg-[#14131a] border-[#2d281e] text-[#a8a29e] hover:bg-[#201e28]'
-                  }`}
-                >
-                  <span className="block text-[10px] text-[#d4af37]">18 px · Sugerido</span>
-                  Grande
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setFontSize('extragrande')}
-                  className={`py-2 px-2 rounded-xl text-xs font-black border transition-all text-center cursor-pointer ${
-                    fontSize === 'extragrande'
-                      ? 'bg-[#292212] border-[#d4af37] text-[#fef3c7] shadow'
-                      : 'bg-[#14131a] border-[#2d281e] text-[#a8a29e] hover:bg-[#201e28]'
-                  }`}
-                >
-                  <span className="block text-[10px] text-amber-300">22 px</span>
-                  Extra Grande
-                </button>
-              </div>
-            </div>
-
-            {/* Selector de Rondas */}
-            {availableRounds.length > 1 && (
-              <div className="p-4 rounded-2xl bg-[#18171f] border border-[#2d281e] space-y-2.5">
-                <label className="text-xs font-black uppercase tracking-wider text-[#d4af37] flex items-center gap-1.5">
-                  <Layers className="w-4 h-4" />
-                  Filtrar Ronda a Cocinar
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedRound('all')}
-                    className={`py-1.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                      selectedRound === 'all'
-                        ? 'bg-[#292212] border-[#d4af37] text-[#fef3c7]'
-                        : 'bg-[#14131a] border-[#2d281e] text-[#a8a29e] hover:bg-[#201e28]'
-                    }`}
-                  >
-                    Todas ({rawItems.length})
-                  </button>
-                  {availableRounds.map((r) => {
-                    const count = rawItems.filter((i) => (i.roundNumber || 1) === r).length;
-                    return (
-                      <button
-                        key={r}
-                        type="button"
-                        onClick={() => setSelectedRound(r)}
-                        className={`py-1.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                          selectedRound === r
-                            ? 'bg-[#292212] border-[#d4af37] text-[#fef3c7]'
-                            : 'bg-[#14131a] border-[#2d281e] text-[#a8a29e] hover:bg-[#201e28]'
-                        }`}
-                      >
-                        Ronda #{r} ({count})
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Ancho del Papel de Impresora POS */}
-            <div className="p-4 rounded-2xl bg-[#18171f] border border-[#2d281e] space-y-2.5">
-              <label className="text-xs font-black uppercase tracking-wider text-[#d4af37] flex items-center gap-1.5">
-                <Printer className="w-4 h-4" />
-                Ancho del Papel Térmico
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedWidth('80mm')}
-                  className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all text-center cursor-pointer ${
-                    selectedWidth === '80mm'
-                      ? 'bg-[#292212] border-[#d4af37] text-[#fef3c7]'
-                      : 'bg-[#14131a] border-[#2d281e] text-[#a8a29e] hover:bg-[#201e28]'
-                  }`}
-                >
-                  80 mm (Estándar Cocina)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedWidth('58mm')}
-                  className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all text-center cursor-pointer ${
-                    selectedWidth === '58mm'
-                      ? 'bg-[#292212] border-[#d4af37] text-[#fef3c7]'
-                      : 'bg-[#14131a] border-[#2d281e] text-[#a8a29e] hover:bg-[#201e28]'
-                  }`}
-                >
-                  58 mm (Tirilla Estrecha)
-                </button>
-              </div>
-            </div>
-
-            {/* Opciones Adicionales */}
-            <div className="p-4 rounded-2xl bg-[#18171f] border border-[#2d281e] space-y-3">
-              <label className="text-xs font-black uppercase tracking-wider text-[#d4af37] flex items-center gap-1.5">
-                <UtensilsCrossed className="w-4 h-4" />
-                Preferencias de Cocina
-              </label>
-              <label className="flex items-center gap-2.5 text-xs text-[#d6d3d1] cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={includePrices}
-                  onChange={(e) => setIncludePrices(e.target.checked)}
-                  className="w-4 h-4 rounded border-[#383124] bg-[#14131a] accent-[#d4af37] cursor-pointer"
-                />
-                <span>Incluir precios de venta (desactivado por defecto)</span>
-              </label>
-            </div>
-
-            {/* Botón Grande de Imprimir en Panel */}
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-[#d4af37] via-[#e6ca65] to-[#b89728] text-[#0e0e12] font-black text-sm flex items-center justify-center gap-2 shadow-xl hover:brightness-110 active:scale-[0.98] cursor-pointer transition-all"
-            >
-              <Printer className="w-5 h-5 stroke-[2.5]" />
-              <span>IMPRIMIR COMANDA DE COCINA</span>
-            </button>
-
-          </div>
-
-          {/* VISTA PREVIA DEL TICKET TÉRMICO (LO QUE SE IMPRIME) */}
-          <div className="md:col-span-7 flex flex-col items-center justify-start print:block print:w-full">
+        {/* VISTA PREVIA DEL TICKET TÉRMICO (LO QUE SE IMPRIME) */}
+        <div className="p-4 sm:p-6 flex flex-col items-center justify-start overflow-y-auto print:block print:p-0 print:overflow-visible">
             
             <div className="w-full flex justify-between items-center mb-2 px-2 print:hidden">
               <span className="text-xs font-black text-[#d4af37] flex items-center gap-1.5">
                 <ChefHat className="w-4 h-4" />
-                Vista Previa del Rollo Térmico
+                Vista Previa del Ticket POS de Cocina (Configurado en Administración)
               </span>
               <span className="text-[11px] text-[#a8a29e] font-mono">
                 {is58mm ? '58 mm (~48 mm imprimible)' : '80 mm (~72 mm imprimible)'}
@@ -536,8 +377,6 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
                 <div className="text-center text-[9px] font-mono text-neutral-500 pt-0.5">
                   Colmena POS · Impreso: {new Date().toLocaleTimeString('es-CO')}
                 </div>
-              </div>
-
             </div>
 
           </div>
