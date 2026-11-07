@@ -98,10 +98,15 @@ export const ProductCustomizeModal: React.FC<ProductCustomizeModalProps> = ({
   const [selectedModifierIds, setSelectedModifierIds] = useState<Record<string, string[]>>(() => {
     if (initialItem?.selectedModifiers && initialItem.selectedModifiers.length > 0) {
       const initMap: Record<string, string[]> = {};
+      for (const group of allGroups) {
+        initMap[group.id] = [];
+      }
       for (const m of initialItem.selectedModifiers) {
-        if (!initMap[m.groupId]) initMap[m.groupId] = [];
-        if (!initMap[m.groupId].includes(m.optionId)) {
-          initMap[m.groupId].push(m.optionId);
+        if (m.optionId && !m.optionId.startsWith('none-')) {
+          if (!initMap[m.groupId]) initMap[m.groupId] = [];
+          if (!initMap[m.groupId].includes(m.optionId)) {
+            initMap[m.groupId].push(m.optionId);
+          }
         }
       }
       return initMap;
@@ -109,12 +114,13 @@ export const ProductCustomizeModal: React.FC<ProductCustomizeModalProps> = ({
 
     const initial: Record<string, string[]> = {};
     for (const group of allGroups) {
-      const defaultOpt = group.options.find((o) => o.isDefault && o.isActive);
+      const activeOpts = group.options.filter((o) => o.isActive !== false);
+      const defaultOpt = activeOpts.find((o) => o.isDefault);
       if (defaultOpt) {
         initial[group.id] = [defaultOpt.id];
-      } else if (group.isRequired && group.minSelections > 0 && group.options.length > 0) {
-        if (group.selectionType === 'single') {
-          initial[group.id] = [group.options[0].id];
+      } else if ((group.isRequired && group.minSelections > 0) || group.noSelectionDiscount !== undefined || product.isDailyMenu) {
+        if (group.selectionType === 'single' && activeOpts.length > 0) {
+          initial[group.id] = [activeOpts[0].id];
         }
       }
     }
@@ -176,7 +182,7 @@ export const ProductCustomizeModal: React.FC<ProductCustomizeModalProps> = ({
     for (const group of allGroups) {
       const ids = selectedModifierIds[group.id] || [];
       for (const id of ids) {
-        const opt = group.options.find((o) => o.id === id);
+        const opt = group.options.find((o) => o.id === id && o.isActive !== false);
         if (opt) {
           const qtyKey = `${group.id}_${opt.id}`;
           const txtKey = `${group.id}_${opt.id}`;
@@ -199,6 +205,23 @@ export const ProductCustomizeModal: React.FC<ProductCustomizeModalProps> = ({
     }
     return list;
   }, [allGroups, selectedModifierIds, optionQuantities, optionTexts]);
+
+  // Descuentos por categorías no seleccionadas (ej: Sin Sopa, Sin Principio, etc.)
+  const omissionDiscountsTotal = useMemo(() => {
+    let totalDiscount = 0;
+    for (const group of allGroups) {
+      const discount = group.noSelectionDiscount || 0;
+      if (discount > 0) {
+        const ids = (selectedModifierIds[group.id] || []).filter((id) =>
+          group.options.some((o) => o.id === id && o.isActive !== false)
+        );
+        if (ids.length === 0) {
+          totalDiscount += discount;
+        }
+      }
+    }
+    return totalDiscount;
+  }, [allGroups, selectedModifierIds]);
 
   // Combo swap surcharges
   const swapSurchargesList = useMemo(() => {
@@ -224,9 +247,18 @@ export const ProductCustomizeModal: React.FC<ProductCustomizeModalProps> = ({
       selectedDetailsList,
       swapSurchargesList,
       quantity,
-      adjustments
+      adjustments,
+      omissionDiscountsTotal
     );
-  }, [product.price, selectedVariant, selectedDetailsList, swapSurchargesList, quantity, adjustments]);
+  }, [
+    product.price,
+    selectedVariant,
+    selectedDetailsList,
+    swapSurchargesList,
+    quantity,
+    adjustments,
+    omissionDiscountsTotal,
+  ]);
 
   // Validation
   const validation = useMemo(() => {
@@ -238,6 +270,12 @@ export const ProductCustomizeModal: React.FC<ProductCustomizeModalProps> = ({
     setSelectedModifierIds((prev) => {
       const current = prev[group.id] || [];
       if (group.selectionType === 'single') {
+        if (current.includes(option.id) && !group.isRequired) {
+          return {
+            ...prev,
+            [group.id]: [],
+          };
+        }
         return {
           ...prev,
           [group.id]: [option.id],
@@ -263,6 +301,13 @@ export const ProductCustomizeModal: React.FC<ProductCustomizeModalProps> = ({
         }
       }
     });
+  };
+
+  const handleClearGroupSelection = (group: ModifierGroup) => {
+    setSelectedModifierIds((prev) => ({
+      ...prev,
+      [group.id]: [],
+    }));
   };
 
   const handleOptionQtyChange = (group: ModifierGroup, option: ModifierOption, delta: number) => {
@@ -320,13 +365,43 @@ export const ProductCustomizeModal: React.FC<ProductCustomizeModalProps> = ({
 
     const effectiveRecipe = calculateEffectiveRecipe(product.recipe || [], selectedDetailsList, products);
 
+    // Construir lista final de modificadores (incluyendo omisiones como "Sin Sopa (-$2.000)" para cocina y recibo)
+    const finalModifiers: SelectedModifierDetail[] = [];
+    for (const group of allGroups) {
+      const groupMods = selectedDetailsList.filter((m) => m.groupId === group.id);
+      if (groupMods.length > 0) {
+        for (const gm of groupMods) {
+          finalModifiers.push({
+            ...gm,
+            optionName:
+              product.isDailyMenu || group.noSelectionDiscount !== undefined
+                ? `${group.name}: ${gm.optionName}`
+                : gm.optionName,
+          });
+        }
+      } else if (product.isDailyMenu || group.noSelectionDiscount !== undefined) {
+        const discount = group.noSelectionDiscount || 0;
+        finalModifiers.push({
+          groupId: group.id,
+          groupName: group.name,
+          optionId: `none-${group.id}`,
+          optionName:
+            discount > 0
+              ? `Sin ${group.name} (-${formatProductPrice(discount)})`
+              : `Sin ${group.name}`,
+          priceSurcharge: discount > 0 ? -discount : 0,
+          quantity: 1,
+        });
+      }
+    }
+
     const customizedItem: CustomizedItemSelection = {
       lineItemId: initialItem?.lineItemId || `line-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       productId: product.id,
       productName: product.name,
       basePrice: product.price,
       variant: selectedVariant,
-      selectedModifiers: selectedDetailsList,
+      selectedModifiers: finalModifiers,
       comboSwaps,
       quantity,
       adjustments,
@@ -573,27 +648,39 @@ export const ProductCustomizeModal: React.FC<ProductCustomizeModalProps> = ({
               </h3>
 
               {allGroups.map((group) => {
-                const currentSelections = selectedModifierIds[group.id] || [];
+                const activeOptions = group.options.filter((o) => o.isActive !== false);
+                const currentSelections = (selectedModifierIds[group.id] || []).filter((id) =>
+                  activeOptions.some((o) => o.id === id)
+                );
                 const isSingle = group.selectionType === 'single';
                 const isQuantityType = group.selectionType === 'quantity';
                 const isTextType = group.selectionType === 'text';
+                const hasOmissionOption =
+                  !group.isRequired &&
+                  (product.isDailyMenu || group.noSelectionDiscount !== undefined);
+                const omissionDiscount = group.noSelectionDiscount || 0;
+                const isOmitted = currentSelections.length === 0;
 
                 return (
                   <div
                     key={group.id}
                     className="p-4 rounded-2xl bg-[#1a1922] border border-[#383124] space-y-3 shadow-md"
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           <span className="text-xs font-bold text-[#fef3c7]">
                             {group.name}
                           </span>
-                          {group.isRequired && (
+                          {group.isRequired ? (
                             <span className="text-[9px] bg-red-950 text-red-300 border border-red-800/80 px-1.5 py-0.2 rounded font-bold">
                               Obligatorio
                             </span>
-                          )}
+                          ) : omissionDiscount > 0 ? (
+                            <span className="text-[10px] bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 px-2 py-0.5 rounded-full font-bold">
+                              Si no incluye disminuye -{formatProductPrice(omissionDiscount)}
+                            </span>
+                          ) : null}
                         </div>
                         {group.description && (
                           <p className="text-[11px] text-[#a8a29e] mt-0.5">{group.description}</p>
@@ -602,7 +689,9 @@ export const ProductCustomizeModal: React.FC<ProductCustomizeModalProps> = ({
 
                       <span className="text-[10px] text-[#a8a29e] bg-[#121117] px-2.5 py-0.5 rounded-full border border-[#2d281e]">
                         {isSingle
-                          ? 'Elige 1'
+                          ? hasOmissionOption
+                            ? 'Elige 1 o Sin opción'
+                            : 'Elige 1'
                           : isQuantityType
                           ? 'Por cantidad'
                           : isTextType
@@ -613,7 +702,46 @@ export const ProductCustomizeModal: React.FC<ProductCustomizeModalProps> = ({
 
                     {/* Options list */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {group.options.map((option) => {
+                      {hasOmissionOption && (
+                        <div
+                          onClick={() => handleClearGroupSelection(group)}
+                          className={`p-2.5 rounded-xl border transition-all flex items-center justify-between cursor-pointer ${
+                            isOmitted
+                              ? 'bg-emerald-950/60 border-emerald-500 text-white shadow-sm'
+                              : 'bg-[#121117] border-[#2d281e] text-[#a8a29e] hover:border-[#383124]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div
+                              className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                                isOmitted
+                                  ? 'border-emerald-400 bg-emerald-500 text-[#0e0e12]'
+                                  : 'border-zinc-600'
+                              }`}
+                            >
+                              {isOmitted && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                            </div>
+                            <div>
+                              <span className="text-xs font-bold block">
+                                Sin {group.name} (No incluye)
+                              </span>
+                              <span className="text-[10px] text-[#a8a29e] block">
+                                {omissionDiscount > 0
+                                  ? `Disminuye ${formatProductPrice(omissionDiscount)} del valor`
+                                  : 'Sin descuento adicional'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {omissionDiscount > 0 && (
+                            <span className="text-xs font-black text-emerald-400">
+                              -{formatProductPrice(omissionDiscount)}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {activeOptions.map((option) => {
                         const isSelected = currentSelections.includes(option.id);
                         const optQty = optionQuantities[`${group.id}_${option.id}`] || 1;
 
@@ -650,9 +778,14 @@ export const ProductCustomizeModal: React.FC<ProductCustomizeModalProps> = ({
                                 </div>
                               </div>
 
-                              {option.priceSurcharge > 0 && (
-                                <span className="text-xs font-black text-[#d4af37]">
-                                  +{formatProductPrice(option.priceSurcharge)}
+                              {option.priceSurcharge !== 0 && (
+                                <span
+                                  className={`text-xs font-black ${
+                                    option.priceSurcharge > 0 ? 'text-[#d4af37]' : 'text-emerald-400'
+                                  }`}
+                                >
+                                  {option.priceSurcharge > 0 ? '+' : ''}
+                                  {formatProductPrice(option.priceSurcharge)}
                                 </span>
                               )}
                             </div>
@@ -901,7 +1034,21 @@ export const ProductCustomizeModal: React.FC<ProductCustomizeModalProps> = ({
 
             {/* Total Price Breakdown */}
             <div className="text-right">
-              <div className="text-[10px] text-[#a8a29e]">Precio Unitario: {formatProductPrice(priceBreakdown.unitPrice)}</div>
+              <div className="text-[10px] text-[#a8a29e] flex flex-wrap items-center justify-end gap-1.5">
+                <span>Base: {formatProductPrice(priceBreakdown.basePrice)}</span>
+                {priceBreakdown.modifiersSurcharge !== 0 && (
+                  <span className={priceBreakdown.modifiersSurcharge > 0 ? 'text-[#d4af37]' : 'text-emerald-400'}>
+                    ({priceBreakdown.modifiersSurcharge > 0 ? '+' : ''}
+                    {formatProductPrice(priceBreakdown.modifiersSurcharge)})
+                  </span>
+                )}
+                {priceBreakdown.omissionDiscounts > 0 && (
+                  <span className="text-emerald-400 font-bold">
+                    (-{formatProductPrice(priceBreakdown.omissionDiscounts)} sin opción)
+                  </span>
+                )}
+                <span>· Unit: {formatProductPrice(priceBreakdown.unitPrice)}</span>
+              </div>
               <div className="text-base font-black text-[#d4af37]">
                 Total: {formatProductPrice(priceBreakdown.totalPrice)}
               </div>

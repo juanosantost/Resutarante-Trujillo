@@ -18,6 +18,7 @@ import {
   CheckCircle2,
   Image as ImageIcon,
   UtensilsCrossed,
+  Lock,
 } from 'lucide-react';
 
 interface ProductCardProps {
@@ -49,11 +50,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const hasVariants = product.variants && product.variants.length > 0;
   const isAgotado = product.status === 'agotado';
   const isInactivo = product.status === 'inactivo' || !product.isAvailableForSale;
+  const isDailyMenu = Boolean(product.isDailyMenu || product.id === 'prod-almuerzo-del-dia');
 
   return (
     <div
       className={`group relative flex flex-col rounded-2xl bg-[#1e1e1e] border transition-all duration-200 overflow-hidden shadow-lg hover:shadow-2xl hover:border-[#B77900]/70 ${
-        isInactivo
+        isDailyMenu
+          ? 'border-[#B77900]/60 ring-1 ring-[#D6A21A]/30 bg-[#1e1a14]'
+          : isInactivo
           ? 'opacity-65 border-[#333333]'
           : isAgotado
           ? 'border-red-900/40 bg-[#1e1818]'
@@ -103,7 +107,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
           {/* Status Badge */}
           <div className="pointer-events-auto">
-            {isAgotado ? (
+            {isDailyMenu ? (
+              <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-[#D6A21A] border border-[#B77900] text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm">
+                <Sparkles className="w-3 h-3 text-[#D6A21A]" />
+                <span>Menú del Día</span>
+              </span>
+            ) : isAgotado ? (
               <span className="px-2 py-0.5 rounded-md bg-red-950/90 text-red-300 border border-red-700/60 text-[10px] font-black uppercase tracking-wider">
                 Agotado
               </span>
@@ -182,7 +191,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           {/* Product Name */}
           <h3
             className="font-bold text-sm text-[#FFFDF5] group-hover:text-[#D6A21A] transition-colors line-clamp-1 cursor-pointer"
-            onClick={() => onEdit(product)}
+            onClick={() => (isDailyMenu ? onCustomize(product) : onEdit(product))}
             title={product.name}
           >
             {product.name}
@@ -192,13 +201,21 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           <p className="text-xs text-zinc-400 line-clamp-2 mt-1 leading-relaxed min-h-[2rem]">
             {product.description}
           </p>
+
+          {isDailyMenu && (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              <span className="px-2 py-0.5 rounded-md bg-[#292212] text-[#D6A21A] border border-[#B77900]/40 text-[9.5px] font-semibold">
+                Sopa · Principio · Carne · 3 Acompañamientos
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Footer: Price, Variants Info, and Actions */}
         <div className="mt-3 pt-2.5 border-t border-[#2a2a2a] flex items-center justify-between">
           <div>
             <div className="text-[10px] text-zinc-400">
-              {hasVariants ? 'Desde' : 'Precio'}
+              {hasVariants ? 'Desde' : isDailyMenu ? 'Menú Base' : 'Precio'}
             </div>
             <div className="text-base font-black text-[#D6A21A]">
               {formatProductPrice(product.price)}
@@ -217,28 +234,54 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5">
-            {canManage && onDelete && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(product);
-                }}
-                className="p-2 rounded-xl bg-red-950/40 hover:bg-red-900/80 text-red-400 hover:text-red-200 border border-red-800/40 transition-colors cursor-pointer"
-                title="Eliminar producto permanentemente"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            )}
+            {isDailyMenu ? (
+              <>
+                <span
+                  className="px-2 py-1 rounded-lg bg-amber-950/60 border border-amber-800/60 text-amber-400 text-[10px] font-bold flex items-center gap-1 shadow-sm"
+                  title="Producto protegido: No editable ni borrable como producto regular. Sus parámetros se eligen al seleccionarlo."
+                >
+                  <Lock className="w-3 h-3 text-amber-400" />
+                  <span className="hidden sm:inline">Protegido</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCustomize(product);
+                  }}
+                  className="px-3.5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 via-[#D6A21A] to-[#B77900] text-[#181818] hover:brightness-110 active:scale-95 transition-all cursor-pointer shadow-lg shadow-amber-500/20 flex items-center gap-1.5"
+                  title="Seleccionar y elegir parámetros establecidos del Menú del Día"
+                >
+                  <Sparkles className="w-3.5 h-3.5 fill-current" />
+                  <span>Seleccionar Menú</span>
+                </button>
+              </>
+            ) : (
+              <>
+                {canManage && onDelete && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(product);
+                    }}
+                    className="p-2 rounded-xl bg-red-950/40 hover:bg-red-900/80 text-red-400 hover:text-red-200 border border-red-800/40 transition-colors cursor-pointer"
+                    title="Eliminar producto permanentemente"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
 
-            <button
-              type="button"
-              onClick={() => onEdit(product)}
-              className="px-3.5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-[#B77900] to-[#D6A21A] text-[#181818] hover:brightness-110 active:scale-95 transition-all cursor-pointer shadow-md flex items-center gap-1.5"
-            >
-              <Edit className="w-3.5 h-3.5" />
-              <span>Editar</span>
-            </button>
+                <button
+                  type="button"
+                  onClick={() => onEdit(product)}
+                  className="px-3.5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-[#B77900] to-[#D6A21A] text-[#181818] hover:brightness-110 active:scale-95 transition-all cursor-pointer shadow-md flex items-center gap-1.5"
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                  <span>Editar</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

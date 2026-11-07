@@ -3,6 +3,7 @@ import { useRestaurant } from '../../context/RestaurantContext';
 import { MenuItem, OrderType, Table, Product, CustomizedItemSelection } from '../../types';
 import { formatCOP, calculateOrderTotals, getEffectiveTaxRate } from '../../utils/calculations';
 import { ProductCustomizeModal } from '../catalog/ProductCustomizeModal';
+import { buildDefaultDailyMenuItem, sortProductsWithDailyFirst } from '../../utils/productUtils';
 import {
   X,
   Plus,
@@ -104,15 +105,17 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
           isAvailable: true,
           image: p.images?.[0] || '',
           sku: p.sku,
+          isDailyMenu: p.isDailyMenu,
+          featureGroups: p.featureGroups,
         });
         existingIds.add(p.id);
       }
     }
-    return list;
+    return sortProductsWithDailyFirst(list);
   }, [menuItems, products]);
 
   const filteredMenuItems = useMemo(() => {
-    return allActiveProducts.filter((item) => {
+    const list = allActiveProducts.filter((item) => {
       if (item.isAvailable === false) return false;
       if (selectedCategory !== 'todos' && item.categoryId !== selectedCategory) {
         return false;
@@ -126,6 +129,7 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
       }
       return true;
     });
+    return sortProductsWithDailyFirst(list);
   }, [allActiveProducts, selectedCategory, searchFilter]);
 
   // Handle clicking product in grid
@@ -134,12 +138,16 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
 
     const hasOptions =
       matchedProduct &&
-      ((matchedProduct.variants && matchedProduct.variants.length > 0) ||
+      (matchedProduct.isDailyMenu ||
+        (matchedProduct.variants && matchedProduct.variants.length > 0) ||
         (matchedProduct.featureGroups && matchedProduct.featureGroups.length > 0) ||
         matchedProduct.isCombo ||
         (matchedProduct.modifierGroupIds && matchedProduct.modifierGroupIds.length > 0));
 
-    if (forceCustomize || hasOptions) {
+    if (forceCustomize && matchedProduct) {
+      setEditingLineItem(null);
+      setCustomizingProduct(matchedProduct);
+    } else if (hasOptions) {
       if (matchedProduct) {
         setEditingLineItem(null);
         setCustomizingProduct(matchedProduct);
@@ -150,6 +158,47 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
     } else {
       quickAddMenuItem(item);
     }
+  };
+
+  // Al tocar la tarjeta: agregar el producto con sus valores por defecto
+  const handleQuickAddProduct = (item: MenuItem) => {
+    const isDaily = Boolean(item.isDailyMenu || item.id === 'prod-almuerzo-del-dia');
+    const matchedProduct = products.find((p) => p.id === item.id);
+
+    if (isDaily && matchedProduct) {
+      const defaultItem = buildDefaultDailyMenuItem(matchedProduct, products);
+      setCartItems((prev) => {
+        const defaultModIds = JSON.stringify(
+          (defaultItem.selectedModifiers || []).map((m) => m.optionId).sort()
+        );
+        const existingIdx = prev.findIndex((c) => {
+          if (c.productId !== item.id) return false;
+          if (c.notes || (c.adjustments && c.adjustments.length > 0)) return false;
+          const cModIds = JSON.stringify(
+            (c.selectedModifiers || []).map((m) => m.optionId).sort()
+          );
+          return cModIds === defaultModIds;
+        });
+
+        if (existingIdx >= 0) {
+          const updated = [...prev];
+          const curr = updated[existingIdx];
+          const newQty = curr.quantity + 1;
+          updated[existingIdx] = {
+            ...curr,
+            quantity: newQty,
+            totalPrice: curr.unitPrice * newQty,
+          };
+          return updated;
+        }
+
+        return [...prev, defaultItem];
+      });
+
+      return;
+    }
+
+    quickAddMenuItem(item);
   };
 
   const quickAddMenuItem = (item: MenuItem) => {
@@ -472,13 +521,16 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                 const inCartQty = cartItems
                   .filter((c) => c.productId === item.id)
                   .reduce((sum, c) => sum + c.quantity, 0);
+                const isDaily = Boolean(item.isDailyMenu || item.id === 'prod-almuerzo-del-dia');
 
                 return (
                   <div
                     key={item.id}
-                    onClick={() => handleSelectProduct(item, false)}
+                    onClick={() => handleQuickAddProduct(item)}
                     className={`rounded-2xl border transition-all flex flex-col justify-between overflow-hidden cursor-pointer group hover:scale-[1.01] hover:shadow-xl ${
-                      inCartQty > 0
+                      isDaily
+                        ? 'bg-[#1b1915] border-[#d4af37]/80 ring-1 ring-[#d4af37]/40 shadow-lg shadow-[#d4af37]/10'
+                        : inCartQty > 0
                         ? 'bg-[#1b181e] border-[#d4af37] shadow-lg shadow-[#d4af37]/15 ring-1 ring-[#d4af37]'
                         : 'bg-[#15141a] border-[#292520] hover:border-[#d4af37]/60 hover:bg-[#1a1820]'
                     }`}
@@ -512,6 +564,14 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                           ✓ {inCartQty}
                         </span>
                       )}
+
+                      {/* Badge Almuerzo del Día */}
+                      {isDaily && (
+                        <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded-md text-[8.5px] font-black bg-gradient-to-r from-amber-500 to-[#d4af37] text-[#0e0e12] flex items-center gap-0.5 shadow-sm">
+                          <Sparkles className="w-2.5 h-2.5 fill-current" />
+                          Menú del Día
+                        </span>
+                      )}
                     </div>
 
                     {/* Contenido del Producto Ultra-Compacto */}
@@ -521,7 +581,9 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                           {item.name}
                         </h3>
                         <p className="text-[10px] text-[#a8a29e] mt-0.5 line-clamp-2 leading-snug">
-                          {item.description || 'Receta artesanal preparada en cocina.'}
+                          {isDaily
+                            ? 'Sopa · Principio · Carne · 3 Acompañamientos a elección'
+                            : item.description || 'Receta artesanal preparada en cocina.'}
                         </p>
                       </div>
 
@@ -541,7 +603,7 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                               handleSelectProduct(item, true);
                             }}
                             className="p-1 rounded-lg bg-[#24222e] hover:bg-[#343042] text-[#d4af37] border border-[#d4af37]/40 cursor-pointer"
-                            title="Agregar con detalles / Personalizar"
+                            title="Configurar opciones del plato"
                           >
                             <Sliders className="w-3 h-3" />
                           </button>
@@ -550,9 +612,14 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleSelectProduct(item, false);
+                              handleSelectProduct(item, true);
                             }}
-                            className="py-1 px-2 rounded-lg bg-gradient-to-r from-[#292212] to-[#3a2f16] group-hover:from-[#d4af37] group-hover:to-[#b89728] text-[#fef3c7] group-hover:text-[#0e0e12] border border-[#d4af37]/60 font-black text-[10px] sm:text-[11px] flex items-center justify-center shadow-sm transition-all cursor-pointer hover:brightness-110 active:scale-95"
+                            className={`py-1 px-2.5 rounded-lg font-black text-[10px] sm:text-[11px] flex items-center justify-center shadow-sm transition-all cursor-pointer hover:brightness-110 active:scale-95 ${
+                              isDaily
+                                ? 'bg-gradient-to-r from-amber-500 to-[#d4af37] text-[#0e0e12] border border-[#d4af37]'
+                                : 'bg-gradient-to-r from-[#292212] to-[#3a2f16] group-hover:from-[#d4af37] group-hover:to-[#b89728] text-[#fef3c7] group-hover:text-[#0e0e12] border border-[#d4af37]/60'
+                            }`}
+                            title="Configurar opciones del plato"
                           >
                             <span>+ Agregar</span>
                           </button>
@@ -569,19 +636,9 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
         {/* FOOTER DEL KIOSCO INTEGRADO AL FINAL */}
         <div className="border-t border-[#2d281e] bg-[#16151c] px-4 sm:px-6 py-3 flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
-            <button
-              type="button"
-              onClick={() => setIsCartOpen(true)}
-              className="relative p-2.5 rounded-xl bg-[#2b2416] border border-[#d4af37]/60 text-[#d4af37] hover:brightness-110 flex items-center justify-center cursor-pointer shadow transition-all shrink-0"
-              title="Ver mi pedido"
-            >
+            <div className="p-2.5 rounded-xl bg-[#201d18] border border-[#383124] text-[#d4af37] flex items-center justify-center shrink-0">
               <ShoppingBag className="w-4 h-4" />
-              {cartItemCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-[#d4af37] text-[#0e0e12] font-black text-[10px] w-4.5 h-4.5 rounded-full flex items-center justify-center shadow animate-pulse">
-                  {cartItemCount}
-                </span>
-              )}
-            </button>
+            </div>
             <div className="min-w-0">
               <div className="flex items-baseline gap-2">
                 <span className="text-xs text-[#a8a29e] hidden sm:inline">Total Pedido:</span>
@@ -879,7 +936,7 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                                 {line.selectedModifiers.map((m) => (
                                   <div key={m.optionId} className="flex items-center justify-between">
                                     <span>
-                                      • {m.groupName}: <strong className="text-white">{m.optionName}</strong>
+                                      • {m.groupName}: <strong className="text-white">{m.optionName.startsWith(`${m.groupName}: `) ? m.optionName.substring(m.groupName.length + 2) : m.optionName}</strong>
                                       {m.quantity && m.quantity > 1 ? ` (x${m.quantity})` : ''}
                                       {m.textValue ? ` "${m.textValue}"` : ''}
                                     </span>

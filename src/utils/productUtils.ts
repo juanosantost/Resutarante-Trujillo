@@ -21,6 +21,7 @@ export interface PriceBreakdown {
   basePrice: number;
   variantAdjustment: number;
   modifiersSurcharge: number;
+  omissionDiscounts: number;
   swapsSurcharge: number;
   discountsAmount: number;
   surchargesAmount: number;
@@ -35,6 +36,7 @@ export interface PriceBreakdown {
  * - Precio base
  * - Variante seleccionada
  * - Adicionales y modificadores elegidos
+ * - Descuentos por no seleccionar categorías del Menú del día (omissionDiscountsTotal)
  * - Posibles recargos por cambio de componentes en combo
  * - Descuentos y recargos comerciales fijos o porcentuales
  */
@@ -44,7 +46,8 @@ export function calculateCustomizedProductPrice(
   selectedModifiers: Array<SelectedModifierDetail | ModifierOption> = [],
   swapSurcharges: number[] = [],
   quantity: number = 1,
-  adjustments: ProductAdjustment[] = []
+  adjustments: ProductAdjustment[] = [],
+  omissionDiscountsTotal: number = 0
 ): PriceBreakdown {
   const safeQty = Math.max(1, Math.floor(quantity || 1));
   const variantAdj = variant?.priceAdjustment || 0;
@@ -54,8 +57,9 @@ export function calculateCustomizedProductPrice(
     return acc + surcharge * qty;
   }, 0);
   const swapTotal = swapSurcharges.reduce((acc, s) => acc + (s || 0), 0);
+  const safeOmissionDiscount = Math.max(0, omissionDiscountsTotal || 0);
 
-  const subtotalBase = Math.max(0, basePrice + variantAdj + modTotal + swapTotal);
+  const subtotalBase = Math.max(0, basePrice + variantAdj + modTotal + swapTotal - safeOmissionDiscount);
 
   let discountsAmount = 0;
   let surchargesAmount = 0;
@@ -77,6 +81,7 @@ export function calculateCustomizedProductPrice(
     basePrice,
     variantAdjustment: variantAdj,
     modifiersSurcharge: modTotal,
+    omissionDiscounts: safeOmissionDiscount,
     swapsSurcharge: swapTotal,
     discountsAmount,
     surchargesAmount,
@@ -390,4 +395,78 @@ export function formatProductPrice(amount: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount || 0);
+}
+
+/**
+ * Coloca el Menú del Día como el primer producto (arriba a la mano izquierda, índice 0).
+ */
+export function sortProductsWithDailyFirst<T extends { id: string; isDailyMenu?: boolean }>(
+  items: T[]
+): T[] {
+  const result = [...items];
+  const dailyIdx = result.findIndex(
+    (item) => item.id === 'prod-almuerzo-del-dia' || item.isDailyMenu
+  );
+  if (dailyIdx > 0) {
+    const [daily] = result.splice(dailyIdx, 1);
+    result.unshift(daily);
+  }
+  return result;
+}
+
+/**
+ * Construye un item de pedido con los valores por defecto del Menú del Día:
+ * asigna las opciones por defecto de cada categoría (Sopa, Principio, Carne, Acompañamientos 1, 2 y 3)
+ * y calcula el precio base unitario.
+ */
+export function buildDefaultDailyMenuItem(
+  product: Product,
+  allProducts: Product[] = []
+): CustomizedItemSelection {
+  const groups: ModifierGroup[] =
+    product.featureGroups && product.featureGroups.length > 0 ? product.featureGroups : [];
+
+  const defaultModifiers: SelectedModifierDetail[] = [];
+  let modifiersSurcharge = 0;
+
+  for (const group of groups) {
+    const activeOptions = (group.options || []).filter((o) => o.isActive !== false);
+    if (activeOptions.length === 0) continue;
+    const chosen = activeOptions.find((o) => o.isDefault) || activeOptions[0];
+    const surcharge = chosen.priceSurcharge || 0;
+    modifiersSurcharge += surcharge;
+    defaultModifiers.push({
+      groupId: group.id,
+      groupName: group.name,
+      optionId: chosen.id,
+      optionName: `${group.name}: ${chosen.name}`,
+      priceSurcharge: surcharge,
+      quantity: 1,
+    });
+  }
+
+  const basePrice = product.price || 0;
+  const unitPrice = Math.max(0, basePrice + modifiersSurcharge);
+  const effectiveRecipe = calculateEffectiveRecipe(
+    product.recipe || [],
+    defaultModifiers,
+    allProducts
+  );
+
+  return {
+    lineItemId: `line-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+    productId: product.id,
+    productName: product.name || 'Menú del Día',
+    basePrice,
+    variant: null,
+    selectedModifiers: defaultModifiers,
+    comboSwaps: [],
+    quantity: 1,
+    adjustments: [],
+    notes: '',
+    unitPrice,
+    totalPrice: unitPrice,
+    prepStationId: product.prepStationId || 'st-cocina-caliente',
+    effectiveRecipe,
+  };
 }

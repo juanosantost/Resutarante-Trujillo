@@ -37,6 +37,7 @@ import {
   PlusCircle,
   Sliders,
   Edit,
+  Lock,
 } from 'lucide-react';
 
 interface ProductManagementModalProps {
@@ -420,6 +421,57 @@ export const ProductManagementModal: React.FC<ProductManagementModalProps> = ({
       showToast(`Error: ${err.message || 'No se pudo guardar el producto'}`, 'error');
     }
   };
+
+  const isDailyMenu = Boolean(product?.isDailyMenu || product?.id === 'prod-almuerzo-del-dia');
+
+  if (isDailyMenu) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+        <div className="relative w-full max-w-lg bg-[#181818] border border-[#B77900] rounded-3xl shadow-2xl p-6 text-[#faf5ee] space-y-5">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-[#292212] border border-[#B77900] text-[#D6A21A] flex items-center justify-center shrink-0">
+              <Lock className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-base font-black text-[#FFFDF5]">
+                Producto Protegido del Sistema
+              </h2>
+              <p className="text-xs text-[#d6d3d1]">
+                Menú del Día
+              </p>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-[#141414] border border-[#383838] text-xs text-zinc-300 space-y-2 leading-relaxed">
+            <p>
+              El producto <strong>Menú del Día</strong> está protegido contra edición directa y borrado en el catálogo estándar para mantener la integridad de sus 6 categorías predeterminadas:
+            </p>
+            <div className="grid grid-cols-2 gap-2 text-[11px] text-[#D6A21A] font-semibold py-1">
+              <div>• Sopa</div>
+              <div>• Principio</div>
+              <div>• Carne</div>
+              <div>• Acompañamiento 1</div>
+              <div>• Acompañamiento 2</div>
+              <div>• Acompañamiento 3</div>
+            </div>
+            <p className="text-zinc-400 text-[11px]">
+              Para modificar los platos disponibles de hoy, habilitar o deshabilitar el menú, o ajustar los valores de descuento y adiciones, utiliza el botón <strong>"Menú del día"</strong> en la pantalla de Inicio.
+            </p>
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#B77900] to-[#D6A21A] text-[#181818] text-xs font-black cursor-pointer hover:brightness-110 active:scale-95 transition-all shadow-lg"
+            >
+              Entendido / Cerrar
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto">

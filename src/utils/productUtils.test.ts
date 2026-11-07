@@ -8,6 +8,8 @@ import {
   filterProducts,
   sortCategories,
   formatProductPrice,
+  sortProductsWithDailyFirst,
+  buildDefaultDailyMenuItem,
 } from './productUtils';
 import {
   Product,
@@ -288,3 +290,100 @@ test('sortCategories sorts categories by numeric order', () => {
   assert.equal(sorted[1].id, 'c2');
   assert.equal(sorted[2].id, 'c3');
 });
+
+test('calculateCustomizedProductPrice supports Daily Menu with meat addition and omission discounts', () => {
+  const baseLunchPrice = 16000;
+  // Selected meat with surcharge of +2000 COP
+  const selectedModifiers: ModifierOption[] = [
+    { id: 'meat-res', name: 'Carne asada a la brasa', priceSurcharge: 2000, isActive: true },
+  ];
+  // Omission discounts: Sin Sopa (-1500) and Sin Principio (-1000) = 2500 COP discount
+  const omissionDiscounts = 2500;
+  const quantity = 1;
+
+  const result = calculateCustomizedProductPrice(
+    baseLunchPrice,
+    null,
+    selectedModifiers,
+    [],
+    quantity,
+    [],
+    omissionDiscounts
+  );
+
+  // 16.000 + 2.000 - 2.500 = 15.500 COP unit price
+  assert.equal(result.basePrice, 16000);
+  assert.equal(result.modifiersSurcharge, 2000);
+  assert.equal(result.omissionDiscounts, 2500);
+  assert.equal(result.unitPrice, 15500);
+  assert.equal(result.totalPrice, 15500);
+});
+
+test('sortProductsWithDailyFirst puts Menú del Día at index 0 (top-left)', () => {
+  const items = [
+    { id: 'prod-burger-1', name: 'Hamburguesa' },
+    { id: 'prod-perro-1', name: 'Perro Caliente' },
+    { id: 'prod-almuerzo-del-dia', name: 'Menú del Día', isDailyMenu: true },
+    { id: 'prod-bebida-1', name: 'Limonada' },
+  ];
+
+  const sorted = sortProductsWithDailyFirst(items);
+  assert.equal(sorted[0].id, 'prod-almuerzo-del-dia');
+  assert.equal(sorted[0].name, 'Menú del Día');
+  assert.equal(sorted.length, 4);
+});
+
+test('buildDefaultDailyMenuItem builds item with default options and base price', () => {
+  const dailyProduct = {
+    id: 'prod-almuerzo-del-dia',
+    name: 'Menú del Día',
+    price: 16000,
+    sku: 'ALM-001',
+    categoryId: 'cat-menu-del-dia',
+    prepStationId: 'st-cocina-caliente',
+    prepTimeMinutes: 12,
+    isAvailableForSale: true,
+    isVisibleInMenu: true,
+    status: 'activo',
+    isDailyMenu: true,
+    variants: [],
+    featureGroups: [
+      {
+        id: 'grp-sopa',
+        name: 'Sopa',
+        selectionType: 'single',
+        minSelections: 1,
+        maxSelections: 1,
+        isRequired: true,
+        isActive: true,
+        options: [
+          { id: 'opt-sopa-1', name: 'Sopa de Lentejas', priceSurcharge: 0, isActive: true, isDefault: true },
+          { id: 'opt-sopa-2', name: 'Sancocho Trifásico', priceSurcharge: 2000, isActive: true },
+        ],
+      },
+      {
+        id: 'grp-carne',
+        name: 'Carne',
+        selectionType: 'single',
+        minSelections: 1,
+        maxSelections: 1,
+        isRequired: true,
+        isActive: true,
+        options: [
+          { id: 'opt-carne-1', name: 'Pollo a la Plancha', priceSurcharge: 0, isActive: true, isDefault: true },
+          { id: 'opt-carne-2', name: 'Churrasco 250g', priceSurcharge: 5000, isActive: true },
+        ],
+      },
+    ],
+  };
+
+  const item = buildDefaultDailyMenuItem(dailyProduct as unknown as Product);
+  assert.equal(item.productName, 'Menú del Día');
+  assert.equal(item.basePrice, 16000);
+  assert.equal(item.unitPrice, 16000);
+  assert.equal(item.totalPrice, 16000);
+  assert.equal(item.selectedModifiers?.length, 2);
+  assert.equal(item.selectedModifiers?.[0].optionName, 'Sopa: Sopa de Lentejas');
+  assert.equal(item.selectedModifiers?.[1].optionName, 'Carne: Pollo a la Plancha');
+});
+

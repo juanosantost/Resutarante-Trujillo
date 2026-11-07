@@ -1,7 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
-import { MenuItem, Order } from '../../types';
+import { MenuItem, Order, Product, CustomizedItemSelection } from '../../types';
 import { formatCOP, calculateOrderTotals, getEffectiveTaxRate } from '../../utils/calculations';
+import { ProductCustomizeModal } from '../catalog/ProductCustomizeModal';
+import { buildDefaultDailyMenuItem, sortProductsWithDailyFirst } from '../../utils/productUtils';
 import {
   X,
   Plus,
@@ -19,6 +21,9 @@ import {
   History,
   Trash2,
   Layers,
+  Tag,
+  Edit,
+  Sliders,
 } from 'lucide-react';
 
 interface AddRoundModalProps {
@@ -37,6 +42,7 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
     categories,
     menuItems,
     products,
+    modifierGroups,
     addRoundToOrder,
     actionLoading,
   } = useRestaurant();
@@ -47,10 +53,12 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
   const [showHistory, setShowHistory] = useState<boolean>(false);
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
 
-  // Carrito de items para esta ronda nueva
-  const [roundCart, setRoundCart] = useState<
-    Record<string, { menuItem: MenuItem; quantity: number; notes: string }>
-  >({});
+  // Line items en la ronda nueva
+  const [roundCartItems, setRoundCartItems] = useState<CustomizedItemSelection[]>([]);
+
+  // Estado para modal de personalización (ej: Almuerzo del día u otros)
+  const [customizingProduct, setCustomizingProduct] = useState<Product | null>(null);
+  const [editingLineItem, setEditingLineItem] = useState<CustomizedItemSelection | null>(null);
 
   // Unificar productos activos garantizando que siempre haya platos disponibles
   const allActiveProducts: MenuItem[] = useMemo(() => {
@@ -78,15 +86,17 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
           isAvailable: true,
           image: p.images?.[0] || '',
           sku: p.sku,
+          isDailyMenu: p.isDailyMenu,
+          featureGroups: p.featureGroups,
         });
         existingIds.add(p.id);
       }
     }
-    return list;
+    return sortProductsWithDailyFirst(list);
   }, [menuItems, products]);
 
   const filteredMenuItems = useMemo(() => {
-    return allActiveProducts.filter((item) => {
+    const list = allActiveProducts.filter((item) => {
       if (item.isAvailable === false) return false;
       if (selectedCategory !== 'todos' && item.categoryId !== selectedCategory) {
         return false;
@@ -100,76 +110,178 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
       }
       return true;
     });
+    return sortProductsWithDailyFirst(list);
   }, [allActiveProducts, selectedCategory, searchFilter]);
 
-  const handleAddItem = (item: MenuItem) => {
-    setRoundCart((prev) => {
-      const existing = prev[item.id];
-      if (existing) {
-        return {
-          ...prev,
-          [item.id]: {
-            ...existing,
-            quantity: existing.quantity + 1,
-          },
+  // Handle clicking product in grid
+  const handleSelectProduct = (item: MenuItem, forceCustomize: boolean = false) => {
+    const matchedProduct = products.find((p) => p.id === item.id);
+
+    const hasOptions =
+      matchedProduct &&
+      (matchedProduct.isDailyMenu ||
+        (matchedProduct.variants && matchedProduct.variants.length > 0) ||
+        (matchedProduct.featureGroups && matchedProduct.featureGroups.length > 0) ||
+        matchedProduct.isCombo ||
+        (matchedProduct.modifierGroupIds && matchedProduct.modifierGroupIds.length > 0));
+
+    if (forceCustomize && matchedProduct) {
+      setEditingLineItem(null);
+      setCustomizingProduct(matchedProduct);
+    } else if (hasOptions) {
+      if (matchedProduct) {
+        setEditingLineItem(null);
+        setCustomizingProduct(matchedProduct);
+      } else {
+        quickAddMenuItem(item);
+      }
+    } else {
+      quickAddMenuItem(item);
+    }
+  };
+
+  // Al tocar la tarjeta: agregar el producto con sus valores por defecto a la ronda
+  const handleQuickAddProduct = (item: MenuItem) => {
+    const isDaily = Boolean(item.isDailyMenu || item.id === 'prod-almuerzo-del-dia');
+    const matchedProduct = products.find((p) => p.id === item.id);
+
+    if (isDaily && matchedProduct) {
+      const defaultItem = buildDefaultDailyMenuItem(matchedProduct, products);
+      setRoundCartItems((prev) => {
+        const defaultModIds = JSON.stringify(
+          (defaultItem.selectedModifiers || []).map((m) => m.optionId).sort()
+        );
+        const existingIdx = prev.findIndex((c) => {
+          if (c.productId !== item.id) return false;
+          if (c.notes || (c.adjustments && c.adjustments.length > 0)) return false;
+          const cModIds = JSON.stringify(
+            (c.selectedModifiers || []).map((m) => m.optionId).sort()
+          );
+          return cModIds === defaultModIds;
+        });
+
+        if (existingIdx >= 0) {
+          const updated = [...prev];
+          const curr = updated[existingIdx];
+          const newQty = curr.quantity + 1;
+          updated[existingIdx] = {
+            ...curr,
+            quantity: newQty,
+            totalPrice: curr.unitPrice * newQty,
+          };
+          return updated;
+        }
+
+        return [...prev, defaultItem];
+      });
+
+      return;
+    }
+
+    quickAddMenuItem(item);
+  };
+
+  const quickAddMenuItem = (item: MenuItem) => {
+    setRoundCartItems((prev) => {
+      const existingIdx = prev.findIndex(
+        (c) =>
+          c.productId === item.id &&
+          !c.variant &&
+          (!c.selectedModifiers || c.selectedModifiers.length === 0) &&
+          (!c.adjustments || c.adjustments.length === 0) &&
+          !c.notes
+      );
+
+      if (existingIdx >= 0) {
+        const updated = [...prev];
+        const current = updated[existingIdx];
+        const newQty = current.quantity + 1;
+        updated[existingIdx] = {
+          ...current,
+          quantity: newQty,
+          totalPrice: current.unitPrice * newQty,
         };
+        return updated;
       }
-      return {
-        ...prev,
-        [item.id]: {
-          menuItem: item,
-          quantity: 1,
-          notes: '',
-        },
+
+      const newItem: CustomizedItemSelection = {
+        lineItemId: `line-rnd-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        productId: item.id,
+        productName: item.name,
+        basePrice: item.price,
+        quantity: 1,
+        unitPrice: item.price,
+        totalPrice: item.price,
+        effectiveRecipe: (item.recipe as any) || [],
       };
+      return [...prev, newItem];
     });
   };
 
-  const handleRemoveItem = (itemId: string) => {
-    setRoundCart((prev) => {
-      const existing = prev[itemId];
-      if (!existing) return prev;
-      if (existing.quantity <= 1) {
-        const copy = { ...prev };
-        delete copy[itemId];
-        return copy;
+  const handleAddCustomizedItem = (customized: CustomizedItemSelection) => {
+    setRoundCartItems((prev) => {
+      const existingIdx = prev.findIndex((c) => c.lineItemId === customized.lineItemId);
+      if (existingIdx >= 0) {
+        const updated = [...prev];
+        updated[existingIdx] = customized;
+        return updated;
       }
-      return {
-        ...prev,
-        [itemId]: {
-          ...existing,
-          quantity: existing.quantity - 1,
-        },
-      };
+      return [...prev, customized];
+    });
+    setCustomizingProduct(null);
+    setEditingLineItem(null);
+  };
+
+  const handleEditLineItem = (lineItem: CustomizedItemSelection) => {
+    const matchedProduct = products.find((p) => p.id === lineItem.productId) || {
+      id: lineItem.productId,
+      name: lineItem.productName,
+      price: lineItem.basePrice,
+      recipe: lineItem.effectiveRecipe || [],
+      sku: 'PRD-RND',
+      categoryId: 'cat-entradas',
+      prepStationId: 'st-cocina-caliente',
+      prepTimeMinutes: 15,
+      isAvailableForSale: true,
+      isAvailableForDelivery: true,
+      isVisibleInMenu: true,
+      status: 'activo',
+      variants: [],
+      createdAt: '',
+      updatedAt: '',
+    };
+
+    setEditingLineItem(lineItem);
+    setCustomizingProduct(matchedProduct as Product);
+  };
+
+  const handleUpdateLineQty = (lineItemId: string, delta: number) => {
+    setRoundCartItems((prev) => {
+      return prev
+        .map((item) => {
+          if (item.lineItemId === lineItemId) {
+            const newQty = item.quantity + delta;
+            if (newQty <= 0) return null;
+            return {
+              ...item,
+              quantity: newQty,
+              totalPrice: item.unitPrice * newQty,
+            };
+          }
+          return item;
+        })
+        .filter(Boolean) as CustomizedItemSelection[];
     });
   };
 
-  const handleDeleteItem = (itemId: string) => {
-    setRoundCart((prev) => {
-      const copy = { ...prev };
-      delete copy[itemId];
-      return copy;
-    });
+  const handleDeleteLineItem = (lineItemId: string) => {
+    setRoundCartItems((prev) => prev.filter((item) => item.lineItemId !== lineItemId));
   };
 
-  const handleUpdateNotes = (itemId: string, noteText: string) => {
-    setRoundCart((prev) => {
-      if (!prev[itemId]) return prev;
-      return {
-        ...prev,
-        [itemId]: {
-          ...prev[itemId],
-          notes: noteText,
-        },
-      };
-    });
-  };
-
-  const cartList = Object.values(roundCart);
-  const cartItemCount = cartList.reduce((acc, i) => acc + i.quantity, 0);
+  const cartItemCount = roundCartItems.reduce((acc, i) => acc + i.quantity, 0);
   const taxRate = getEffectiveTaxRate(currentBranch);
   const newRoundTotals = calculateOrderTotals(
-    cartList.map((i) => ({ price: i.menuItem.price, quantity: i.quantity })),
+    roundCartItems.map((i) => ({ price: i.unitPrice, quantity: i.quantity })),
     taxRate,
     order.tip > 0,
     0.10
@@ -177,16 +289,37 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (cartList.length === 0) return;
+    if (roundCartItems.length === 0) return;
 
     try {
       await addRoundToOrder(
         order.id,
-        cartList.map((c) => ({
-          menuItem: c.menuItem,
-          quantity: c.quantity,
-          notes: c.notes,
-        }))
+        roundCartItems.map((c) => {
+          const matchedMenuItem = allActiveProducts.find((m) => m.id === c.productId) || {
+            id: c.productId,
+            name: c.productName,
+            description: '',
+            categoryId: 'cat-entradas',
+            price: c.unitPrice,
+            station: 'cocina_caliente',
+            prepTimeMinutes: 15,
+            recipe: c.effectiveRecipe || [],
+            isAvailable: true,
+          };
+
+          return {
+            menuItem: {
+              ...matchedMenuItem,
+              price: c.unitPrice,
+              recipe: c.effectiveRecipe || matchedMenuItem.recipe,
+            },
+            quantity: c.quantity,
+            notes: c.notes,
+            selectedModifiers: c.selectedModifiers,
+            adjustments: c.adjustments,
+            effectiveRecipe: c.effectiveRecipe,
+          };
+        })
       );
       onSuccess();
       onClose();
@@ -197,7 +330,7 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
 
   const getCategoryIcon = (catName: string) => {
     const n = catName.toLowerCase();
-    if (n.includes('entrada') || n.includes('sopa')) return Soup;
+    if (n.includes('entrada') || n.includes('sopa') || n.includes('menú') || n.includes('almuerzo')) return Soup;
     if (n.includes('parrilla') || n.includes('costilla') || n.includes('carne')) return Flame;
     if (n.includes('bebida') || n.includes('cerveza') || n.includes('trago')) return Wine;
     if (n.includes('postre') || n.includes('dulce')) return Cake;
@@ -366,13 +499,19 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 pb-6">
               {filteredMenuItems.map((item) => {
-                const inCart = roundCart[item.id]?.quantity || 0;
+                const inCartQty = roundCartItems
+                  .filter((c) => c.productId === item.id)
+                  .reduce((sum, c) => sum + c.quantity, 0);
+                const isDaily = Boolean(item.isDailyMenu || item.id === 'prod-almuerzo-del-dia');
+
                 return (
                   <div
                     key={item.id}
-                    onClick={() => handleAddItem(item)}
+                    onClick={() => handleQuickAddProduct(item)}
                     className={`rounded-2xl border transition-all flex flex-col justify-between overflow-hidden cursor-pointer group hover:scale-[1.01] hover:shadow-xl ${
-                      inCart > 0
+                      isDaily
+                        ? 'bg-[#1b1915] border-[#d4af37]/80 ring-1 ring-[#d4af37]/40 shadow-lg shadow-[#d4af37]/10'
+                        : inCartQty > 0
                         ? 'bg-[#1b181e] border-[#d4af37] shadow-lg shadow-[#d4af37]/15 ring-1 ring-[#d4af37]'
                         : 'bg-[#15141a] border-[#292520] hover:border-[#d4af37]/60 hover:bg-[#1a1820]'
                     }`}
@@ -401,9 +540,17 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
                       </span>
 
                       {/* Badge si ya está seleccionado */}
-                      {inCart > 0 && (
+                      {inCartQty > 0 && (
                         <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded-full text-[9px] font-black bg-[#d4af37] text-[#0e0e12] shadow-lg flex items-center gap-0.5 animate-in zoom-in-95">
-                          ✓ +{inCart}
+                          ✓ +{inCartQty}
+                        </span>
+                      )}
+
+                      {/* Badge Almuerzo del Día */}
+                      {isDaily && (
+                        <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded-md text-[8.5px] font-black bg-gradient-to-r from-amber-500 to-[#d4af37] text-[#0e0e12] flex items-center gap-0.5 shadow-sm">
+                          <Sparkles className="w-2.5 h-2.5 fill-current" />
+                          Menú del Día
                         </span>
                       )}
                     </div>
@@ -415,7 +562,9 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
                           {item.name}
                         </h3>
                         <p className="text-[10px] text-[#a8a29e] mt-0.5 line-clamp-2 leading-snug">
-                          {item.description || 'Receta artesanal preparada en cocina.'}
+                          {isDaily
+                            ? 'Sopa · Principio · Carne · 3 Acompañamientos a elección'
+                            : item.description || 'Receta artesanal preparada en cocina.'}
                         </p>
                       </div>
 
@@ -427,38 +576,34 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
                           </span>
                         </div>
 
-                        <div onClick={(e) => e.stopPropagation()}>
-                          {inCart > 0 ? (
-                            <div className="flex items-center gap-0.5 bg-[#121117] p-0.5 rounded-lg border border-[#d4af37]/50 shadow-inner">
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveItem(item.id)}
-                                className="w-5 h-5 rounded-md bg-[#24222e] hover:bg-[#343042] text-[#a8a29e] hover:text-white flex items-center justify-center font-black text-[11px] cursor-pointer"
-                                title="Disminuir cantidad"
-                              >
-                                -
-                              </button>
-                              <span className="font-mono font-black text-[11px] px-1 text-[#d4af37]">
-                                +{inCart}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => handleAddItem(item)}
-                                className="w-5 h-5 rounded-md bg-[#d4af37] hover:brightness-110 text-[#0e0e12] font-black text-[11px] flex items-center justify-center cursor-pointer shadow"
-                                title="Agregar otro"
-                              >
-                                +
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleAddItem(item)}
-                              className="py-1 px-2.5 rounded-lg bg-gradient-to-r from-[#292212] to-[#3a2f16] group-hover:from-[#d4af37] group-hover:to-[#b89728] text-[#fef3c7] group-hover:text-[#0e0e12] border border-[#d4af37]/60 font-black text-[10px] sm:text-[11px] flex items-center justify-center shadow-sm transition-all cursor-pointer hover:brightness-110 active:scale-95"
-                            >
-                              <span>Agregar</span>
-                            </button>
-                          )}
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSelectProduct(item, true);
+                            }}
+                            className="p-1 rounded-lg bg-[#24222e] hover:bg-[#343042] text-[#d4af37] border border-[#d4af37]/40 cursor-pointer"
+                            title="Configurar opciones del plato"
+                          >
+                            <Sliders className="w-3 h-3" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSelectProduct(item, true);
+                            }}
+                            className={`py-1 px-2.5 rounded-lg font-black text-[10px] sm:text-[11px] flex items-center justify-center shadow-sm transition-all cursor-pointer hover:brightness-110 active:scale-95 ${
+                              isDaily
+                                ? 'bg-gradient-to-r from-amber-500 to-[#d4af37] text-[#0e0e12] border border-[#d4af37]'
+                                : 'bg-gradient-to-r from-[#292212] to-[#3a2f16] group-hover:from-[#d4af37] group-hover:to-[#b89728] text-[#fef3c7] group-hover:text-[#0e0e12] border border-[#d4af37]/60'
+                            }`}
+                            title="Configurar opciones del plato"
+                          >
+                            <span>+ Agregar</span>
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -472,19 +617,9 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
         {/* FOOTER DE RONDA DOCKED AL FINAL */}
         <div className="border-t border-[#2d281e] bg-[#16151c] px-4 sm:px-6 py-3 flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
-            <button
-              type="button"
-              onClick={() => setIsCartOpen(!isCartOpen)}
-              className="relative p-2.5 rounded-xl bg-[#2b2416] border border-[#d4af37]/60 text-[#d4af37] hover:brightness-110 flex items-center justify-center cursor-pointer shadow transition-all shrink-0"
-              title="Ver adicionales de la ronda"
-            >
+            <div className="p-2.5 rounded-xl bg-[#201d18] border border-[#383124] text-[#d4af37] flex items-center justify-center shrink-0">
               <ShoppingBag className="w-4 h-4" />
-              {cartItemCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-[#d4af37] text-[#0e0e12] font-black text-[10px] w-4.5 h-4.5 rounded-full flex items-center justify-center shadow animate-pulse">
-                  {cartItemCount}
-                </span>
-              )}
-            </button>
+            </div>
             <div className="min-w-0">
               <div className="flex items-baseline gap-2">
                 <span className="text-xs text-[#a8a29e] hidden sm:inline">Ronda #{nextRoundNumber}:</span>
@@ -559,7 +694,7 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
 
               {/* Lista de Items con Notas y Controles */}
               <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3">
-                {cartList.length === 0 ? (
+                {roundCartItems.length === 0 ? (
                   <div className="py-16 text-center text-[#78716c] space-y-2">
                     <UtensilsCrossed className="w-10 h-10 mx-auto text-[#4d3d19]" />
                     <p className="text-sm font-bold text-[#fef3c7]">No has seleccionado nuevos productos</p>
@@ -568,41 +703,60 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
                     </p>
                   </div>
                 ) : (
-                  cartList.map(({ menuItem, quantity, notes: itemNotes }) => (
+                  roundCartItems.map((lineItem) => (
                     <div
-                      key={menuItem.id}
+                      key={lineItem.lineItemId}
                       className="p-3.5 rounded-2xl bg-[#1a1922] border border-[#2d281e] space-y-2.5 shadow-sm"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                          <h4 className="text-xs font-black text-[#fef3c7]">{menuItem.name}</h4>
+                          <h4 className="text-xs font-black text-[#fef3c7]">{lineItem.productName}</h4>
                           <span className="font-mono text-xs font-bold text-[#d4af37]">
-                            {formatCOP(menuItem.price * quantity)}
+                            {formatCOP(lineItem.totalPrice)}
                           </span>
+
+                          {/* Modificadores o detalles */}
+                          {lineItem.selectedModifiers && lineItem.selectedModifiers.length > 0 && (
+                            <div className="mt-1 space-y-0.5 text-[10px] text-[#a8a29e]">
+                              {lineItem.selectedModifiers.map((mod, mIdx) => (
+                                <div key={mIdx} className="truncate">
+                                  • {mod.optionName}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
 
-                        {/* Controles de Cantidad */}
+                        {/* Botón Editar + Controles de Cantidad */}
                         <div className="flex items-center gap-1.5 bg-[#121117] p-1 rounded-xl border border-[#383124]">
                           <button
                             type="button"
-                            onClick={() => handleRemoveItem(menuItem.id)}
+                            onClick={() => handleEditLineItem(lineItem)}
+                            className="w-6 h-6 rounded-lg bg-[#24222e] hover:bg-[#343042] text-[#d4af37] flex items-center justify-center text-xs cursor-pointer"
+                            title="Editar opciones"
+                          >
+                            <Edit className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateLineQty(lineItem.lineItemId!, -1)}
                             className="w-6 h-6 rounded-lg bg-[#24222e] text-[#a8a29e] hover:text-white flex items-center justify-center font-black text-xs cursor-pointer"
                           >
                             <Minus className="w-3 h-3" />
                           </button>
                           <span className="font-mono font-bold text-xs px-2 text-[#fef3c7]">
-                            {quantity}
+                            {lineItem.quantity}
                           </span>
                           <button
                             type="button"
-                            onClick={() => handleAddItem(menuItem)}
+                            onClick={() => handleUpdateLineQty(lineItem.lineItemId!, 1)}
                             className="w-6 h-6 rounded-lg bg-[#2b2416] text-[#d4af37] hover:bg-[#d4af37] hover:text-[#0e0e12] flex items-center justify-center font-black text-xs cursor-pointer transition-colors"
                           >
                             <Plus className="w-3 h-3" />
                           </button>
                           <button
                             type="button"
-                            onClick={() => handleDeleteItem(menuItem.id)}
+                            onClick={() => handleDeleteLineItem(lineItem.lineItemId!)}
                             className="w-6 h-6 rounded-lg hover:bg-red-950/80 text-[#78716c] hover:text-red-400 flex items-center justify-center text-xs ml-1 cursor-pointer"
                             title="Eliminar de esta ronda"
                           >
@@ -612,13 +766,11 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
                       </div>
 
                       {/* Nota para Cocina */}
-                      <input
-                        type="text"
-                        placeholder="Nota de preparación para cocina..."
-                        value={itemNotes}
-                        onChange={(e) => handleUpdateNotes(menuItem.id, e.target.value)}
-                        className="w-full bg-[#121117] border border-[#2d281e] rounded-xl px-3 py-1.5 text-xs text-[#d6d3d1] placeholder-[#57534e] focus:outline-none focus:border-[#d4af37]"
-                      />
+                      {lineItem.notes && (
+                        <div className="text-[10px] text-[#a8a29e] bg-[#121117] p-1.5 rounded-lg border border-[#2d281e]">
+                          Nota: "{lineItem.notes}"
+                        </div>
+                      )}
                     </div>
                   ))
                 )}
@@ -653,9 +805,9 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
                   <button
                     type="button"
                     onClick={() => handleSubmit()}
-                    disabled={cartList.length === 0 || actionLoading}
+                    disabled={roundCartItems.length === 0 || actionLoading}
                     className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 cursor-pointer shadow-lg transition-all ${
-                      cartList.length === 0 || actionLoading
+                      roundCartItems.length === 0 || actionLoading
                         ? 'bg-[#2a2213] text-[#78716c] cursor-not-allowed'
                         : 'bg-gradient-to-r from-[#d4af37] to-[#b89728] text-[#0e0e12] hover:brightness-110 active:scale-95 shadow-[#d4af37]/25'
                     }`}
@@ -669,6 +821,19 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
           </div>
         )}
 
+        {/* Modal de Personalización para Almuerzo del Día u otros productos */}
+        {customizingProduct && (
+          <ProductCustomizeModal
+            product={customizingProduct}
+            modifierGroups={modifierGroups}
+            initialItem={editingLineItem}
+            onClose={() => {
+              setCustomizingProduct(null);
+              setEditingLineItem(null);
+            }}
+            onAddToCart={handleAddCustomizedItem}
+          />
+        )}
       </div>
     </div>
   );

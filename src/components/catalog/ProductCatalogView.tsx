@@ -29,6 +29,7 @@ import {
   AlertTriangle,
   Tag,
   HelpCircle,
+  Lock,
 } from 'lucide-react';
 
 export const ProductCatalogView: React.FC = () => {
@@ -81,6 +82,12 @@ export const ProductCatalogView: React.FC = () => {
 
     if (combosOnly) {
       list = list.filter((p) => p.isCombo);
+    }
+
+    const dailyIdx = list.findIndex((p) => p.id === 'prod-almuerzo-del-dia' || p.isDailyMenu);
+    if (dailyIdx > 0) {
+      const [daily] = list.splice(dailyIdx, 1);
+      list.unshift(daily);
     }
 
     return list;
@@ -487,7 +494,26 @@ export const ProductCatalogView: React.FC = () => {
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          {canManage && (
+                          {p.isDailyMenu || p.id === 'prod-almuerzo-del-dia' ? (
+                            <>
+                              <span
+                                className="px-2 py-1 rounded-lg bg-amber-950/60 border border-amber-800/60 text-amber-400 text-[10px] font-bold flex items-center gap-1 shadow-sm"
+                                title="Producto del sistema protegido contra edición estándar y borrado"
+                              >
+                                <Lock className="w-3 h-3 text-amber-400" />
+                                <span>Protegido</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setCustomizingProduct(p)}
+                                className="px-3 py-1.5 rounded-lg text-xs font-black bg-gradient-to-r from-amber-500 to-[#D6A21A] text-[#181818] hover:brightness-110 transition-all cursor-pointer shadow-md flex items-center gap-1.5"
+                                title="Seleccionar y elegir parámetros establecidos del Menú del Día"
+                              >
+                                <Sparkles className="w-3.5 h-3.5 fill-current" />
+                                <span>Seleccionar Parámetros</span>
+                              </button>
+                            </>
+                          ) : canManage ? (
                             <>
                               <button
                                 type="button"
@@ -507,7 +533,7 @@ export const ProductCatalogView: React.FC = () => {
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </>
-                          )}
+                          ) : null}
                         </div>
                       </td>
                     </tr>
@@ -574,36 +600,59 @@ export const ProductCatalogView: React.FC = () => {
               )}
             </div>
 
-            <p className="text-xs text-zinc-300">
-              ¿Estás seguro de que deseas eliminar permanentemente este producto? Se eliminará del menú, de las opciones de pedidos activos y de la cocina.
-            </p>
+            {productToDelete.isDailyMenu || productToDelete.id === 'prod-almuerzo-del-dia' ? (
+              <div className="p-4 rounded-xl bg-amber-950/60 border border-amber-800 text-amber-200 text-xs space-y-3">
+                <div className="flex items-center gap-2 font-black text-[#D6A21A] text-sm">
+                  <Lock className="w-4 h-4 text-[#D6A21A]" />
+                  <span>Producto Protegido del Sistema</span>
+                </div>
+                <p className="leading-relaxed text-zinc-300">
+                  El <strong>Menú del Día</strong> es un producto central del restaurante y no puede ser eliminado ni borrado del sistema para preservar la estructura de Sopa, Principio, Carne y Acompañamientos.
+                </p>
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setProductToDelete(null)}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#B77900] to-[#D6A21A] text-[#181818] font-bold text-xs cursor-pointer"
+                  >
+                    Entendido
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <p className="text-xs text-zinc-300">
+                  ¿Estás seguro de que deseas eliminar permanentemente este producto? Se eliminará del menú, de las opciones de pedidos activos y de la cocina.
+                </p>
 
-            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#2d2d2d]">
-              <button
-                type="button"
-                onClick={() => setProductToDelete(null)}
-                className="px-4 py-2 rounded-xl bg-[#282828] text-zinc-300 hover:bg-[#333] text-xs font-bold cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                disabled={actionLoading}
-                onClick={async () => {
-                  try {
-                    await deleteProduct(productToDelete.id);
-                    showToast(`Producto "${productToDelete.name}" eliminado correctamente`, 'success');
-                    setProductToDelete(null);
-                  } catch (err) {
-                    showToast('Error al eliminar el producto', 'error');
-                  }
-                }}
-                className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-black shadow-lg flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>{actionLoading ? 'Eliminando...' : 'Sí, Eliminar Producto'}</span>
-              </button>
-            </div>
+                <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#2d2d2d]">
+                  <button
+                    type="button"
+                    onClick={() => setProductToDelete(null)}
+                    className="px-4 py-2 rounded-xl bg-[#282828] text-zinc-300 hover:bg-[#333] text-xs font-bold cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={actionLoading}
+                    onClick={async () => {
+                      try {
+                        await deleteProduct(productToDelete.id);
+                        showToast(`Producto "${productToDelete.name}" eliminado correctamente`, 'success');
+                        setProductToDelete(null);
+                      } catch (err) {
+                        showToast('Error al eliminar el producto', 'error');
+                      }
+                    }}
+                    className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-black shadow-lg flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{actionLoading ? 'Eliminando...' : 'Sí, Eliminar Producto'}</span>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

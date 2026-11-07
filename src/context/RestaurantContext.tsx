@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useTransition } from 'react';
+import React, { createContext, useContext, useEffect, useState, useTransition, useMemo } from 'react';
 import {
   collection,
   doc,
@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db, initializeAuthAndConnection, handleFirestoreError, OperationType, sanitizeFirestoreData } from '../services/firebase';
 import { checkAndSeedInitialData, INITIAL_BRANCHES, INITIAL_MENU_ITEMS, INITIAL_CATEGORIES } from '../services/dbSeed';
+import { DEFAULT_DAILY_MENU_PRODUCT } from '../services/catalogSeed';
 import {
   Branch,
   UserRole,
@@ -48,6 +49,8 @@ import {
   Category,
   ModifierGroup,
   ProductStatus,
+  SelectedModifierDetail,
+  ProductAdjustment,
   Supplier,
   Purchase,
   SupplierAdvance,
@@ -146,6 +149,13 @@ interface RestaurantContextType {
   products: Product[];
   catalogCategories: Category[];
   modifierGroups: ModifierGroup[];
+  dailyMenuProduct: Product;
+  saveDailyMenuConfig: (params: {
+    name: string;
+    price: number;
+    isVisible: boolean;
+    featureGroups: ModifierGroup[];
+  }) => Promise<void>;
 
   createProduct: (data: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string>;
   updateProduct: (id: string, data: Partial<Product>) => Promise<void>;
@@ -199,6 +209,9 @@ interface RestaurantContextType {
       menuItem: MenuItem;
       quantity: number;
       notes?: string;
+      selectedModifiers?: SelectedModifierDetail[];
+      adjustments?: ProductAdjustment[];
+      effectiveRecipe?: RecipeIngredient[];
     }>;
     notes?: string;
     includeTip?: boolean;
@@ -210,6 +223,9 @@ interface RestaurantContextType {
       menuItem: MenuItem;
       quantity: number;
       notes?: string;
+      selectedModifiers?: SelectedModifierDetail[];
+      adjustments?: ProductAdjustment[];
+      effectiveRecipe?: RecipeIngredient[];
     }>
   ) => Promise<void>;
   cancelOrder: (orderId: string, reason?: string) => Promise<void>;
@@ -591,6 +607,21 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const unsubCatalogCategories = onSnapshot(collection(db, 'categories'), (snap) => {
       const list: Category[] = [];
       snap.forEach((d) => list.push({ ...d.data(), id: d.id } as Category));
+      const hasDailyCategory = list.some((c) => c.id === 'cat-menu-del-dia');
+      if (!hasDailyCategory) {
+        const dailyCat: Category = {
+          id: 'cat-menu-del-dia',
+          name: 'Menú del Día',
+          description: 'Almuerzos ejecutivos con Sopa, Principio, Carne y 3 Acompañamientos a elección',
+          order: 0,
+          isActive: true,
+          isVisibleInMenu: true,
+          icon: 'UtensilsCrossed',
+          itemCount: 1,
+        };
+        list.unshift(dailyCat);
+        setDoc(doc(db, 'categories', dailyCat.id), sanitizeFirestoreData(dailyCat), { merge: true }).catch(() => {});
+      }
       if (list.length > 0) {
         setCatalogCategories(list.sort((a, b) => (a.order || 0) - (b.order || 0)));
       }
@@ -607,6 +638,73 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const unsubProducts = onSnapshot(collection(db, 'products'), (snap) => {
       const list: Product[] = [];
       snap.forEach((d) => list.push({ ...d.data(), id: d.id } as Product));
+      const dailyIdx = list.findIndex((p) => p.id === 'prod-almuerzo-del-dia' || p.isDailyMenu);
+      if (dailyIdx === -1) {
+        list.unshift(DEFAULT_DAILY_MENU_PRODUCT);
+        setDoc(
+          doc(db, 'products', DEFAULT_DAILY_MENU_PRODUCT.id),
+          sanitizeFirestoreData(DEFAULT_DAILY_MENU_PRODUCT),
+          { merge: true }
+        ).catch(() => {});
+        setDoc(
+          doc(db, 'menuItems', DEFAULT_DAILY_MENU_PRODUCT.id),
+          sanitizeFirestoreData({
+            id: DEFAULT_DAILY_MENU_PRODUCT.id,
+            name: DEFAULT_DAILY_MENU_PRODUCT.name,
+            description: DEFAULT_DAILY_MENU_PRODUCT.description,
+            categoryId: DEFAULT_DAILY_MENU_PRODUCT.categoryId,
+            price: DEFAULT_DAILY_MENU_PRODUCT.price,
+            station: 'cocina_caliente',
+            prepTimeMinutes: DEFAULT_DAILY_MENU_PRODUCT.prepTimeMinutes,
+            recipe: DEFAULT_DAILY_MENU_PRODUCT.recipe || [],
+            isAvailable: true,
+            isAvailableForSale: true,
+            isVisibleInMenu: true,
+            isDailyMenu: true,
+            status: 'activo',
+            image: DEFAULT_DAILY_MENU_PRODUCT.images?.[0] || '',
+            sku: DEFAULT_DAILY_MENU_PRODUCT.sku,
+            branchId: 'all',
+            prepStationId: DEFAULT_DAILY_MENU_PRODUCT.prepStationId,
+            variants: [],
+          }),
+          { merge: true }
+        ).catch(() => {});
+      } else {
+        // Asegurar nombre "Menú del Día" y categoría "Menú del Día" si venía con nombre anterior
+        const dailyItem = list[dailyIdx];
+        if (
+          dailyItem.name === 'Almuerzo del día' ||
+          dailyItem.categoryId !== 'cat-menu-del-dia' ||
+          dailyItem.categoryName !== 'Menú del Día'
+        ) {
+          dailyItem.name = 'Menú del Día';
+          dailyItem.categoryId = 'cat-menu-del-dia';
+          dailyItem.categoryName = 'Menú del Día';
+          setDoc(
+            doc(db, 'products', dailyItem.id),
+            sanitizeFirestoreData({
+              name: 'Menú del Día',
+              categoryId: 'cat-menu-del-dia',
+              categoryName: 'Menú del Día',
+            }),
+            { merge: true }
+          ).catch(() => {});
+          setDoc(
+            doc(db, 'menuItems', dailyItem.id),
+            sanitizeFirestoreData({
+              name: 'Menú del Día',
+              categoryId: 'cat-menu-del-dia',
+            }),
+            { merge: true }
+          ).catch(() => {});
+        }
+        // Ubicar como primer producto arriba a la mano izquierda
+        if (dailyIdx > 0) {
+          const [daily] = list.splice(dailyIdx, 1);
+          list.unshift(daily);
+        }
+      }
       setProducts(list);
     }, (error) => handleFirestoreError(error, OperationType.GET, 'products'));
 
@@ -896,6 +994,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       menuItem: MenuItem;
       quantity: number;
       notes?: string;
+      selectedModifiers?: SelectedModifierDetail[];
+      adjustments?: ProductAdjustment[];
+      effectiveRecipe?: RecipeIngredient[];
     }>;
     notes?: string;
     includeTip?: boolean;
@@ -926,6 +1027,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         notes: it.notes || '',
         roundNumber: 1,
         sentToKitchen: true, // Ya se envía en la primera comanda
+        selectedModifiers: it.selectedModifiers || [],
+        adjustments: it.adjustments || [],
+        effectiveRecipe: it.effectiveRecipe || it.menuItem.recipe || [],
       }));
 
       // Totales
@@ -992,17 +1096,18 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           quantity: oi.quantity,
           station: oi.station,
           notes: oi.notes,
+          selectedModifiers: oi.selectedModifiers || [],
           status: 'pendiente',
         })),
         waiterName: staffName,
         createdAt: now,
         updatedAt: now,
       };
-      await setDoc(doc(db, 'comandas', comandaId), comanda);
+      await setDoc(doc(db, 'comandas', comandaId), sanitizeFirestoreData(comanda));
 
       // 4. Descontar inventario según recetas (Trazabilidad Kardex)
       const recipeDeductions = calculateRecipeDeductions(
-        items.map((i) => ({ recipe: i.menuItem.recipe, quantity: i.quantity }))
+        items.map((i) => ({ recipe: i.effectiveRecipe || i.menuItem.recipe, quantity: i.quantity }))
       );
       for (const [invId, deduction] of Object.entries(recipeDeductions)) {
         const invItem = inventory.find((it) => it.id === invId);
@@ -1052,6 +1157,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       menuItem: MenuItem;
       quantity: number;
       notes?: string;
+      selectedModifiers?: SelectedModifierDetail[];
+      adjustments?: ProductAdjustment[];
+      effectiveRecipe?: RecipeIngredient[];
     }>
   ) => {
     if (actionLoading) throw new Error('Operación en proceso');
@@ -1075,6 +1183,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         notes: it.notes || '',
         roundNumber: nextRound,
         sentToKitchen: true,
+        selectedModifiers: it.selectedModifiers || [],
+        adjustments: it.adjustments || [],
+        effectiveRecipe: it.effectiveRecipe || it.menuItem.recipe || [],
       }));
 
       // Combinar con items existentes
@@ -1086,7 +1197,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const { subtotal, tax, tip, total } = calculateOrderTotals(allItems, taxRate, hasTip, 0.10);
 
       // Actualizar Orden
-      await updateDoc(doc(db, 'orders', orderId), {
+      await updateDoc(doc(db, 'orders', orderId), sanitizeFirestoreData({
         items: allItems,
         subtotal,
         tax,
@@ -1094,7 +1205,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         total,
         currentRound: nextRound,
         updatedAt: now,
-      });
+      }));
 
       // Crear Comanda para Cocina (SOLO CON LOS PRODUCTOS NUEVOS DE ESTA RONDA)
       const comandaId = `com-${Date.now()}`;
@@ -1114,13 +1225,14 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           quantity: oi.quantity,
           station: oi.station,
           notes: oi.notes,
+          selectedModifiers: oi.selectedModifiers || [],
           status: 'pendiente',
         })),
         waiterName: staffName,
         createdAt: now,
         updatedAt: now,
       };
-      await setDoc(doc(db, 'comandas', comandaId), comanda);
+      await setDoc(doc(db, 'comandas', comandaId), sanitizeFirestoreData(comanda));
 
       // Descontar inventario de la nueva ronda
       const recipeDeductions = calculateRecipeDeductions(
@@ -2705,6 +2817,10 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const deleteProduct = async (id: string): Promise<void> => {
     try {
+      if (id === 'prod-almuerzo-del-dia' || id.includes('almuerzo-del-dia')) {
+        console.warn('El producto Almuerzo del Día está protegido por el sistema y no puede ser eliminado.');
+        throw new Error('El producto Almuerzo del Día está protegido por el sistema y no puede ser eliminado.');
+      }
       setActionLoading(true);
       const prod = products.find((p) => p.id === id);
       const prodName = prod?.name || id;
@@ -2756,6 +2872,131 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       });
     } catch (error) {
       console.error('Error toggling product status:', error);
+      handleFirestoreError(error, OperationType.UPDATE, 'products');
+      throw error;
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // ==========================================
+  // CONFIGURACIÓN DE "ALMUERZO DEL DÍA" (MENÚ DEL DÍA)
+  // ==========================================
+  const dailyMenuProduct: Product = useMemo(() => {
+    const found = products.find((p) => p.id === 'prod-almuerzo-del-dia' || p.isDailyMenu);
+    return found || DEFAULT_DAILY_MENU_PRODUCT;
+  }, [products]);
+
+  const saveDailyMenuConfig = async (params: {
+    name: string;
+    price: number;
+    isVisible: boolean;
+    featureGroups: ModifierGroup[];
+  }): Promise<void> => {
+    try {
+      setActionLoading(true);
+      const now = new Date().toISOString();
+      const prodId = 'prod-almuerzo-del-dia';
+      const cleanName = params.name.trim() || 'Menú del Día';
+      const cleanPrice = Math.max(0, Math.round(params.price || 0));
+
+      const updatedProductData: Partial<Product> = {
+        id: prodId,
+        name: cleanName,
+        categoryId: 'cat-menu-del-dia',
+        categoryName: 'Menú del Día',
+        price: cleanPrice,
+        isVisibleInMenu: params.isVisible,
+        isAvailableForSale: params.isVisible,
+        isDailyMenu: true,
+        status: params.isVisible ? 'activo' : 'inactivo',
+        featureGroups: params.featureGroups,
+        updatedAt: now,
+      };
+
+      // 1. Guardar o actualizar en products
+      await setDoc(
+        doc(db, 'products', prodId),
+        sanitizeFirestoreData({
+          ...DEFAULT_DAILY_MENU_PRODUCT,
+          ...dailyMenuProduct,
+          ...updatedProductData,
+        }),
+        { merge: true }
+      );
+
+      // 2. Sincronizar con menuItems para POS y cocina
+      await setDoc(
+        doc(db, 'menuItems', prodId),
+        sanitizeFirestoreData({
+          id: prodId,
+          name: cleanName,
+          description: dailyMenuProduct.description || DEFAULT_DAILY_MENU_PRODUCT.description,
+          categoryId: 'cat-menu-del-dia',
+          price: cleanPrice,
+          station: 'cocina_caliente',
+          prepTimeMinutes: dailyMenuProduct.prepTimeMinutes || 12,
+          recipe: dailyMenuProduct.recipe || [],
+          isAvailable: params.isVisible,
+          isAvailableForSale: params.isVisible,
+          isVisibleInMenu: params.isVisible,
+          isDailyMenu: true,
+          status: params.isVisible ? 'activo' : 'inactivo',
+          sku: dailyMenuProduct.sku || DEFAULT_DAILY_MENU_PRODUCT.sku,
+          image: dailyMenuProduct.images?.[0] || DEFAULT_DAILY_MENU_PRODUCT.images?.[0] || '',
+          branchId: 'all',
+          prepStationId: 'st-cocina-caliente',
+          variants: [],
+        }),
+        { merge: true }
+      );
+
+      // 3. Actualizar estado local inmediatamente para reactividad instantánea (primer producto)
+      setProducts((prev) => {
+        const withoutDaily = prev.filter((p) => p.id !== prodId && !p.isDailyMenu);
+        const prevDaily = prev.find((p) => p.id === prodId || p.isDailyMenu);
+        const merged: Product = {
+          ...DEFAULT_DAILY_MENU_PRODUCT,
+          ...(prevDaily || {}),
+          ...updatedProductData,
+        } as Product;
+        return [merged, ...withoutDaily];
+      });
+
+      setMenuItems((prev) => {
+        const withoutDaily = prev.filter((m) => m.id !== prodId && !m.isDailyMenu);
+        const item: MenuItem = {
+          id: prodId,
+          name: cleanName,
+          description: dailyMenuProduct.description || DEFAULT_DAILY_MENU_PRODUCT.description,
+          categoryId: 'cat-menu-del-dia',
+          price: cleanPrice,
+          station: 'cocina_caliente',
+          prepTimeMinutes: dailyMenuProduct.prepTimeMinutes || 12,
+          recipe: dailyMenuProduct.recipe || [],
+          isAvailable: params.isVisible,
+          isAvailableForSale: params.isVisible,
+          isVisibleInMenu: params.isVisible,
+          isDailyMenu: true,
+          status: params.isVisible ? 'activo' : 'inactivo',
+          sku: dailyMenuProduct.sku || DEFAULT_DAILY_MENU_PRODUCT.sku,
+          image: dailyMenuProduct.images?.[0] || DEFAULT_DAILY_MENU_PRODUCT.images?.[0] || '',
+          branchId: 'all',
+          prepStationId: 'st-cocina-caliente',
+          variants: [],
+        };
+        return [item, ...withoutDaily];
+      });
+
+      await logAuditAction({
+        entityType: 'product',
+        entityId: prodId,
+        entityName: cleanName,
+        action: 'update',
+        details: `Menú del día "${cleanName}" actualizado: Precio $${cleanPrice.toLocaleString('es-CO')} COP, Visible: ${params.isVisible ? 'SÍ' : 'NO'}, ${params.featureGroups.length} categorías configuradas`,
+      });
+    } catch (error) {
+      console.error('Error saving daily menu config:', error);
       handleFirestoreError(error, OperationType.UPDATE, 'products');
       throw error;
     } finally {
@@ -4845,6 +5086,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         variants: p.variants,
         modifierGroupIds: p.modifierGroupIds,
         isCombo: p.isCombo,
+        isDailyMenu: p.isDailyMenu,
+        featureGroups: p.featureGroups,
         comboConfig: p.comboConfig,
       }));
 
@@ -4853,8 +5096,13 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const extraMenuItems = menuItems.filter(
       (m) => !existingIds.has(m.id) && m.isAvailable !== false
     );
-
-    return [...mappedProducts, ...extraMenuItems];
+    const combined = [...mappedProducts, ...extraMenuItems];
+    const dailyIdx = combined.findIndex((m) => m.id === 'prod-almuerzo-del-dia' || m.isDailyMenu);
+    if (dailyIdx > 0) {
+      const [daily] = combined.splice(dailyIdx, 1);
+      combined.unshift(daily);
+    }
+    return combined;
   }, [products, menuItems]);
 
   const activeCombinedCategories: MenuCategory[] = React.useMemo(() => {
@@ -4910,6 +5158,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         products,
         catalogCategories,
         modifierGroups,
+        dailyMenuProduct,
+        saveDailyMenuConfig,
         createProduct,
         updateProduct,
         deleteProduct,

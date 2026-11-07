@@ -248,6 +248,7 @@ export interface ModifierGroup {
   appliesToProductIds?: string[];
   isActive: boolean;
   order?: number;
+  noSelectionDiscount?: number; // Valor en COP que disminuye si no se selecciona ninguna opción de esta categoría
 }
 
 export interface ProductAdjustment {
@@ -325,6 +326,7 @@ export interface Product {
   modifierGroupIds: string[];
   featureGroups?: ModifierGroup[]; // Grupos de características específicos del producto
   isCombo?: boolean;
+  isDailyMenu?: boolean;
   comboConfig?: ComboConfig;
   recipe?: RecipeIngredient[];
   createdAt: string;
@@ -392,6 +394,8 @@ export interface MenuItem {
   variants?: ProductVariant[];
   modifierGroupIds?: string[];
   isCombo?: boolean;
+  isDailyMenu?: boolean;
+  featureGroups?: ModifierGroup[];
   comboConfig?: ComboConfig;
 }
 

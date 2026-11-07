@@ -25,6 +25,7 @@ import { CheckoutModal } from '../modals/CheckoutModal';
 import { ReceiptModal } from '../modals/ReceiptModal';
 import { NewOrderModal } from '../modals/NewOrderModal';
 import { KitchenTicketModal } from '../modals/KitchenTicketModal';
+import { DailyMenuConfigModal } from '../modals/DailyMenuConfigModal';
 
 import {
   ClipboardList,
@@ -57,6 +58,7 @@ import {
   BookmarkCheck,
   CreditCard,
   Printer,
+  Soup,
 } from 'lucide-react';
 
 interface HomeDashboardProps {
@@ -83,6 +85,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
 
   // Modales interactivos
   const [showNewOrderModal, setShowNewOrderModal] = useState<boolean>(false);
+  const [showDailyMenuConfig, setShowDailyMenuConfig] = useState<boolean>(false);
   const [selectedOrderForRound, setSelectedOrderForRound] = useState<Order | null>(null);
   const [selectedOrderForCheckout, setSelectedOrderForCheckout] = useState<Order | null>(null);
   const [selectedOrderForKitchenPrint, setSelectedOrderForKitchenPrint] = useState<Order | null>(null);
@@ -279,6 +282,16 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
 
           {/* Botones de Acción Rápida en Cabecera */}
           <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setShowDailyMenuConfig(true)}
+              className="px-4 py-2.5 rounded-xl bg-[#242218] hover:bg-[#2e2b1f] border border-[#d4af37]/60 text-[#fef3c7] font-black text-xs inline-flex items-center gap-2 shadow-md cursor-pointer transition-all"
+              title="Configurar opciones, precios y categorías del Menú del día"
+            >
+              <UtensilsCrossed className="w-4 h-4 text-[#d4af37]" />
+              <span>Menú del día</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setShowNewOrderModal(true)}
@@ -841,6 +854,11 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de Configuración del Menú del Día */}
+      {showDailyMenuConfig && (
+        <DailyMenuConfigModal onClose={() => setShowDailyMenuConfig(false)} />
       )}
 
     </div>
