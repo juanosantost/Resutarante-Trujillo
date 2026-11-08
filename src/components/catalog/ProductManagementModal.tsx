@@ -444,7 +444,7 @@ export const ProductManagementModal: React.FC<ProductManagementModalProps> = ({
 
           <div className="p-4 rounded-2xl bg-[#141414] border border-[#383838] text-xs text-zinc-300 space-y-2 leading-relaxed">
             <p>
-              El producto <strong>Menú del Día</strong> está protegido contra edición directa y borrado en el catálogo estándar para mantener la integridad de sus 6 categorías predeterminadas:
+              El producto <strong>Menú del Día</strong> está protegido contra edición directa y borrado en el catálogo estándar para mantener la integridad de sus 7 categorías predeterminadas:
             </p>
             <div className="grid grid-cols-2 gap-2 text-[11px] text-[#D6A21A] font-semibold py-1">
               <div>• Sopa</div>
@@ -453,6 +453,7 @@ export const ProductManagementModal: React.FC<ProductManagementModalProps> = ({
               <div>• Acompañamiento 1</div>
               <div>• Acompañamiento 2</div>
               <div>• Acompañamiento 3</div>
+              <div>• Bebida / Sobremesa</div>
             </div>
             <p className="text-zinc-400 text-[11px]">
               Para modificar los platos disponibles de hoy, habilitar o deshabilitar el menú, o ajustar los valores de descuento y adiciones, utiliza el botón <strong>"Menú del día"</strong> en la pantalla de Inicio.
@@ -869,7 +870,7 @@ export const ProductManagementModal: React.FC<ProductManagementModalProps> = ({
                 className="px-3 py-1.5 rounded-xl bg-[#2b2416] border border-[#d4af37]/60 text-[#d4af37] text-xs font-bold hover:brightness-110 cursor-pointer flex items-center gap-1 shadow"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>+ Agregar Grupo</span>
+                <span>Agregar Grupo</span>
               </button>
             </div>
 

@@ -16,7 +16,13 @@ import {
 } from 'firebase/firestore';
 import { db, initializeAuthAndConnection, handleFirestoreError, OperationType, sanitizeFirestoreData } from '../services/firebase';
 import { checkAndSeedInitialData, INITIAL_BRANCHES, INITIAL_MENU_ITEMS, INITIAL_CATEGORIES } from '../services/dbSeed';
-import { DEFAULT_DAILY_MENU_PRODUCT } from '../services/catalogSeed';
+import {
+  DEFAULT_DAILY_MENU_PRODUCT,
+  DEFAULT_DAILY_MENU_GROUPS,
+  INITIAL_PRODUCTS,
+  INITIAL_PRODUCT_CATEGORIES,
+  INITIAL_MODIFIER_GROUPS,
+} from '../services/catalogSeed';
 import {
   Branch,
   UserRole,
@@ -509,14 +515,14 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [productionLogs, setProductionLogs] = useState<ProductionLog[]>([]);
   const [activeShift, setActiveShift] = useState<CashShift | null>(null);
   const [cashMovements, setCashMovements] = useState<CashMovement[]>([]);
-  const [categories, setCategories] = useState<MenuCategory[]>([]);
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [categories, setCategories] = useState<MenuCategory[]>(INITIAL_CATEGORIES);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(INITIAL_MENU_ITEMS);
   const [separados, setSeparados] = useState<Separado[]>([]);
   const [cartera, setCartera] = useState<CarteraRecord[]>([]);
   const [abonos, setAbonos] = useState<Abono[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [catalogCategories, setCatalogCategories] = useState<Category[]>([]);
-  const [modifierGroups, setModifierGroups] = useState<ModifierGroup[]>([]);
+  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  const [catalogCategories, setCatalogCategories] = useState<Category[]>(INITIAL_PRODUCT_CATEGORIES);
+  const [modifierGroups, setModifierGroups] = useState<ModifierGroup[]>(INITIAL_MODIFIER_GROUPS);
 
   // Módulo 11: Compras, Proveedores y Gastos
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -553,22 +559,14 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   }, [userRole]);
 
-  // Inicialización y Seed
+  // Inicialización y Seed (no bloqueante para carga inmediata)
   useEffect(() => {
     let isMounted = true;
+    setIsLoading(false);
     async function init() {
       try {
         await initializeAuthAndConnection();
         await checkAndSeedInitialData();
-        // Cargar semillas iniciales de Módulo 03 si las colecciones aún no han emitido
-        const { INITIAL_PRODUCTS, INITIAL_PRODUCT_CATEGORIES, INITIAL_MODIFIER_GROUPS } = await import('../services/catalogSeed');
-        if (isMounted) {
-          setProducts((prev) => (prev.length === 0 ? INITIAL_PRODUCTS : prev));
-          setCatalogCategories((prev) => (prev.length === 0 ? INITIAL_PRODUCT_CATEGORIES : prev));
-          setModifierGroups((prev) => (prev.length === 0 ? INITIAL_MODIFIER_GROUPS : prev));
-          setMenuItems((prev) => (prev.length === 0 ? INITIAL_MENU_ITEMS : prev));
-          setCategories((prev) => (prev.length === 0 ? INITIAL_CATEGORIES : prev));
-        }
       } catch (err) {
         console.error('Initial setup error:', err);
       } finally {
@@ -671,8 +669,26 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           { merge: true }
         ).catch(() => {});
       } else {
-        // Asegurar nombre "Menú del Día" y categoría "Menú del Día" si venía con nombre anterior
+        // Asegurar nombre "Menú del Día", categoría "Menú del Día" y la categoría Bebida / Sobremesa
         const dailyItem = list[dailyIdx];
+        const currentGroups = Array.isArray(dailyItem.featureGroups) ? [...dailyItem.featureGroups] : [];
+        const hasDrinkGroup = currentGroups.some(
+          (g) => g.id === 'grp-almuerzo-bebida' || g.name.toLowerCase().includes('bebida')
+        );
+        const defaultDrinkGroup = DEFAULT_DAILY_MENU_GROUPS.find(
+          (g) => g.id === 'grp-almuerzo-bebida'
+        );
+
+        let needsFirestoreSync = false;
+        const syncPayload: Record<string, any> = {};
+
+        if (!hasDrinkGroup && defaultDrinkGroup) {
+          currentGroups.push(defaultDrinkGroup);
+          dailyItem.featureGroups = currentGroups;
+          syncPayload.featureGroups = currentGroups;
+          needsFirestoreSync = true;
+        }
+
         if (
           dailyItem.name === 'Almuerzo del día' ||
           dailyItem.categoryId !== 'cat-menu-del-dia' ||
@@ -681,15 +697,11 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           dailyItem.name = 'Menú del Día';
           dailyItem.categoryId = 'cat-menu-del-dia';
           dailyItem.categoryName = 'Menú del Día';
-          setDoc(
-            doc(db, 'products', dailyItem.id),
-            sanitizeFirestoreData({
-              name: 'Menú del Día',
-              categoryId: 'cat-menu-del-dia',
-              categoryName: 'Menú del Día',
-            }),
-            { merge: true }
-          ).catch(() => {});
+          syncPayload.name = 'Menú del Día';
+          syncPayload.categoryId = 'cat-menu-del-dia';
+          syncPayload.categoryName = 'Menú del Día';
+          needsFirestoreSync = true;
+
           setDoc(
             doc(db, 'menuItems', dailyItem.id),
             sanitizeFirestoreData({
@@ -699,6 +711,15 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             { merge: true }
           ).catch(() => {});
         }
+
+        if (needsFirestoreSync) {
+          setDoc(
+            doc(db, 'products', dailyItem.id),
+            sanitizeFirestoreData(syncPayload),
+            { merge: true }
+          ).catch(() => {});
+        }
+
         // Ubicar como primer producto arriba a la mano izquierda
         if (dailyIdx > 0) {
           const [daily] = list.splice(dailyIdx, 1);
@@ -1618,18 +1639,36 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         let addCard = 0;
         let addTransfer = 0;
 
-        if (method === 'efectivo') {
-          addCash = paymentTotal;
-        } else if (method === 'tarjeta') {
-          addCard = paymentTotal;
-        } else if (method === 'nequi_daviplata' || method === 'transferencia') {
-          addTransfer = paymentTotal;
-        } else if (method === 'mixto' && splits) {
+        const classifyBucket = (mId: string): 'cash' | 'card' | 'transfer' => {
+          const norm = (mId || '').toLowerCase();
+          const matchedPm = paymentMethods.find(
+            (pm) =>
+              pm.id.toLowerCase() === norm ||
+              pm.name.toLowerCase().replace(/\s+/g, '_') === norm ||
+              pm.name.toLowerCase() === norm
+          );
+          if (matchedPm) {
+            if (matchedPm.category === 'efectivo' || matchedPm.isCashType) return 'cash';
+            if (matchedPm.category === 'tarjeta') return 'card';
+            return 'transfer';
+          }
+          if (norm.includes('efectivo') || norm.includes('caja')) return 'cash';
+          if (norm.includes('tarjeta') || norm.includes('datafono') || norm.includes('datáfono')) return 'card';
+          return 'transfer';
+        };
+
+        if (method === 'mixto' && splits && splits.length > 0) {
           for (const s of splits) {
-            if (s.method === 'efectivo') addCash += s.amount;
-            else if (s.method === 'tarjeta') addCard += s.amount;
+            const bucket = classifyBucket(s.method);
+            if (bucket === 'cash') addCash += s.amount;
+            else if (bucket === 'card') addCard += s.amount;
             else addTransfer += s.amount;
           }
+        } else {
+          const bucket = classifyBucket(method);
+          if (bucket === 'cash') addCash = paymentTotal;
+          else if (bucket === 'card') addCard = paymentTotal;
+          else addTransfer = paymentTotal;
         }
 
         const newSalesCash = (activeShift.salesCash || 0) + addCash;
@@ -5020,13 +5059,26 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const now = new Date().toISOString();
       const docRef = doc(db, 'payments', paymentId);
 
-      // Si fue en efectivo y hay turno activo, revertir en caja
-      if (target.method === 'efectivo' && activeShift) {
-        await addCashMovement(
-          'egreso',
-          target.amountPaid,
-          `Anulación Pago Venta #${target.orderNumber}: ${reason}`
-        );
+      // Si fue en efectivo (o pago mixto con parte en efectivo) y hay turno activo, revertir en caja
+      if (activeShift) {
+        if (target.method.toLowerCase().includes('efectivo')) {
+          await addCashMovement(
+            'egreso',
+            target.amountPaid,
+            `Anulación Pago Venta #${target.orderNumber}: ${reason}`
+          );
+        } else if (target.method === 'mixto' && target.splits && target.splits.length > 0) {
+          const cashPortion = target.splits
+            .filter((s) => s.method.toLowerCase().includes('efectivo'))
+            .reduce((sum, s) => sum + (s.amount || 0), 0);
+          if (cashPortion > 0) {
+            await addCashMovement(
+              'egreso',
+              cashPortion,
+              `Anulación Pago Mixto (Parte Efectivo) Venta #${target.orderNumber}: ${reason}`
+            );
+          }
+        }
       }
 
       await updateDoc(docRef, {

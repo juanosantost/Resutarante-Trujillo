@@ -108,8 +108,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           {/* Status Badge */}
           <div className="pointer-events-auto">
             {isDailyMenu ? (
-              <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-[#D6A21A] border border-[#B77900] text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm">
-                <Sparkles className="w-3 h-3 text-[#D6A21A]" />
+              <span className="px-2 py-0.5 rounded-md bg-gradient-to-r from-amber-500 to-[#D6A21A] text-[#181818] border border-[#B77900] text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm">
+                <Sparkles className="w-3 h-3 text-[#181818] fill-current" />
                 <span>Menú del Día</span>
               </span>
             ) : isAgotado ? (
@@ -205,7 +205,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           {isDailyMenu && (
             <div className="mt-1.5 flex flex-wrap gap-1">
               <span className="px-2 py-0.5 rounded-md bg-[#292212] text-[#D6A21A] border border-[#B77900]/40 text-[9.5px] font-semibold">
-                Sopa · Principio · Carne · 3 Acompañamientos
+                Sopa · Principio · Carne · 3 Acompañamientos · Bebida
               </span>
             </div>
           )}

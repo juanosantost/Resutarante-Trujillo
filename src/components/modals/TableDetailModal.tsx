@@ -349,7 +349,7 @@ export const TableDetailModal: React.FC<TableDetailModalProps> = ({
                     className="flex-1 py-2 px-3 rounded-xl bg-[#292212] border border-[#B77900]/60 text-[#D6A21A] text-xs font-bold hover:brightness-110 flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
                   >
                     <Plus className="w-4 h-4 stroke-[2.5]" />
-                    <span>+ Agregar</span>
+                    <span>Agregar</span>
                   </button>
                 )}
                 {onCheckout && (

@@ -14,7 +14,7 @@ export const INITIAL_PRODUCT_CATEGORIES: Category[] = [
   {
     id: 'cat-menu-del-dia',
     name: 'Menú del Día',
-    description: 'Almuerzos ejecutivos con Sopa, Principio, Carne y 3 Acompañamientos a elección',
+    description: 'Almuerzos ejecutivos con Sopa, Principio, Carne, 3 Acompañamientos y Bebida / Sobremesa a elección',
     order: 0,
     isActive: true,
     isVisibleInMenu: true,
@@ -284,7 +284,7 @@ export const DEFAULT_DAILY_MENU_GROUPS: ModifierGroup[] = [
   {
     id: 'grp-almuerzo-acomp3',
     name: 'Acompañamiento 3',
-    description: 'Tercer acompañamiento (ensalada o bebida del almuerzo)',
+    description: 'Tercer acompañamiento (ensalada, aguacate o guarnición)',
     selectionType: 'single',
     minSelections: 0,
     maxSelections: 1,
@@ -295,7 +295,26 @@ export const DEFAULT_DAILY_MENU_GROUPS: ModifierGroup[] = [
     options: [
       { id: 'opt-ac3-ensalada', name: 'Ensalada Fresca del Día', priceSurcharge: 0, isActive: true, isDefault: true },
       { id: 'opt-ac3-aguacate', name: 'Porción de Aguacate', priceSurcharge: 1000, isActive: true },
-      { id: 'opt-ac3-limonada', name: 'Vaso de Limonada / Guarapo', priceSurcharge: 0, isActive: true },
+      { id: 'opt-ac3-postre', name: 'Dulce / Postre Casero del Día', priceSurcharge: 0, isActive: true },
+    ],
+  },
+  {
+    id: 'grp-almuerzo-bebida',
+    name: 'Bebida / Sobremesa',
+    description: 'Bebida o sobremesa del almuerzo (si no se selecciona disminuye el valor configurado)',
+    selectionType: 'single',
+    minSelections: 0,
+    maxSelections: 1,
+    isRequired: false,
+    isActive: true,
+    order: 7,
+    noSelectionDiscount: 1000,
+    options: [
+      { id: 'opt-beb-limonada', name: 'Limonada Natural / Guarapo', priceSurcharge: 0, isActive: true, isDefault: true },
+      { id: 'opt-beb-jugo-agua', name: 'Jugo Natural del Día (En Agua)', priceSurcharge: 0, isActive: true },
+      { id: 'opt-beb-jugo-leche', name: 'Jugo Natural en Leche', priceSurcharge: 1500, isActive: true },
+      { id: 'opt-beb-mazamorra', name: 'Mazamorra Valluna con Panela', priceSurcharge: 0, isActive: true },
+      { id: 'opt-beb-claro', name: 'Claro Valluno Tradicional', priceSurcharge: 0, isActive: true },
     ],
   },
 ];
@@ -303,7 +322,7 @@ export const DEFAULT_DAILY_MENU_GROUPS: ModifierGroup[] = [
 export const DEFAULT_DAILY_MENU_PRODUCT: Product = {
   id: 'prod-almuerzo-del-dia',
   name: 'Menú del Día',
-  description: 'Menú del día configurable con Sopa, Principio, Carne y 3 Acompañamientos a elección.',
+  description: 'Menú del día configurable con Sopa, Principio, Carne, 3 Acompañamientos y Bebida / Sobremesa a elección.',
   categoryId: 'cat-menu-del-dia',
   categoryName: 'Menú del Día',
   price: 16000,

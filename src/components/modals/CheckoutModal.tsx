@@ -111,18 +111,39 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   // Manejo de efectivo y pagos mixtos sincronizados con grandTotal
   const [cashReceived, setCashReceived] = useState<number>(grandTotal);
-  const [splits, setSplits] = useState<PaymentSplit[]>([
-    { method: 'efectivo', amount: Math.round(grandTotal / 2) },
-    { method: 'tarjeta', amount: Math.round(grandTotal / 2) },
-  ]);
+  const [splits, setSplits] = useState<PaymentSplit[]>(() => {
+    const half = Math.floor(grandTotal / 2);
+    return [
+      { method: 'efectivo', amount: half },
+      { method: 'nequi_daviplata', amount: Math.max(0, grandTotal - half) },
+    ];
+  });
 
   useEffect(() => {
     setCashReceived(grandTotal);
-    setSplits([
-      { method: 'efectivo', amount: Math.round(grandTotal / 2) },
-      { method: 'tarjeta', amount: Math.round(grandTotal / 2) },
-    ]);
+    setSplits((prev) => {
+      const m0 = prev[0]?.method || 'efectivo';
+      const m1 = prev[1]?.method || 'nequi_daviplata';
+      const half = Math.floor(grandTotal / 2);
+      if (prev.length <= 2) {
+        return [
+          { method: m0, amount: half },
+          { method: m1, amount: Math.max(0, grandTotal - half) },
+        ];
+      }
+      // Si hay 3 o más medios, ajustar el último con el saldo restante
+      const othersSum = prev.slice(0, -1).reduce((sum, s) => sum + (s.amount || 0), 0);
+      return prev.map((s, idx) =>
+        idx === prev.length - 1 ? { ...s, amount: Math.max(0, grandTotal - othersSum) } : s
+      );
+    });
   }, [grandTotal]);
+
+  const splitsTotal = useMemo(
+    () => splits.reduce((sum, s) => sum + (Number(s.amount) || 0), 0),
+    [splits]
+  );
+  const splitsDifference = grandTotal - splitsTotal;
 
   const change = Math.max(0, cashReceived - grandTotal);
   const splitAmounts = splitBillEqually(grandTotal, splitCount);
@@ -243,6 +264,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       orderNumber: order.orderNumber,
       shiftId: activeShift ? activeShift.id : 'turno-actual',
       method: paymentMethod,
+      splits: paymentMethod === 'mixto' ? splits.filter((s) => s.amount > 0) : undefined,
       amountPaid: paymentMethod === 'efectivo' ? cashReceived : grandTotal,
       subtotal: totalsResult.subtotal,
       tax: totalsResult.tax,
@@ -307,7 +329,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         { id: 'efectivo', label: 'Efectivo', icon: Banknote, desc: 'Cálculo de cambio/vueltas' },
         { id: 'tarjeta', label: 'Tarjeta / Datáfono', icon: CreditCard, desc: 'Crédito o Débito' },
         { id: 'nequi_daviplata', label: 'Nequi / Daviplata', icon: Smartphone, desc: 'Transferencia móvil inmediata' },
-        { id: 'mixto', label: 'Pago Mixto', icon: Layers, desc: 'Dividir métodos de pago' },
+        { id: 'transferencia', label: 'Transferencia Bancaria', icon: CreditCard, desc: 'Bancolombia / PSE' },
+        { id: 'mixto', label: 'Pago Mixto', icon: Layers, desc: 'Combinar medios de pago' },
       ];
     }
     const mapped = active.map((p) => {
@@ -321,8 +344,31 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         desc: p.description || (p.isCashType ? 'Efectivo en caja' : p.bankName ? `Canal ${p.bankName}` : 'Medio habilitado'),
       };
     });
-    return [...mapped, { id: 'mixto' as PaymentMethod, label: 'Pago Mixto', icon: Layers, desc: 'Dividir métodos de pago' }];
+    return [...mapped, { id: 'mixto' as PaymentMethod, label: 'Pago Mixto', icon: Layers, desc: 'Combinar medios de pago' }];
   }, [paymentMethods]);
+
+  // Opciones disponibles para elegir dentro de cada línea del Pago Mixto
+  const selectableSplitMethods: { id: PaymentMethod; label: string }[] = useMemo(() => {
+    const fromActive = methodsList.filter((m) => m.id !== 'mixto').map((m) => ({ id: m.id, label: m.label }));
+    const standardDefaults: { id: PaymentMethod; label: string }[] = [
+      { id: 'efectivo', label: 'Efectivo' },
+      { id: 'tarjeta', label: 'Tarjeta / Datáfono' },
+      { id: 'nequi_daviplata', label: 'Nequi / Daviplata' },
+      { id: 'transferencia', label: 'Transferencia Bancaria' },
+    ];
+    const combined = [...fromActive];
+    for (const std of standardDefaults) {
+      const alreadyExists = combined.some(
+        (c) =>
+          c.id === std.id ||
+          c.label.toLowerCase().includes(std.label.split(' ')[0].toLowerCase())
+      );
+      if (!alreadyExists) {
+        combined.push(std);
+      }
+    }
+    return combined;
+  }, [methodsList]);
 
   return (
     <>
@@ -417,7 +463,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-[#d4af37] to-[#b89728] text-[#0e0e12] text-[11px] font-black flex items-center gap-1 hover:brightness-110 shadow cursor-pointer ml-1"
                   >
                     <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                    <span>+ Agregar Ítem Entregado</span>
+                    <span>Agregar Ítem Entregado</span>
                   </button>
                 </div>
               </div>
@@ -741,40 +787,192 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
             {paymentMethod === 'mixto' && (
               <div className="bg-[#18171f] p-4 rounded-xl border border-[#2d281e] space-y-3">
-                <span className="text-xs font-bold text-[#d4af37] block">
-                  Distribución de Montos Mixtos (Total: {formatCOP(grandTotal)}):
-                </span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#2d281e] pb-2.5">
                   <div>
-                    <label className="block text-[11px] text-[#a8a29e] mb-1">Parte en Efectivo (COP):</label>
-                    <input
-                      type="number"
-                      value={splits[0].amount}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value) || 0;
-                        setSplits([
-                          { method: 'efectivo', amount: val },
-                          { method: 'tarjeta', amount: Math.max(0, grandTotal - val) },
-                        ]);
-                      }}
-                      className="w-full bg-[#121117] border border-[#383124] rounded-lg px-3 py-1.5 text-xs text-[#fef3c7]"
-                    />
+                    <span className="text-xs font-bold text-[#d4af37] block">
+                      Distribución de Pago Mixto (Total a cubrir: {formatCOP(grandTotal)})
+                    </span>
+                    <span className="text-[11px] text-[#a8a29e]">
+                      Selecciona los medios de pago que se van a utilizar y el valor recibido en cada uno.
+                    </span>
                   </div>
-                  <div>
-                    <label className="block text-[11px] text-[#a8a29e] mb-1">Parte en Tarjeta / Datáfono (COP):</label>
-                    <input
-                      type="number"
-                      value={splits[1].amount}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value) || 0;
-                        setSplits([
-                          { method: 'efectivo', amount: Math.max(0, grandTotal - val) },
-                          { method: 'tarjeta', amount: val },
-                        ]);
-                      }}
-                      className="w-full bg-[#121117] border border-[#383124] rounded-lg px-3 py-1.5 text-xs text-[#fef3c7]"
-                    />
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const usedMethods = splits.map((s) => s.method);
+                      const nextMethod =
+                        selectableSplitMethods.find((m) => !usedMethods.includes(m.id))?.id ||
+                        selectableSplitMethods[0]?.id ||
+                        'transferencia';
+                      const currentSum = splits.reduce((sum, s) => sum + (s.amount || 0), 0);
+                      const remaining = Math.max(0, grandTotal - currentSum);
+                      setSplits((prev) => [...prev, { method: nextMethod, amount: remaining }]);
+                    }}
+                    className="px-2.5 py-1.5 rounded-lg bg-[#2b2416] hover:bg-[#3d321d] border border-[#d4af37]/50 text-[#d4af37] text-[11px] font-bold flex items-center gap-1 cursor-pointer self-start sm:self-auto"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Agregar otro medio</span>
+                  </button>
+                </div>
+
+                <div className="space-y-2.5">
+                  {splits.map((split, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3 rounded-xl bg-[#121117] border border-[#383124] grid grid-cols-1 sm:grid-cols-12 gap-3 items-end"
+                    >
+                      <div className="sm:col-span-6">
+                        <label className="block text-[11px] font-semibold text-[#a8a29e] mb-1">
+                          Medio de Pago #{idx + 1}
+                        </label>
+                        <select
+                          aria-label={`Medio de pago ${idx + 1}`}
+                          value={split.method}
+                          onChange={(e) => {
+                            const newMethod = e.target.value as PaymentMethod;
+                            setSplits((prev) =>
+                              prev.map((item, i) => (i === idx ? { ...item, method: newMethod } : item))
+                            );
+                          }}
+                          className="w-full bg-[#18171f] border border-[#383124] rounded-lg px-3 py-2 text-xs font-bold text-[#fef3c7] focus:outline-none focus:border-[#d4af37] cursor-pointer"
+                        >
+                          {selectableSplitMethods.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className={splits.length > 2 ? 'sm:col-span-5' : 'sm:col-span-6'}>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[11px] font-semibold text-[#a8a29e]">
+                            Monto en {selectableSplitMethods.find((m) => m.id === split.method)?.label || split.method} (COP)
+                          </label>
+                          {splits.length > 2 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const otherSum = splits.reduce(
+                                  (sum, s, i) => (i === idx ? sum : sum + (s.amount || 0)),
+                                  0
+                                );
+                                const rem = Math.max(0, grandTotal - otherSum);
+                                setSplits((prev) =>
+                                  prev.map((item, i) => (i === idx ? { ...item, amount: rem } : item))
+                                );
+                              }}
+                              className="text-[10px] font-bold text-[#d4af37] hover:underline cursor-pointer"
+                            >
+                              Completar saldo
+                            </button>
+                          )}
+                        </div>
+                        <div className="relative">
+                          <span className="absolute left-3 top-2 text-xs font-bold text-[#a8a29e]">$</span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={split.amount}
+                            onChange={(e) => {
+                              const val = Math.max(0, parseInt(e.target.value) || 0);
+                              setSplits((prev) => {
+                                if (prev.length === 2) {
+                                  const otherIdx = idx === 0 ? 1 : 0;
+                                  const next = [...prev];
+                                  next[idx] = { ...next[idx], amount: val };
+                                  next[otherIdx] = {
+                                    ...next[otherIdx],
+                                    amount: Math.max(0, grandTotal - val),
+                                  };
+                                  return next;
+                                }
+                                return prev.map((item, i) => (i === idx ? { ...item, amount: val } : item));
+                              });
+                            }}
+                            className="w-full bg-[#18171f] border border-[#383124] rounded-lg pl-7 pr-3 py-1.5 text-xs font-mono font-bold text-[#fef3c7] focus:outline-none focus:border-[#d4af37]"
+                          />
+                        </div>
+                      </div>
+
+                      {splits.length > 2 && (
+                        <div className="sm:col-span-1 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSplits((prev) => {
+                                const filtered = prev.filter((_, i) => i !== idx);
+                                if (filtered.length === 2) {
+                                  const firstAmt = Math.min(grandTotal, filtered[0].amount || 0);
+                                  return [
+                                    { ...filtered[0], amount: firstAmt },
+                                    { ...filtered[1], amount: Math.max(0, grandTotal - firstAmt) },
+                                  ];
+                                }
+                                return filtered;
+                              });
+                            }}
+                            className="p-2 rounded-lg bg-red-950/50 hover:bg-red-900/70 text-red-400 border border-red-800/50 cursor-pointer"
+                            title="Quitar este medio de pago"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Resumen de cuadre del Pago Mixto */}
+                <div
+                  className={`p-2.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs ${
+                    splitsDifference === 0
+                      ? 'bg-emerald-950/30 border-emerald-700/50 text-emerald-300'
+                      : 'bg-amber-950/40 border-amber-600/50 text-amber-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold">
+                      Suma asignada: <strong className="font-mono">{formatCOP(splitsTotal)}</strong> de{' '}
+                      <strong className="font-mono">{formatCOP(grandTotal)}</strong>
+                    </span>
+                    {splitsDifference === 0 ? (
+                      <span className="px-2 py-0.5 rounded bg-emerald-900/60 text-emerald-300 text-[10px] font-black">
+                        ✓ Monto exacto cuadrado
+                      </span>
+                    ) : splitsDifference > 0 ? (
+                      <span className="text-[11px] font-bold text-amber-300">
+                        · Faltan {formatCOP(splitsDifference)} por asignar
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-bold text-red-300">
+                        · Excede el total por {formatCOP(Math.abs(splitsDifference))}
+                      </span>
+                    )}
                   </div>
+
+                  {splitsDifference !== 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSplits((prev) => {
+                          if (prev.length === 0) return prev;
+                          const othersSum = prev
+                            .slice(0, -1)
+                            .reduce((sum, s) => sum + (s.amount || 0), 0);
+                          return prev.map((s, i) =>
+                            i === prev.length - 1
+                              ? { ...s, amount: Math.max(0, grandTotal - othersSum) }
+                              : s
+                          );
+                        });
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-[#d4af37] text-[#0e0e12] text-[10px] font-black hover:brightness-110 cursor-pointer self-start sm:self-auto"
+                    >
+                      Cuadrar Diferencia Automáticamente
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -829,12 +1027,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 disabled={
                   actionLoading ||
                   selectedItemIds.length === 0 ||
-                  (paymentMethod === 'efectivo' && cashReceived < grandTotal)
+                  (paymentMethod === 'efectivo' && cashReceived < grandTotal) ||
+                  (paymentMethod === 'mixto' && splitsDifference !== 0)
                 }
                 className={`px-6 py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-2 cursor-pointer transition-all ${
                   actionLoading ||
                   selectedItemIds.length === 0 ||
-                  (paymentMethod === 'efectivo' && cashReceived < grandTotal)
+                  (paymentMethod === 'efectivo' && cashReceived < grandTotal) ||
+                  (paymentMethod === 'mixto' && splitsDifference !== 0)
                     ? 'bg-[#2a2213] text-[#78716c] cursor-not-allowed'
                     : 'bg-gradient-to-r from-[#d4af37] via-[#c49f2b] to-[#a68218] text-[#0e0e12] hover:brightness-110 shadow-lg shadow-[#d4af37]/25'
                 }`}

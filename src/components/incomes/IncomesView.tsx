@@ -112,6 +112,13 @@ export const IncomesView: React.FC<IncomesViewProps> = ({ onNavigateToView }) =>
         const isOrderCancelled = ord?.status === 'cancelado';
         const isPaymentVoided = p.status === 'anulado';
 
+        const formattedMethod =
+          p.method === 'mixto' && p.splits && p.splits.length > 0
+            ? `Mixto (${p.splits
+                .map((s) => `${s.method.replace(/_/g, ' ')}: ${formatCOP(s.amount)}`)
+                .join(' + ')})`
+            : p.method;
+
         list.push({
           id: p.id,
           consecutivo: `PED-${p.orderNumber}`,
@@ -120,7 +127,7 @@ export const IncomesView: React.FC<IncomesViewProps> = ({ onNavigateToView }) =>
           concept: `Pago de venta #${p.orderNumber} (${ord?.type || 'comercial'})`,
           thirdParty: p.customerName || ord?.customerName || 'Consumidor Final',
           documentRef: `Pedido #${p.orderNumber}`,
-          paymentMethod: p.method,
+          paymentMethod: formattedMethod,
           amount: p.amountPaid, // Dinero real efectivamente recibido
           status: isOrderCancelled || isPaymentVoided ? 'anulado' : 'activo',
           userName: p.cashierName || 'Caja',
@@ -229,13 +236,31 @@ export const IncomesView: React.FC<IncomesViewProps> = ({ onNavigateToView }) =>
   const totalReceivedActive = activeIncomesList.reduce((sum, i) => sum + i.amount, 0);
   const totalCountActive = activeIncomesList.length;
 
-  const totalCash = activeIncomesList
-    .filter((i) => i.paymentMethod.toLowerCase().includes('efectivo'))
-    .reduce((sum, i) => sum + i.amount, 0);
-
-  const totalDigital = activeIncomesList
-    .filter((i) => !i.paymentMethod.toLowerCase().includes('efectivo'))
-    .reduce((sum, i) => sum + i.amount, 0);
+  const { totalCash, totalDigital } = useMemo(() => {
+    let cash = 0;
+    let digital = 0;
+    for (const item of activeIncomesList) {
+      if (item.type === 'venta') {
+        const payRef = item.originalRef as Payment;
+        if (payRef.method === 'mixto' && payRef.splits && payRef.splits.length > 0) {
+          for (const s of payRef.splits) {
+            if (s.method.toLowerCase().includes('efectivo')) {
+              cash += s.amount || 0;
+            } else {
+              digital += s.amount || 0;
+            }
+          }
+          continue;
+        }
+      }
+      if (item.paymentMethod.toLowerCase().includes('efectivo')) {
+        cash += item.amount;
+      } else {
+        digital += item.amount;
+      }
+    }
+    return { totalCash: cash, totalDigital: digital };
+  }, [activeIncomesList]);
 
   // Paginación
   const totalPages = Math.ceil(filteredIncomes.length / pageSize) || 1;

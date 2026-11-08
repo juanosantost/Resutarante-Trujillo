@@ -20,6 +20,7 @@ import {
   Save,
   Sparkles,
   Info,
+  Wine,
 } from 'lucide-react';
 
 interface DailyMenuConfigModalProps {
@@ -66,7 +67,13 @@ const FIXED_CATEGORY_META: Array<{
     id: 'grp-almuerzo-acomp3',
     name: 'Acompañamiento 3',
     defaultDiscount: 1000,
-    description: 'Tercer acompañamiento (ej: Ensalada, Aguacate, Bebida)',
+    description: 'Tercer acompañamiento (ej: Ensalada, Aguacate, Postre)',
+  },
+  {
+    id: 'grp-almuerzo-bebida',
+    name: 'Bebida / Sobremesa',
+    defaultDiscount: 1000,
+    description: 'Bebida o sobremesa del almuerzo (ej: Limonada, Jugo Natural, Mazamorra)',
   },
 ];
 
@@ -253,6 +260,7 @@ export const DailyMenuConfigModal: React.FC<DailyMenuConfigModalProps> = ({ onCl
     if (id.includes('sopa')) return Soup;
     if (id.includes('carne')) return Flame;
     if (id.includes('principio')) return Salad;
+    if (id.includes('bebida')) return Wine;
     return Layers;
   };
 
@@ -281,7 +289,7 @@ export const DailyMenuConfigModal: React.FC<DailyMenuConfigModalProps> = ({ onCl
                 </span>
               </div>
               <p className="text-xs text-[#a8a29e] mt-0.5">
-                Configura disponibilidad, nombre, valor base, descuentos por omisión y opciones de Sopa, Principio, Carne y Acompañamientos
+                Configura disponibilidad, nombre, valor base, descuentos por omisión y opciones de Sopa, Principio, Carne, Acompañamientos y Bebida / Sobremesa
               </p>
             </div>
           </div>
@@ -368,7 +376,7 @@ export const DailyMenuConfigModal: React.FC<DailyMenuConfigModalProps> = ({ onCl
             </div>
           </div>
 
-          {/* 2. Categorías del Almuerzo del Día (Sopa, Principio, Carne, Acompañamientos 1, 2 y 3) */}
+          {/* 2. Categorías del Almuerzo del Día (Sopa, Principio, Carne, Acompañamientos 1, 2, 3 y Bebida / Sobremesa) */}
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-xs sm:text-sm font-black text-[#d4af37] uppercase tracking-wider">
@@ -380,8 +388,8 @@ export const DailyMenuConfigModal: React.FC<DailyMenuConfigModalProps> = ({ onCl
               </span>
             </div>
 
-            {/* Pestañas de las 6 Categorías */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+            {/* Pestañas de las 7 Categorías */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
               {groups.map((grp) => {
                 const Icon = getCategoryIcon(grp.id);
                 const isSelected = grp.id === activeGroup.id;

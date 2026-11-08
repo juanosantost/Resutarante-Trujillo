@@ -170,6 +170,16 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                 <span className="font-semibold">Medio de Pago:</span>
                 <span className="font-black">{payment.method?.replace(/_/g, ' ')}</span>
               </div>
+              {payment.method === 'mixto' && payment.splits && payment.splits.length > 0 && (
+                <div className="pt-1 mt-1 border-t border-dotted border-black/50 space-y-0.5">
+                  {payment.splits.map((s, idx) => (
+                    <div key={idx} className="flex justify-between">
+                      <span className="capitalize font-medium">• {s.method.replace(/_/g, ' ')}:</span>
+                      <span className="font-bold">{formatCOP(s.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
               {payment.method === 'efectivo' && (
                 <>
                   <div className="flex justify-between font-semibold">

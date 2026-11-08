@@ -96,6 +96,20 @@ export const INITIAL_BRANCHES: Branch[] = [
   },
 ];
 
+export const DEFAULT_ADMIN_USER: ColmenaUser = {
+  id: 'usr-admin-principal',
+  firebaseUid: 'admin-seed-uid',
+  fullName: 'Juan Carlos Gómez (Super Admin)',
+  documentNumber: '1020304050',
+  email: 'juan.santos.ieci@gmail.com',
+  role: 'administrador',
+  authorizedBranchIds: ['sede-buga'],
+  isActive: true,
+  createdAt: new Date().toISOString(),
+  lastLoginAt: new Date().toISOString(),
+  phone: '3001234567',
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [currentUser, setCurrentUser] = useState<ColmenaUser | null>(() => {
@@ -108,11 +122,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
   const [branches, setBranches] = useState<Branch[]>(INITIAL_BRANCHES);
   const [currentBranchId, setCurrentBranchId] = useState<string>('sede-buga');
-  const [allUsers, setAllUsers] = useState<ColmenaUser[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [allUsers, setAllUsers] = useState<ColmenaUser[]>([DEFAULT_ADMIN_USER]);
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    try {
+      return !localStorage.getItem('colmena_logged_user');
+    } catch {
+      return true;
+    }
+  });
 
-  // 1. Escuchar cambios de autenticación en Firebase
+  // 1. Escuchar cambios de autenticación en Firebase (con timeout de seguridad para evitar bloqueo de carga)
   useEffect(() => {
+    const safetyTimer = setTimeout(() => {
+      setIsLoading(false);
+    }, 900);
     const unsubscribeAuth = onAuthStateChanged(
       auth,
       async (fbUser) => {
@@ -209,7 +232,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     );
 
-    return () => unsubscribeAuth();
+    return () => {
+      clearTimeout(safetyTimer);
+      unsubscribeAuth();
+    };
   }, []);
 
   // 2. Listener en tiempo real para Sucursales
@@ -273,7 +299,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       (snap) => {
         const list: ColmenaUser[] = [];
         snap.forEach((d) => list.push({ ...d.data(), id: d.id } as ColmenaUser));
-        setAllUsers(list.sort((a, b) => (a.fullName || '').localeCompare(b.fullName || '')));
+        if (list.length > 0) {
+          setAllUsers(list.sort((a, b) => (a.fullName || '').localeCompare(b.fullName || '')));
+        }
       },
       (error) => handleFirestoreError(error, OperationType.GET, 'users')
     );

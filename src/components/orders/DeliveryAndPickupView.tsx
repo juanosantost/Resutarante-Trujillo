@@ -822,7 +822,7 @@ export const DeliveryAndPickupView: React.FC = () => {
                             className="w-full mt-1.5 py-1 px-2 rounded-lg bg-[#242424] hover:bg-[#2d2d2d] text-[#D6A21A] border border-dashed border-[#B77900]/40 text-[11px] font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors"
                           >
                             <Plus className="w-3 h-3" />
-                            <span>+ Agregar productos a este pedido</span>
+                            <span>Agregar productos a este pedido</span>
                           </button>
                         )}
                       </div>
@@ -918,7 +918,7 @@ export const DeliveryAndPickupView: React.FC = () => {
                               title="Agregar productos a este pedido en curso"
                             >
                               <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                              <span>+ Agregar Productos</span>
+                              <span>Agregar Productos</span>
                             </button>
                           )}
 

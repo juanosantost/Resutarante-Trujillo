@@ -582,7 +582,7 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                         </h3>
                         <p className="text-[10px] text-[#a8a29e] mt-0.5 line-clamp-2 leading-snug">
                           {isDaily
-                            ? 'Sopa · Principio · Carne · 3 Acompañamientos a elección'
+                            ? 'Sopa · Principio · Carne · 3 Acompañamientos · Bebida'
                             : item.description || 'Receta artesanal preparada en cocina.'}
                         </p>
                       </div>

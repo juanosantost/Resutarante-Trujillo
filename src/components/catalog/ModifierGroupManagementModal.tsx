@@ -558,7 +558,7 @@ export const ModifierGroupManagementModal: React.FC<ModifierGroupManagementModal
                               className="px-2 py-0.5 rounded bg-[#292212] text-[#D6A21A] hover:bg-[#382d18] border border-[#B77900]/50 text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
                             >
                               <Plus className="w-3 h-3" />
-                              <span>+ Agregar Afectación</span>
+                              <span>Agregar Afectación</span>
                             </button>
                           </div>
 
