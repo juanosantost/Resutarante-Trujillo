@@ -6,6 +6,8 @@ import {
   calculateSelectedItemsTotals,
   getInitialSelectedItemIds,
   filterReceiptItems,
+  expandOrderItemsToSingleUnits,
+  formatOrderItemModifiersSummary,
 } from '../../utils/checkoutCalculations';
 import { ReceiptModal } from './ReceiptModal';
 import {
@@ -50,14 +52,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     menuItems,
   } = useRestaurant();
 
-  // 1. Estado editable de los productos de la comanda
+  // 1. Estado editable de los productos de la comanda (desagrupados en unidades de 1 para cobro individual)
   const [items, setItems] = useState<OrderItem[]>(() => {
-    return (order.items || []).map((it) => ({ ...it }));
+    return expandOrderItemsToSingleUnits(order.items || []);
   });
 
   // 2. Selección de ítems con checkbox (por defecto seleccionados los no pagados)
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>(() => {
-    return getInitialSelectedItemIds(order.items || []);
+    return getInitialSelectedItemIds(expandOrderItemsToSingleUnits(order.items || []));
   });
 
   // 3. Modal / formulario para agregar producto no registrado previamente
@@ -167,8 +169,32 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     setSelectedItemIds([]);
   };
 
-  // Modificación de cantidades
+  // Modificación de cantidades (al incrementar, crea una unidad separada para mantener el cobro individual)
   const handleQuantityChange = (itemId: string, delta: number) => {
+    if (delta > 0) {
+      const target = items.find((it) => it.id === itemId);
+      if (!target) return;
+      const newCloneId = `${target.id}-extra-${Date.now()}-${Math.random().toString(36).substr(2, 3)}`;
+      const clonedItem: OrderItem = {
+        ...target,
+        id: newCloneId,
+        quantity: 1,
+        paid: false,
+        paidAt: undefined,
+        paidPaymentId: undefined,
+      };
+      setItems((prev) => {
+        const idx = prev.findIndex((it) => it.id === itemId);
+        if (idx === -1) return [...prev, clonedItem];
+        const next = [...prev];
+        next.splice(idx + 1, 0, clonedItem);
+        return next;
+      });
+      setSelectedItemIds((prev) => [...prev, newCloneId]);
+      return;
+    }
+
+    // Si delta < 0 y la cantidad es 1, remover esa unidad individual
     setItems((prev) => {
       const updated = prev
         .map((it) => {
@@ -181,6 +207,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         .filter(Boolean) as OrderItem[];
       return updated;
     });
+    setSelectedItemIds((prev) => prev.filter((id) => id !== itemId));
   };
 
   const handleDeleteItem = (itemId: string) => {
@@ -208,27 +235,33 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     setEditingItemId(null);
   };
 
-  // Agregar un producto adicional (ej: entregado pero omitido en registro)
+  // Agregar un producto adicional (ej: entregado pero omitido en registro), separado en unidades individuales
   const handleAddDeliveredProduct = () => {
     if (!newProductName.trim() || newProductPrice <= 0 || newProductQuantity <= 0) return;
 
-    const newItemId = `item-deliv-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
-    const newItem: OrderItem = {
-      id: newItemId,
-      menuItemId: `custom-${Date.now()}`,
-      name: newProductName.trim(),
-      price: newProductPrice,
-      quantity: newProductQuantity,
-      station: 'cocina_caliente',
-      roundNumber: order.currentRound || 1,
-      sentToKitchen: true,
-      notes: newProductNotes.trim() || 'Entregado en mesa / Adición en cobro',
-      paid: false,
-    };
+    const qty = Math.max(1, Math.round(newProductQuantity));
+    const baseTimestamp = Date.now();
+    const newUnits: OrderItem[] = [];
 
-    setItems((prev) => [...prev, newItem]);
-    // Seleccionar automáticamente el ítem recién agregado
-    setSelectedItemIds((prev) => [...prev, newItemId]);
+    for (let i = 0; i < qty; i++) {
+      const newItemId = `item-deliv-${baseTimestamp}-${i + 1}-${Math.random().toString(36).substr(2, 4)}`;
+      newUnits.push({
+        id: newItemId,
+        menuItemId: `custom-${baseTimestamp}`,
+        name: newProductName.trim(),
+        price: newProductPrice,
+        quantity: 1,
+        station: 'cocina_caliente',
+        roundNumber: order.currentRound || 1,
+        sentToKitchen: true,
+        notes: newProductNotes.trim() || 'Entregado en mesa / Adición en cobro',
+        paid: false,
+      });
+    }
+
+    setItems((prev) => [...prev, ...newUnits]);
+    // Seleccionar automáticamente los ítems recién agregados
+    setSelectedItemIds((prev) => [...prev, ...newUnits.map((u) => u.id)]);
 
     // Resetear formulario
     setNewProductName('');
@@ -469,20 +502,28 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               </div>
 
               {/* Lista Detallada de Productos con Checkbox Izquierdo */}
-              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                 {items.length === 0 ? (
                   <div className="p-4 text-center text-xs text-[#78716c] italic border border-dashed border-[#383124] rounded-lg">
-                    No hay productos en esta cuenta. Haz clic en "+ Agregar Ítem Entregado" para registrar consumos.
+                    No hay productos en esta cuenta. Haz clic en "Agregar Ítem Entregado" para registrar consumos.
                   </div>
                 ) : (
                   items.map((item) => {
                     const isChecked = selectedItemIds.includes(item.id);
                     const isPaid = Boolean(item.paid);
+                    const modifiersSummary = formatOrderItemModifiersSummary(item);
+                    const matchedCatalogProduct =
+                      products.find((p) => p.id === item.menuItemId) ||
+                      menuItems.find((m) => m.id === item.menuItemId);
+                    const fallbackDescription =
+                      !modifiersSummary && matchedCatalogProduct?.description
+                        ? matchedCatalogProduct.description
+                        : '';
 
                     return (
                       <div
                         key={item.id}
-                        className={`p-2.5 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
+                        className={`p-3 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-start justify-between gap-2.5 ${
                           isPaid
                             ? 'bg-[#14121a]/60 border-[#332a1e] text-[#8c8270]'
                             : isChecked
@@ -490,21 +531,21 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                             : 'bg-[#14131a] border-[#2d281e] opacity-75'
                         }`}
                       >
-                        {/* Checkbox y Nombre */}
-                        <div className="flex items-start sm:items-center gap-2.5 flex-1 min-w-0">
-                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                        {/* Checkbox, Nombre, Descripción Completa y Observaciones */}
+                        <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                          <label className="flex items-center gap-2 cursor-pointer select-none pt-0.5">
                             <input
                               type="checkbox"
                               checked={isChecked}
                               onChange={() => toggleSelectItem(item.id)}
-                              className="w-4 h-4 rounded accent-[#d4af37] cursor-pointer mt-0.5 sm:mt-0"
+                              className="w-4 h-4 rounded accent-[#d4af37] cursor-pointer"
                             />
                           </label>
 
-                          <div className="min-w-0 flex-1">
+                          <div className="min-w-0 flex-1 space-y-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span
-                                className={`text-xs font-bold truncate ${
+                                className={`text-xs font-bold ${
                                   isPaid ? 'line-through text-[#8c8270] decoration-[#d4af37]/80' : 'text-[#fef3c7]'
                                 }`}
                               >
@@ -517,15 +558,50 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                                 </span>
                               )}
 
-                              <span className="text-[10px] text-[#78716c]">
+                              <span className="text-[10px] font-mono text-[#a8a29e]">
                                 {formatCOP(item.price)} c/u
                               </span>
                             </div>
 
-                            {item.notes && (
-                              <p className="text-[10px] text-[#a8a29e] italic truncate">
-                                Nota: {item.notes}
+                            {/* Descripción completa de lo que pidió el cliente (Sopa, Principio, Carne, Acompañamientos, Bebida o descripción del plato) */}
+                            {modifiersSummary && (
+                              <p className="text-[11px] text-[#d6d3d1] leading-snug whitespace-normal break-words bg-[#121117]/80 px-2 py-1 rounded-lg border border-[#2d281e]">
+                                <span className="font-semibold text-[#d4af37]">Detalle pedido: </span>
+                                {modifiersSummary}
                               </p>
+                            )}
+
+                            {fallbackDescription && (
+                              <p className="text-[11px] text-[#a8a29e] leading-snug whitespace-normal break-words">
+                                {fallbackDescription}
+                              </p>
+                            )}
+
+                            {/* Descuentos por omisión o recargos aplicados al plato */}
+                            {item.adjustments && item.adjustments.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                {item.adjustments.map((adj) => (
+                                  <span
+                                    key={adj.id}
+                                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                                      adj.type === 'descuento'
+                                        ? 'bg-emerald-950/50 border-emerald-700/50 text-emerald-300'
+                                        : 'bg-amber-950/50 border-amber-700/50 text-amber-300'
+                                    }`}
+                                  >
+                                    {adj.type === 'descuento' ? 'Descuento' : 'Adición'}: {adj.concept} (
+                                    {adj.type === 'descuento' ? '-' : '+'}
+                                    {adj.modality === 'porcentaje' ? `${adj.value}%` : formatCOP(adj.value)})
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Observaciones / Notas del cliente (completas sin recortar) */}
+                            {item.notes && (
+                              <div className="text-[11px] text-[#fef3c7] bg-[#2b2416]/80 border border-[#d4af37]/50 px-2 py-1 rounded-lg whitespace-normal break-words">
+                                <strong className="text-[#d4af37]">Observación:</strong> {item.notes}
+                              </div>
                             )}
                           </div>
                         </div>

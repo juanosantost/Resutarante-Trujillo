@@ -123,14 +123,43 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
               </div>
               <div className={`space-y-1.5 text-black font-bold ${is58mm ? 'text-xs' : 'text-[13px]'}`}>
                 {filterReceiptItems(payment, order).length > 0 ? (
-                  filterReceiptItems(payment, order).map((it) => (
-                    <div key={it.id} className="flex justify-between gap-2">
-                      <span className="leading-snug">
-                        {it.quantity}x {it.name}
-                      </span>
-                      <span className="font-black shrink-0">{formatCOP(it.price * it.quantity)}</span>
-                    </div>
-                  ))
+                  filterReceiptItems(payment, order).map((it) => {
+                    const modSummary = (it.selectedModifiers || [])
+                      .map((m) => {
+                        const cleanOpt =
+                          m.groupName && m.optionName.startsWith(`${m.groupName}: `)
+                            ? m.optionName.substring(m.groupName.length + 2)
+                            : m.optionName;
+                        return m.groupName ? `${m.groupName}: ${cleanOpt}` : cleanOpt;
+                      })
+                      .join(' · ');
+
+                    return (
+                      <div key={it.id} className="space-y-0.5">
+                        <div className="flex justify-between gap-2">
+                          <span className="leading-snug">
+                            {it.quantity}x {it.name}
+                          </span>
+                          <span className="font-black shrink-0">{formatCOP(it.price * it.quantity)}</span>
+                        </div>
+                        {modSummary && (
+                          <div className="text-[10px] font-medium leading-tight pl-2 text-black/80">
+                            {modSummary}
+                          </div>
+                        )}
+                        {it.adjustments && it.adjustments.length > 0 && (
+                          <div className="text-[10px] font-semibold leading-tight pl-2 text-black/80">
+                            {it.adjustments.map((a) => a.concept).join(' · ')}
+                          </div>
+                        )}
+                        {it.notes && (
+                          <div className="text-[10px] italic leading-tight pl-2 text-black">
+                            Obs: {it.notes}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
                 ) : (
                   <div className="flex justify-between">
                     <span>Consumo de Alimentos y Bebidas</span>

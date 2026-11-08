@@ -122,3 +122,72 @@ export function filterReceiptItems(
 
   return order?.items || [];
 }
+
+/**
+ * Desagrupa cualquier ítem con quantity > 1 en unidades individuales (quantity = 1)
+ * copiando íntegramente su descripción (selectedModifiers, adjustments y notes) en cada unidad
+ * para que al momento de cobrar cada plato/producto salga por separado con todo su detalle.
+ */
+export function expandOrderItemsToSingleUnits(items: OrderItem[]): OrderItem[] {
+  if (!items || items.length === 0) return [];
+  const expanded: OrderItem[] = [];
+
+  for (const item of items) {
+    const qty = Math.max(1, Math.round(item.quantity || 1));
+    const clonedModifiers = item.selectedModifiers
+      ? item.selectedModifiers.map((m) => ({ ...m }))
+      : undefined;
+    const clonedAdjustments = item.adjustments
+      ? item.adjustments.map((a) => ({ ...a }))
+      : undefined;
+
+    if (qty <= 1) {
+      expanded.push({
+        ...item,
+        quantity: 1,
+        selectedModifiers: clonedModifiers,
+        adjustments: clonedAdjustments,
+        notes: item.notes,
+      });
+    } else {
+      for (let i = 0; i < qty; i++) {
+        expanded.push({
+          ...item,
+          id: i === 0 ? item.id : `${item.id}-u${i + 1}`,
+          quantity: 1,
+          selectedModifiers: clonedModifiers ? clonedModifiers.map((m) => ({ ...m })) : undefined,
+          adjustments: clonedAdjustments ? clonedAdjustments.map((a) => ({ ...a })) : undefined,
+          notes: item.notes,
+        });
+      }
+    }
+  }
+
+  return expanded;
+}
+
+/**
+ * Formatea en texto claro las opciones seleccionadas del plato (ej: Sopa, Principio, Carne, Acompañamientos, Bebida)
+ * para mostrar la descripción completa en cada ítem aunque se repita.
+ */
+export function formatOrderItemModifiersSummary(item: OrderItem): string {
+  if (!item.selectedModifiers || item.selectedModifiers.length === 0) return '';
+  return item.selectedModifiers
+    .map((m) => {
+      const cleanOpt =
+        m.groupName && m.optionName.startsWith(`${m.groupName}: `)
+          ? m.optionName.substring(m.groupName.length + 2)
+          : m.optionName;
+      const label = m.groupName ? `${m.groupName}: ${cleanOpt}` : cleanOpt;
+      const qtyStr = m.quantity && m.quantity > 1 ? ` (x${m.quantity})` : '';
+      const textStr = m.textValue ? ` "${m.textValue}"` : '';
+      const surchargeStr =
+        m.priceSurcharge && m.priceSurcharge > 0
+          ? ` (+$${(m.priceSurcharge * (m.quantity || 1)).toLocaleString('es-CO')})`
+          : '';
+      return `${label}${qtyStr}${textStr}${surchargeStr}`;
+    })
+    .join(' · ');
+}
+
+

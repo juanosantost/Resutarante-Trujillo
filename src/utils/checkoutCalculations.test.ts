@@ -160,3 +160,18 @@ test('filterReceiptItems respects selected paid items in POS invoice', () => {
   const filtered3 = filterReceiptItems(paymentLegacy, { items: mockItems });
   assert.equal(filtered3.length, 3);
 });
+
+test('expandOrderItemsToSingleUnits splits grouped items into individual quantity=1 rows for checkout', async () => {
+  const { expandOrderItemsToSingleUnits } = await import('./checkoutCalculations');
+  const expanded = expandOrderItemsToSingleUnits(mockItems);
+  // mockItems has: item-1 (qty 2), item-2 (qty 1), item-3 (qty 3) => total 6 single items
+  assert.equal(expanded.length, 6);
+  assert.equal(expanded.every((it) => it.quantity === 1), true);
+  assert.equal(expanded[0].id, 'item-1');
+  assert.equal(expanded[1].id, 'item-1-u2');
+  assert.equal(expanded[2].id, 'item-2');
+  assert.equal(expanded[3].id, 'item-3');
+  assert.equal(expanded[4].id, 'item-3-u2');
+  assert.equal(expanded[5].id, 'item-3-u3');
+});
+

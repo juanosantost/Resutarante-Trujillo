@@ -230,17 +230,46 @@ export const OrdersView: React.FC = () => {
                             </span>
                             <span className="text-[#a8a29e]">{items.length} productos</span>
                           </div>
-                          <div className="space-y-1 text-xs">
-                            {items.map((it) => (
-                              <div key={it.id} className="flex justify-between text-[#d6d3d1]">
-                                <span>
-                                  {it.quantity}x {it.name}
-                                </span>
-                                <span className="font-semibold text-[#fef3c7]">
-                                  {formatCOP(it.price * it.quantity)}
-                                </span>
-                              </div>
-                            ))}
+                          <div className="space-y-1.5 text-xs">
+                            {items.map((it) => {
+                              const modSummary = (it.selectedModifiers || [])
+                                .map((m) => {
+                                  const cleanOpt =
+                                    m.groupName && m.optionName.startsWith(`${m.groupName}: `)
+                                      ? m.optionName.substring(m.groupName.length + 2)
+                                      : m.optionName;
+                                  return m.groupName ? `${m.groupName}: ${cleanOpt}` : cleanOpt;
+                                })
+                                .join(' · ');
+
+                              return (
+                                <div key={it.id} className="border-b border-[#24211a] pb-1 last:border-0">
+                                  <div className="flex justify-between text-[#d6d3d1]">
+                                    <span className="font-semibold">
+                                      {it.quantity}x {it.name}
+                                    </span>
+                                    <span className="font-semibold text-[#fef3c7] shrink-0">
+                                      {formatCOP(it.price * it.quantity)}
+                                    </span>
+                                  </div>
+                                  {modSummary && (
+                                    <div className="text-[10px] text-[#a8a29e] leading-snug pl-3 mt-0.5 whitespace-normal break-words">
+                                      • {modSummary}
+                                    </div>
+                                  )}
+                                  {it.adjustments && it.adjustments.length > 0 && (
+                                    <div className="text-[10px] text-emerald-400 pl-3 font-semibold">
+                                      {it.adjustments.map((a) => a.concept).join(' · ')}
+                                    </div>
+                                  )}
+                                  {it.notes && (
+                                    <div className="text-[10px] text-[#d4af37] italic pl-3 whitespace-normal break-words">
+                                      ↳ Obs: {it.notes}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       ))}

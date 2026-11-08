@@ -318,15 +318,44 @@ export const TableDetailModal: React.FC<TableDetailModalProps> = ({
                 <span>Pedido #{activeOrder.orderNumber}</span>
                 <span className="text-[#a8a29e]">{activeOrder.items.length} productos solicitados</span>
               </div>
-              <div className="max-h-28 overflow-y-auto space-y-1 pr-1 text-xs">
-                {activeOrder.items.map((item, idx) => (
-                  <div key={idx} className="flex justify-between text-[11px] text-[#a8a29e] border-b border-[#24211a] pb-1">
-                    <span>
-                      {item.quantity}x {item.name}
-                    </span>
-                    <span className="font-mono text-[#d6d3d1]">{formatCOP(item.price * item.quantity)}</span>
-                  </div>
-                ))}
+              <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1 text-xs">
+                {activeOrder.items.map((item, idx) => {
+                  const modSummary = (item.selectedModifiers || [])
+                    .map((m) => {
+                      const cleanOpt =
+                        m.groupName && m.optionName.startsWith(`${m.groupName}: `)
+                          ? m.optionName.substring(m.groupName.length + 2)
+                          : m.optionName;
+                      return m.groupName ? `${m.groupName}: ${cleanOpt}` : cleanOpt;
+                    })
+                    .join(' · ');
+
+                  return (
+                    <div key={idx} className="text-[11px] text-[#a8a29e] border-b border-[#24211a] pb-1 last:border-0">
+                      <div className="flex justify-between">
+                        <span className="font-semibold text-[#d6d3d1]">
+                          {item.quantity}x {item.name}
+                        </span>
+                        <span className="font-mono text-[#d6d3d1] shrink-0">{formatCOP(item.price * item.quantity)}</span>
+                      </div>
+                      {modSummary && (
+                        <div className="text-[10px] text-[#a8a29e] pl-3 leading-snug whitespace-normal break-words">
+                          • {modSummary}
+                        </div>
+                      )}
+                      {item.adjustments && item.adjustments.length > 0 && (
+                        <div className="text-[10px] text-emerald-400 pl-3 font-semibold">
+                          {item.adjustments.map((a) => a.concept).join(' · ')}
+                        </div>
+                      )}
+                      {item.notes && (
+                        <div className="text-[10px] text-[#D6A21A] italic pl-3 whitespace-normal break-words">
+                          ↳ Obs: {item.notes}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="flex flex-col sm:flex-row gap-2 pt-2 flex-wrap">

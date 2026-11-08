@@ -596,21 +596,50 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
                               Ronda {roundNum}
                             </div>
                           )}
-                          {roundsMap[roundNum].map((it, idx) => (
-                            <div key={idx} className="flex justify-between items-start text-[11px] text-[#d6d3d1]">
-                              <div className="pr-2">
-                                <span className="font-bold text-[#FFFDF5]">{it.quantity}x</span> {it.name}
-                                {it.notes && (
-                                  <span className="text-[10px] text-[#D6A21A] block italic pl-3">
-                                    ↳ {it.notes}
-                                  </span>
-                                )}
+                          {roundsMap[roundNum].map((it, idx) => {
+                            const modSummary = (it.selectedModifiers || [])
+                              .map((m) => {
+                                const cleanOpt =
+                                  m.groupName && m.optionName.startsWith(`${m.groupName}: `)
+                                    ? m.optionName.substring(m.groupName.length + 2)
+                                    : m.optionName;
+                                return m.groupName ? `${m.groupName}: ${cleanOpt}` : cleanOpt;
+                              })
+                              .join(' · ');
+
+                            return (
+                              <div key={idx} className="flex justify-between items-start text-[11px] text-[#d6d3d1] border-b border-[#2a2a2a]/60 pb-1 last:border-0">
+                                <div className="pr-2 space-y-0.5">
+                                  <div>
+                                    <span className="font-bold text-[#FFFDF5]">{it.quantity}x</span> {it.name}
+                                    {it.paid && (
+                                      <span className="ml-1.5 px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-[#292212] text-[#D6A21A] border border-[#B77900]/40">
+                                        ✓ Pagado
+                                      </span>
+                                    )}
+                                  </div>
+                                  {modSummary && (
+                                    <span className="text-[10px] text-[#a8a29e] block leading-snug pl-3 whitespace-normal break-words">
+                                      • {modSummary}
+                                    </span>
+                                  )}
+                                  {it.adjustments && it.adjustments.length > 0 && (
+                                    <span className="text-[10px] text-emerald-400 block pl-3 font-semibold">
+                                      {it.adjustments.map((a) => `${a.concept}`).join(' · ')}
+                                    </span>
+                                  )}
+                                  {it.notes && (
+                                    <span className="text-[10px] text-[#D6A21A] block italic pl-3 whitespace-normal break-words">
+                                      ↳ Obs: {it.notes}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="font-mono font-semibold shrink-0">
+                                  {formatCOP(it.price * it.quantity)}
+                                </span>
                               </div>
-                              <span className="font-mono font-semibold shrink-0">
-                                {formatCOP(it.price * it.quantity)}
-                              </span>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       ))}
                     </div>
