@@ -553,7 +553,7 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                       )}
 
                       {/* Badge de Tiempo */}
-                      <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded-full text-[8.5px] font-bold bg-black/80 backdrop-blur-md text-[#fef3c7] border border-white/10 flex items-center gap-0.5 shadow">
+                      <span className="prep-time-badge absolute top-1 left-1 px-1.5 py-0.5 rounded-full text-[8.5px] font-bold bg-black/80 backdrop-blur-md text-[#fef3c7] border border-white/10 flex items-center gap-0.5 shadow">
                         <Clock className="w-2 h-2 text-[#d4af37]" />
                         {item.prepTimeMinutes || 15}m
                       </span>

@@ -1254,21 +1254,29 @@ html.theme-light div.font-mono[class*="border"]:not(.colmena-printable-ticket):n
 /* Badges sobre imágenes en tarjetas (tiempo de preparación) */
 html.theme-light .prep-time-badge,
 html.theme-light div[class*="prep-time-badge"],
-html.theme-light span[class*="prep-time-badge"] {
+html.theme-light span[class*="prep-time-badge"],
+html.theme-light span.bg-black\/80,
+html.theme-light div.bg-black\/80:not(.fixed) {
   background-color: #ffffff !important;
   color: #0f172a !important;
   border-color: #cbd5e1 !important;
-  font-weight: 700 !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12) !important;
+  font-weight: 800 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14) !important;
 }
 
 html.theme-light .prep-time-badge *,
-html.theme-light div[class*="prep-time-badge"] * {
+html.theme-light div[class*="prep-time-badge"] *,
+html.theme-light span[class*="prep-time-badge"] *,
+html.theme-light span.bg-black\/80 *,
+html.theme-light div.bg-black\/80:not(.fixed) * {
   color: #0f172a !important;
 }
 
 html.theme-light .prep-time-badge svg,
-html.theme-light div[class*="prep-time-badge"] svg {
+html.theme-light div[class*="prep-time-badge"] svg,
+html.theme-light span[class*="prep-time-badge"] svg,
+html.theme-light span.bg-black\/80 svg,
+html.theme-light div.bg-black\/80:not(.fixed) svg {
   color: #b45309 !important;
 }
 

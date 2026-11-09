@@ -339,16 +339,6 @@ export const OrdersView: React.FC = () => {
 
                         <button
                           type="button"
-                          onClick={() => setSelectedOrderForRound(order)}
-                          className="flex-1 py-2 px-2.5 rounded-xl bg-gradient-to-r from-[#292212] to-[#3a2f16] hover:bg-[#d4af37] text-[#fef3c7] hover:text-[#0e0e12] border border-[#d4af37]/60 text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-sm min-w-[120px]"
-                          title="Agregar productos o nueva ronda a este pedido en curso"
-                        >
-                          <Plus className="w-4 h-4 text-[#d4af37]" />
-                          <span>Agregar</span>
-                        </button>
-
-                        <button
-                          type="button"
                           onClick={() => setSelectedOrderForCheckout(order)}
                           className="flex-1 py-2 px-2.5 rounded-xl bg-emerald-950 text-emerald-400 border border-emerald-700/50 hover:bg-emerald-900 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer transition-all min-w-[90px]"
                         >

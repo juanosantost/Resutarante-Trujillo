@@ -22,6 +22,10 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
   const { currentBranch: currentContextBranch } = useRestaurant();
   const { branches } = useAuth();
 
+  // Solo mostrar el valor de lo pagado (TOTAL PAGADO, Medio de Pago, Efectivo Recibido, Cambio)
+  // cuando realmente se ha registrado el cobro (no en la tirilla previa al pago)
+  const isPaid = !payment.id?.startsWith('preview-');
+
   useEffect(() => {
     document.body.classList.add('printing-pos-ticket');
     return () => {
@@ -188,40 +192,42 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                 </div>
               )}
               <div className={`flex justify-between font-black pt-1.5 border-t border-black text-black ${is58mm ? 'text-sm' : 'text-base'}`}>
-                <span>TOTAL PAGADO:</span>
+                <span>{isPaid ? 'TOTAL PAGADO:' : 'TOTAL:'}</span>
                 <span>{formatCOP(payment.total)}</span>
               </div>
             </div>
 
-            {/* Medios de Pago */}
-            <div className={`py-2.5 border-b border-dashed border-black space-y-1 text-black ${is58mm ? 'text-[11px]' : 'text-xs'}`}>
-              <div className="flex justify-between capitalize">
-                <span className="font-semibold">Medio de Pago:</span>
-                <span className="font-black">{payment.method?.replace(/_/g, ' ')}</span>
-              </div>
-              {payment.method === 'mixto' && payment.splits && payment.splits.length > 0 && (
-                <div className="pt-1 mt-1 border-t border-dotted border-black/50 space-y-0.5">
-                  {payment.splits.map((s, idx) => (
-                    <div key={idx} className="flex justify-between">
-                      <span className="capitalize font-medium">• {s.method.replace(/_/g, ' ')}:</span>
-                      <span className="font-bold">{formatCOP(s.amount)}</span>
-                    </div>
-                  ))}
+            {/* Medios de Pago y Valores Pagados (solo cuando realmente se ha registrado el cobro) */}
+            {isPaid && (
+              <div className={`py-2.5 border-b border-dashed border-black space-y-1 text-black ${is58mm ? 'text-[11px]' : 'text-xs'}`}>
+                <div className="flex justify-between capitalize">
+                  <span className="font-semibold">Medio de Pago:</span>
+                  <span className="font-black">{payment.method?.replace(/_/g, ' ')}</span>
                 </div>
-              )}
-              {payment.method === 'efectivo' && (
-                <>
-                  <div className="flex justify-between font-semibold">
-                    <span>Efectivo Recibido:</span>
-                    <span className="font-bold">{formatCOP(payment.amountPaid)}</span>
+                {payment.method === 'mixto' && payment.splits && payment.splits.length > 0 && (
+                  <div className="pt-1 mt-1 border-t border-dotted border-black/50 space-y-0.5">
+                    {payment.splits.map((s, idx) => (
+                      <div key={idx} className="flex justify-between">
+                        <span className="capitalize font-medium">• {s.method.replace(/_/g, ' ')}:</span>
+                        <span className="font-bold">{formatCOP(s.amount)}</span>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex justify-between font-black">
-                    <span>Cambio / Vueltas:</span>
-                    <span>{formatCOP(payment.change)}</span>
-                  </div>
-                </>
-              )}
-            </div>
+                )}
+                {payment.method === 'efectivo' && (
+                  <>
+                    <div className="flex justify-between font-semibold">
+                      <span>Efectivo Recibido:</span>
+                      <span className="font-bold">{formatCOP(payment.amountPaid)}</span>
+                    </div>
+                    <div className="flex justify-between font-black">
+                      <span>Cambio / Vueltas:</span>
+                      <span>{formatCOP(payment.change)}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Mensaje de Despedida y DIAN */}
             <div className={`pt-3 text-center space-y-1 text-black ${is58mm ? 'text-[10px]' : 'text-[11px]'}`}>
@@ -256,4 +262,6 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
     document.body
   );
 };
+
+
 

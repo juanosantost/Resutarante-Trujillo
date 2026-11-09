@@ -477,7 +477,7 @@ export const ProductCustomizeModal: React.FC<ProductCustomizeModalProps> = ({
                     <span className="text-xs font-medium text-zinc-400">Sin fotografía asignada</span>
                   </div>
                 )}
-                <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-black/80 backdrop-blur-sm text-[10px] text-[#fef3c7] flex items-center gap-1 border border-white/10">
+                <div className="prep-time-badge absolute top-2 left-2 px-2 py-0.5 rounded-full bg-black/80 backdrop-blur-sm text-[10px] text-[#fef3c7] flex items-center gap-1 border border-white/10">
                   <Clock className="w-3 h-3 text-[#d4af37]" />
                   <span>{product.prepTimeMinutes || 15} min prep</span>
                 </div>
@@ -862,7 +862,7 @@ export const ProductCustomizeModal: React.FC<ProductCustomizeModalProps> = ({
                 className="px-3 py-1.5 rounded-xl bg-[#2b2416] border border-[#d4af37]/60 text-[#d4af37] text-xs font-bold hover:brightness-110 cursor-pointer flex items-center gap-1 shadow"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>+ Ajuste Comercial</span>
+                <span>Ajuste Comercial</span>
               </button>
             </div>
 

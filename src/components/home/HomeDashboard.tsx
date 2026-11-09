@@ -673,7 +673,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
                 {/* 5. Barra de Acciones Directas Requeridas */}
                 <div className="pt-3 border-t border-[#2e2e2e] space-y-2">
                   
-                  {/* Fila 1: Botón POS Cocina, Agregar Productos & Botón Cobrar/Pagar */}
+                  {/* Fila 1: Botón POS Cocina & Botón Cobrar/Pagar */}
                   <div className="flex items-center gap-2 flex-wrap">
                     <button
                       type="button"
@@ -683,16 +683,6 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
                     >
                       <Printer className="w-4 h-4 text-[#d4af37]" />
                       <span>POS Cocina</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setSelectedOrderForRound(order)}
-                      className="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#292212] to-[#3a2f16] hover:bg-[#D6A21A] text-[#fef3c7] hover:text-[#181818] border border-[#D6A21A]/60 font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm min-w-[110px]"
-                      title="Agregar productos o nueva ronda a este pedido en curso"
-                    >
-                      <Plus className="w-4 h-4 text-[#D6A21A]" />
-                      <span>Agregar</span>
                     </button>
 
                     <button
