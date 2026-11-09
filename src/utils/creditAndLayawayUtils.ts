@@ -198,3 +198,81 @@ export function isCarteraOverdue(dueDate: string): boolean {
   // Se considera vencida si la fecha límite es anterior al inicio del día de hoy
   return due.getTime() < now.getTime();
 }
+
+export interface UpcomingSeparadoAlert {
+  separado: Separado;
+  scheduledAt: Date;
+  diffMinutes: number;
+  hoursRemaining: number;
+  isOverdue: boolean;
+  timeLabel: string;
+}
+
+/**
+ * Obtiene los separados activos cuya fecha y hora de entrega están próximas
+ * dentro del umbral indicado (por defecto 12 horas) o ya cumplieron la hora y siguen pendientes.
+ */
+export function getUpcomingSeparadosAlert(
+  separados: Separado[],
+  thresholdHours: number = 12,
+  now: Date = new Date()
+): UpcomingSeparadoAlert[] {
+  if (!Array.isArray(separados)) return [];
+
+  const alerts: UpcomingSeparadoAlert[] = [];
+
+  for (const sep of separados) {
+    if (sep.status !== 'activo') continue;
+    if (!sep.deliveryDate) continue;
+
+    const timePart = sep.deliveryTime && /^\d{2}:\d{2}$/.test(sep.deliveryTime.trim())
+      ? sep.deliveryTime.trim()
+      : '12:00';
+
+    const [year, month, day] = sep.deliveryDate.split('-').map(Number);
+    const [hour, minute] = timePart.split(':').map(Number);
+    if (!year || !month || !day) continue;
+
+    const scheduledAt = new Date(year, month - 1, day, hour || 0, minute || 0, 0, 0);
+    if (isNaN(scheduledAt.getTime())) continue;
+
+    const diffMs = scheduledAt.getTime() - now.getTime();
+    const diffMinutes = Math.round(diffMs / 60000);
+    const hoursRemaining = Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10;
+
+    if (diffMinutes <= thresholdHours * 60) {
+      const isOverdue = diffMinutes < 0;
+      let timeLabel = '';
+      if (diffMinutes < 0) {
+        const pastMins = Math.abs(diffMinutes);
+        if (pastMins < 60) {
+          timeLabel = `Hora cumplida hace ${pastMins} min`;
+        } else {
+          const h = Math.floor(pastMins / 60);
+          const m = pastMins % 60;
+          timeLabel = `Hora cumplida hace ${h}h${m > 0 ? ` ${m}m` : ''}`;
+        }
+      } else if (diffMinutes === 0) {
+        timeLabel = '¡Hora programada ahora!';
+      } else if (diffMinutes < 60) {
+        timeLabel = `En ${diffMinutes} min`;
+      } else {
+        const h = Math.floor(diffMinutes / 60);
+        const m = diffMinutes % 60;
+        timeLabel = `En ${h}h${m > 0 ? ` ${m}m` : ''}`;
+      }
+
+      alerts.push({
+        separado: sep,
+        scheduledAt,
+        diffMinutes,
+        hoursRemaining,
+        isOverdue,
+        timeLabel,
+      });
+    }
+  }
+
+  return alerts.sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
+}
+

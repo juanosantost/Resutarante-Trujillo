@@ -92,7 +92,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     logout,
     canAccess,
   } = useAuth();
-  const { tables, activeOrders, activeComandas, inventory, activeShift } = useRestaurant();
+  const { tables, activeOrders, activeComandas, inventory, activeShift, separados, cartera } = useRestaurant();
   const { showToast } = useToast();
   const { isLight, toggleTheme } = useTheme();
 
@@ -160,6 +160,10 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     (c) => c.status === 'nueva' || c.status === 'en_preparacion'
   ).length;
   const lowStockItems = inventory.filter((i) => !i.isDeleted && i.currentStock <= i.minStock).length;
+  const activeSeparadosCount = separados.filter((s) => s.status === 'activo').length;
+  const pendingCarteraCount = cartera.filter(
+    (c) => (c.status === 'vigente' || c.status === 'vencida') && c.balanceDue > 0
+  ).length;
 
   const handleLogout = async () => {
     try {
@@ -237,6 +241,12 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           } else if (btn.badgeType === 'lowStock' && lowStockItems > 0) {
             badge = `! ${lowStockItems}`;
             badgeColor = 'bg-red-900/80 text-red-200 border border-red-700/50';
+          } else if (btn.id === 'separados' && activeSeparadosCount > 0) {
+            badge = activeSeparadosCount;
+            badgeColor = 'bg-[#292212] text-[#D6A21A] border border-[#B77900]/40';
+          } else if (btn.id === 'cartera' && pendingCarteraCount > 0) {
+            badge = pendingCarteraCount;
+            badgeColor = 'bg-[#292212] text-[#D6A21A] border border-[#B77900]/40';
           } else if (btn.badgeText) {
             badge = btn.badgeText;
             badgeColor = 'bg-[#B77900] text-[#181818]';

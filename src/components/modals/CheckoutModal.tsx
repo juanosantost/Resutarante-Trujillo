@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
+import { useToast } from '../../context/ToastContext';
 import { Order, PaymentMethod, PaymentSplit, Payment, OrderItem } from '../../types';
 import { formatCOP, splitBillEqually, getEffectiveTaxRate } from '../../utils/calculations';
 import {
@@ -28,6 +29,11 @@ import {
   AlertCircle,
   ShoppingBag,
   Sparkles,
+  BookmarkCheck,
+  Calendar,
+  Phone,
+  User,
+  ShieldAlert,
 } from 'lucide-react';
 
 interface CheckoutModalProps {
@@ -43,6 +49,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 }) => {
   const {
     closeAndPayOrder,
+    sendOrderToCartera,
     updateOrderItems,
     activeShift,
     actionLoading,
@@ -50,7 +57,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     currentBranch,
     products,
     menuItems,
+    customers,
   } = useRestaurant();
+  const { showToast } = useToast();
 
   // 1. Estado editable de los productos de la comanda (desagrupados en unidades de 1 para cobro individual)
   const [items, setItems] = useState<OrderItem[]>(() => {
@@ -82,12 +91,30 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     order.tip > 0 ? order.tip : Math.round(order.subtotal * 0.10)
   );
   const [customerName, setCustomerName] = useState<string>(order.customerName || '');
-  const [customerNit, setCustomerNit] = useState<string>('222222222222'); // Consumidor final Colombia
+  const [customerNit, setCustomerNit] = useState<string>(order.customerDocument || '222222222222'); // Consumidor final Colombia
   const [splitCount, setSplitCount] = useState<number>(1);
   const [isSplitting, setIsSplitting] = useState<boolean>(false);
 
   // 6. Previsualización / Impresión anticipada de tirilla POS con los ítems seleccionados
   const [previewReceiptPayment, setPreviewReceiptPayment] = useState<Payment | null>(null);
+
+  // 7. Modal de Confirmación para Enviar Pedido a Cartera
+  const [showConfirmCarteraModal, setShowConfirmCarteraModal] = useState<boolean>(false);
+  const [carteraCustomerId, setCarteraCustomerId] = useState<string>(order.customerId || '');
+  const [carteraCustomerName, setCarteraCustomerName] = useState<string>(
+    order.customerName && order.customerName !== 'Cliente General' ? order.customerName : ''
+  );
+  const [carteraCustomerDoc, setCarteraCustomerDoc] = useState<string>(order.customerDocument || '');
+  const [carteraCustomerPhone, setCarteraCustomerPhone] = useState<string>(order.customerPhone || '');
+  const [carteraDueDate, setCarteraDueDate] = useState<string>(() => {
+    return new Date(Date.now() + 86400000 * 30).toISOString().split('T')[0];
+  });
+  const [carteraNotes, setCarteraNotes] = useState<string>(
+    order.fromSeparadoCode
+      ? `Saldo pendiente de Pedido #${order.orderNumber} (Separado #${order.fromSeparadoCode})`
+      : `Saldo pendiente de Pedido #${order.orderNumber}`
+  );
+  const [carteraError, setCarteraError] = useState<string>('');
 
   // Totales dinámicos basados exclusivamente en los elementos seleccionados
   const taxRate = getEffectiveTaxRate(currentBranch);
@@ -102,7 +129,26 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   }, [items, selectedItemIds, includeTip, customTip, taxRate]);
 
   const tipAmount = totalsResult.tip;
-  const grandTotal = totalsResult.total;
+  const grossSelectedTotal = totalsResult.total;
+  const orderAdvanceAmount = Math.max(0, order.advanceAmount || 0);
+  const advanceApplied = Math.min(grossSelectedTotal, orderAdvanceAmount);
+  const grandTotal = Math.max(0, grossSelectedTotal - advanceApplied);
+
+  // Saldo pendiente total de los ítems no pagados de la orden (para envío a Cartera)
+  const unpaidItemsTotals = useMemo(() => {
+    const unpaid = items.filter((it) => !it.paid);
+    const sub = unpaid.reduce((acc, it) => acc + it.price * it.quantity, 0);
+    const tx = Math.round(sub * taxRate);
+    const gross = sub + tx + (includeTip ? tipAmount : 0);
+    const adv = Math.min(gross, orderAdvanceAmount);
+    const netPending = Math.max(0, gross - adv);
+    return {
+      unpaidCount: unpaid.length,
+      grossTotal: gross,
+      advanceDeducted: adv,
+      netPending,
+    };
+  }, [items, taxRate, includeTip, tipAmount, orderAdvanceAmount]);
 
   // Actualizar propina sugerida cuando cambia la selección o el subtotal
   useEffect(() => {
@@ -352,6 +398,58 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       onPaymentComplete(payment);
     } catch (err) {
       console.error('Error completing payment:', err);
+    }
+  };
+
+  // Abrir modal de confirmación para enviar el pedido con su saldo pendiente a Cartera
+  const handleOpenConfirmCartera = () => {
+    setCarteraError('');
+    setCarteraCustomerName(
+      (prev) => prev.trim() || (customerName && customerName !== 'Cliente General' ? customerName : order.customerName || '')
+    );
+    setCarteraCustomerDoc(
+      (prev) => prev.trim() || (customerNit && customerNit !== '222222222222' ? customerNit : order.customerDocument || '')
+    );
+    setCarteraCustomerPhone((prev) => prev.trim() || order.customerPhone || '');
+    setShowConfirmCarteraModal(true);
+  };
+
+  // Confirmar y ejecutar el envío del pedido a Cartera
+  const handleConfirmSendToCartera = async () => {
+    if (actionLoading) return;
+    setCarteraError('');
+
+    const finalCustName = carteraCustomerName.trim() || customerName.trim() || order.customerName || '';
+    if (!finalCustName) {
+      setCarteraError('Por favor ingresa o selecciona el nombre del cliente para registrar la cuenta en Cartera.');
+      return;
+    }
+
+    try {
+      const createdCartera = await sendOrderToCartera({
+        orderId: order.id,
+        customerId: carteraCustomerId || order.customerId || undefined,
+        customerName: finalCustName,
+        customerPhone: carteraCustomerPhone.trim() || order.customerPhone || '',
+        customerDocument: carteraCustomerDoc.trim() || customerNit.trim() || order.customerDocument || '222222222222',
+        customerAddress: order.customerAddress || '',
+        dueDate: carteraDueDate || new Date(Date.now() + 86400000 * 30).toISOString().split('T')[0],
+        notes: carteraNotes.trim() || undefined,
+        updatedItems: items,
+        tipAmount: includeTip ? tipAmount : 0,
+      });
+
+      setShowConfirmCarteraModal(false);
+      showToast(
+        `¡Pedido #${order.orderNumber} enviado a Cartera (${createdCartera.code}) con saldo pendiente de ${formatCOP(
+          createdCartera.balanceDue
+        )}!`,
+        'success'
+      );
+      onClose();
+    } catch (err: any) {
+      console.error('Error sending order to cartera:', err);
+      setCarteraError(err.message || 'Error al enviar el pedido a cartera.');
     }
   };
 
@@ -757,7 +855,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 <div className="flex justify-between items-start">
                   <div>
                     <span className="text-[11px] uppercase font-bold text-[#a8a29e] block">
-                      Total a Cobrar por Ítems Seleccionados
+                      {advanceApplied > 0 ? 'Saldo Neto a Cobrar' : 'Total a Cobrar por Ítems Seleccionados'}
                     </span>
                     <span className="text-[10px] text-[#78716c]">
                       {totalsResult.selectedItems.length === items.length
@@ -769,6 +867,22 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     {formatCOP(grandTotal)}
                   </span>
                 </div>
+
+                {orderAdvanceAmount > 0 && (
+                  <div className="p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-700/50 space-y-1 text-xs">
+                    <div className="flex items-center justify-between text-[#d6d3d1]">
+                      <span>Total Pedido Seleccionado:</span>
+                      <span className="font-mono font-semibold">{formatCOP(grossSelectedTotal)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-emerald-400 font-bold">
+                      <span className="flex items-center gap-1">
+                        <BookmarkCheck className="w-3.5 h-3.5" />
+                        <span>Abono Anticipado ({order.fromSeparadoCode || 'Separado'}):</span>
+                      </span>
+                      <span className="font-mono">-{formatCOP(advanceApplied)}</span>
+                    </div>
+                  </div>
+                )}
 
                 <div className="p-2.5 rounded-lg bg-[#18171f] border border-[#2d281e] flex items-center justify-between text-xs">
                   <span className="text-[#a8a29e]">Ítems ya pagados previamente:</span>
@@ -1089,7 +1203,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 : `Cobro parcial (${selectedItemIds.length}/${items.length} ítems): La cuenta permanecerá abierta con el saldo restante`}
             </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
               <button
                 type="button"
                 onClick={onClose}
@@ -1097,6 +1211,20 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               >
                 Cancelar
               </button>
+
+              {unpaidItemsTotals.netPending > 0 && (
+                <button
+                  type="button"
+                  onClick={handleOpenConfirmCartera}
+                  disabled={actionLoading}
+                  className="px-4 py-2.5 rounded-xl bg-amber-950/60 hover:bg-amber-900/70 border border-amber-500/60 text-amber-300 text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-md"
+                  title="Enviar este pedido a Cartera con el saldo pendiente por cobrar"
+                >
+                  <CreditCard className="w-4 h-4 text-amber-400" />
+                  <span>Enviar a Cartera ({formatCOP(unpaidItemsTotals.netPending)})</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={handlePay}
@@ -1330,6 +1458,200 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           order={order}
           onClose={() => setPreviewReceiptPayment(null)}
         />
+      )}
+
+      {/* MODAL DE CONFIRMACIÓN: ENVIAR PEDIDO CON SALDO PENDIENTE A CARTERA */}
+      {showConfirmCarteraModal && (
+        <div className="fixed inset-0 z-60 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#16151f] border border-amber-500/60 rounded-2xl w-full max-w-lg p-5 text-[#faf5ee] shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-start justify-between border-b border-[#2d281e] pb-3 gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-amber-950/80 border border-amber-500/60 flex items-center justify-center text-amber-400 shrink-0">
+                  <ShieldAlert className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm sm:text-base text-[#fef3c7]">
+                    Confirmar Envío de Pedido #{order.orderNumber} a Cartera
+                  </h3>
+                  <p className="text-[11px] text-[#a8a29e]">
+                    Por seguridad, confirma que deseas enviar el saldo pendiente a Cuentas por Cobrar.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowConfirmCarteraModal(false)}
+                className="p-1 text-[#a8a29e] hover:text-[#fef3c7] rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-amber-950/30 border border-amber-500/40 text-xs space-y-2">
+              <p className="text-[#d6d3d1] leading-snug">
+                Al dar clic en <strong>Aceptar</strong>, este pedido <strong>saldrá de los pedidos activos</strong>{order.tableId ? ' (liberando la mesa)' : ''} y pasará al módulo de <strong>Cartera</strong> con el siguiente saldo pendiente:
+              </p>
+              <div className="pt-2 border-t border-amber-500/20 space-y-1">
+                <div className="flex justify-between text-[#a8a29e]">
+                  <span>Total Ítems Pendientes:</span>
+                  <span className="font-mono font-bold text-[#fef3c7]">{formatCOP(unpaidItemsTotals.grossTotal)}</span>
+                </div>
+                {unpaidItemsTotals.advanceDeducted > 0 && (
+                  <div className="flex justify-between text-emerald-400 font-bold">
+                    <span>Abono Recibido con Anticipación ({order.fromSeparadoCode || 'Separado'}):</span>
+                    <span className="font-mono">-{formatCOP(unpaidItemsTotals.advanceDeducted)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm font-black text-amber-300 pt-1 border-t border-amber-500/20">
+                  <span>Saldo Pendiente que pasa a Cartera:</span>
+                  <span className="font-mono">{formatCOP(unpaidItemsTotals.netPending)}</span>
+                </div>
+              </div>
+            </div>
+
+            {carteraError && (
+              <div className="p-2.5 rounded-xl bg-red-950/80 border border-red-700 text-red-200 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>{carteraError}</span>
+              </div>
+            )}
+
+            {/* Selección o confirmación de datos del cliente para Cartera */}
+            <div className="space-y-3">
+              {customers.length > 0 && (
+                <div>
+                  <label className="block text-[11px] font-bold text-[#a8a29e] mb-1">
+                    Seleccionar Cliente Registrado (Opcional):
+                  </label>
+                  <select
+                    value={carteraCustomerId}
+                    onChange={(e) => {
+                      const cId = e.target.value;
+                      setCarteraCustomerId(cId);
+                      const found = customers.find((c) => c.id === cId);
+                      if (found) {
+                        setCarteraCustomerName(found.name);
+                        setCarteraCustomerDoc(found.documentNumber || '');
+                        setCarteraCustomerPhone(found.phone || '');
+                        setCarteraError('');
+                      }
+                    }}
+                    className="w-full bg-[#121117] border border-[#383124] rounded-lg px-3 py-2 text-xs text-[#fef3c7] focus:outline-none focus:border-[#d4af37]"
+                  >
+                    <option value="">-- Seleccionar de la base de clientes o escribir abajo --</option>
+                    {customers
+                      .filter((c) => c.status === 'activo')
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} — {c.documentNumber} ({c.phone})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-[#a8a29e] mb-1">
+                    Nombre del Cliente <span className="text-red-400">*</span>
+                  </label>
+                  <div className="relative">
+                    <User className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#a8a29e]" />
+                    <input
+                      type="text"
+                      value={carteraCustomerName}
+                      onChange={(e) => {
+                        setCarteraCustomerName(e.target.value);
+                        setCarteraError('');
+                      }}
+                      placeholder="Nombre completo del cliente"
+                      className="w-full pl-9 pr-3 py-1.5 bg-[#121117] border border-[#383124] rounded-lg text-xs text-[#fef3c7] focus:outline-none focus:border-[#d4af37]"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-[#a8a29e] mb-1">
+                    Cédula o NIT:
+                  </label>
+                  <input
+                    type="text"
+                    value={carteraCustomerDoc}
+                    onChange={(e) => setCarteraCustomerDoc(e.target.value)}
+                    placeholder="Documento del cliente"
+                    className="w-full px-3 py-1.5 bg-[#121117] border border-[#383124] rounded-lg text-xs text-[#fef3c7] focus:outline-none focus:border-[#d4af37]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-[#a8a29e] mb-1">
+                    Teléfono / WhatsApp:
+                  </label>
+                  <div className="relative">
+                    <Phone className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#a8a29e]" />
+                    <input
+                      type="text"
+                      value={carteraCustomerPhone}
+                      onChange={(e) => setCarteraCustomerPhone(e.target.value)}
+                      placeholder="300 000 0000"
+                      className="w-full pl-9 pr-3 py-1.5 bg-[#121117] border border-[#383124] rounded-lg text-xs text-[#fef3c7] focus:outline-none focus:border-[#d4af37]"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-[#a8a29e] mb-1">
+                    Fecha Límite de Pago:
+                  </label>
+                  <div className="relative">
+                    <Calendar className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#d4af37]" />
+                    <input
+                      type="date"
+                      value={carteraDueDate}
+                      onChange={(e) => setCarteraDueDate(e.target.value)}
+                      className="w-full pl-9 pr-3 py-1.5 bg-[#121117] border border-[#383124] rounded-lg text-xs text-[#fef3c7] focus:outline-none focus:border-[#d4af37]"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-[#a8a29e] mb-1">
+                  Observaciones de la Cuenta por Cobrar:
+                </label>
+                <input
+                  type="text"
+                  value={carteraNotes}
+                  onChange={(e) => setCarteraNotes(e.target.value)}
+                  placeholder="Nota o referencia del saldo enviado a cartera"
+                  className="w-full px-3 py-1.5 bg-[#121117] border border-[#383124] rounded-lg text-xs text-[#fef3c7] focus:outline-none focus:border-[#d4af37]"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#2d281e]">
+              <button
+                type="button"
+                onClick={() => setShowConfirmCarteraModal(false)}
+                disabled={actionLoading}
+                className="px-4 py-2 rounded-xl border border-[#383124] text-xs font-bold text-[#a8a29e] hover:bg-[#201e28] cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSendToCartera}
+                disabled={actionLoading}
+                className="px-5 py-2 rounded-xl bg-gradient-to-r from-[#d4af37] to-[#b89728] text-[#0e0e12] font-black text-xs hover:brightness-110 cursor-pointer shadow-lg inline-flex items-center gap-1.5"
+              >
+                <CheckCircle className="w-4 h-4" />
+                <span>{actionLoading ? 'Enviando...' : 'Aceptar y Enviar a Cartera'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

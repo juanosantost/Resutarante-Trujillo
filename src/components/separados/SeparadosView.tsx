@@ -9,9 +9,10 @@ import {
   PaymentMethod,
 } from '../../types';
 import { formatCOP, formatColombiaDateTime } from '../../utils/calculations';
-import { validateAbonoAmount } from '../../utils/creditAndLayawayUtils';
+import { validateAbonoAmount, getUpcomingSeparadosAlert } from '../../utils/creditAndLayawayUtils';
 import { CustomerSelectInput } from '../common/CustomerSelectInput';
 import { AbonoReceiptModal } from '../modals/AbonoReceiptModal';
+import { NewOrderModal } from '../modals/NewOrderModal';
 import {
   BookmarkCheck,
   Plus,
@@ -100,11 +101,15 @@ export const SeparadosView: React.FC = () => {
   const [receiptTotal, setReceiptTotal] = useState<number | undefined>(undefined);
   const [receiptRemaining, setReceiptRemaining] = useState<number | undefined>(undefined);
 
+  // Modal de Confirmación de Pedido al Enviar a Cocina (convierte el Separado en Pedido Activo)
+  const [separadoForKitchenOrder, setSeparadoForKitchenOrder] = useState<Separado | null>(null);
+
   // Cálculo de totales del carrito nuevo
   const cartSubtotal = cartItems.reduce((acc, it) => acc + it.totalPrice, 0);
 
   // Métricas
   const activeSeparados = separados.filter((s) => s.status === 'activo');
+  const upcomingAlerts = getUpcomingSeparadosAlert(separados, 12);
   const totalPendingBalance = activeSeparados.reduce((acc, s) => acc + (s.pendingBalance || 0), 0);
   const totalRecaudado = separados.reduce((acc, s) => acc + (s.totalAbonado || 0), 0);
   const completedSeparados = separados.filter((s) => s.status === 'completado').length;
@@ -235,15 +240,8 @@ export const SeparadosView: React.FC = () => {
     }
   };
 
-  const handleSendToKitchen = async (sep: Separado) => {
-    if (confirm(`¿Enviar el pedido de Separado #${sep.code} a cocina (KDS) para preparación?`)) {
-      try {
-        await sendSeparadoToKitchen(sep.id);
-        showToast(`Separado #${sep.code} enviado a comanda de cocina`, 'success');
-      } catch (err: any) {
-        showToast(err.message || 'Error al enviar a cocina', 'error');
-      }
-    }
+  const handleSendToKitchen = (sep: Separado) => {
+    setSeparadoForKitchenOrder(sep);
   };
 
   const handleFinalize = async (sep: Separado) => {
@@ -339,7 +337,7 @@ export const SeparadosView: React.FC = () => {
 
         <div className="bg-[#181818] border border-[#2d281e] p-4 rounded-3xl shadow-sm">
           <span className="text-[10px] uppercase font-bold text-[#a8a29e] tracking-wider">
-            Separados Entregados
+            Separados Convertidos / Entregados
           </span>
           <div className="flex items-baseline gap-2 mt-1">
             <span className="text-2xl font-black text-[#FFFDF5]">{completedSeparados}</span>
@@ -347,6 +345,64 @@ export const SeparadosView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* 1.5 Alerta de 12 Horas para Separados Próximos */}
+      {upcomingAlerts.length > 0 && (
+        <div className="rounded-3xl bg-amber-950/40 border border-amber-500/60 p-4 text-[#FFFDF5] shadow-lg space-y-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-2xl bg-amber-500/20 border border-amber-400/50 text-amber-300 flex items-center justify-center shrink-0 animate-pulse">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-amber-300">
+                  Alerta de Separados Próximos (≤ 12 Horas): {upcomingAlerts.length} {upcomingAlerts.length === 1 ? 'pedido' : 'pedidos'}
+                </h3>
+                <p className="text-xs text-[#d6d3d1]">
+                  Se acerca la hora programada de entrega. Puedes enviarlos a cocina para asignarle destino y convertirlos en pedido activo.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+            {upcomingAlerts.map((alert) => (
+              <div
+                key={alert.separado.id}
+                className="p-3 rounded-2xl bg-[#181818]/90 border border-amber-500/40 flex items-center justify-between gap-3"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono font-black text-xs text-[#D6A21A]">{alert.separado.code}</span>
+                    <span className="text-xs font-bold text-[#FFFDF5] truncate">{alert.separado.customerName}</span>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                        alert.isOverdue
+                          ? 'bg-red-950 text-red-300 border border-red-700'
+                          : 'bg-amber-950 text-amber-300 border border-amber-700'
+                      }`}
+                    >
+                      ⏰ {alert.timeLabel}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-[#a8a29e] mt-0.5">
+                    Programado: <strong className="text-[#FFFDF5]">{alert.separado.deliveryDate} {alert.separado.deliveryTime || '12:00'}</strong> · Abono: <strong className="text-emerald-400">{formatCOP(alert.separado.totalAbonado)}</strong>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleSendToKitchen(alert.separado)}
+                  className="px-3 py-2 rounded-xl bg-gradient-to-r from-[#B77900] to-[#D6A21A] text-[#181818] text-[11px] font-black inline-flex items-center gap-1.5 hover:brightness-110 shadow cursor-pointer shrink-0"
+                >
+                  <Flame className="w-3.5 h-3.5" />
+                  <span>Enviar a Cocina</span>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 2. Barra de Control y Búsqueda */}
       <div className="bg-[#181818] border border-[#2d281e] p-4 rounded-3xl flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -401,17 +457,22 @@ export const SeparadosView: React.FC = () => {
             const isCancelled = sep.status === 'cancelado';
             const percentPaid = Math.min(100, Math.round((sep.totalAbonado / (sep.totalAmount || 1)) * 100));
             const sepAbonosList = abonos.filter((a) => a.parentId === sep.id);
+            const upcomingAlert = upcomingAlerts.find((a) => a.separado.id === sep.id);
 
             return (
               <div
                 key={sep.id}
-                className="bg-[#181818] border border-[#2d281e] hover:border-[#B77900]/50 rounded-3xl p-5 flex flex-col justify-between shadow-md transition-all group"
+                className={`bg-[#181818] border rounded-3xl p-5 flex flex-col justify-between shadow-md transition-all group ${
+                  upcomingAlert
+                    ? 'border-amber-500/80 ring-1 ring-amber-500/30'
+                    : 'border-[#2d281e] hover:border-[#B77900]/50'
+                }`}
               >
                 <div>
                   {/* Encabezado Card */}
                   <div className="flex items-start justify-between gap-2 mb-3">
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-mono font-black text-sm text-[#D6A21A] tracking-wider">
                           {sep.code}
                         </span>
@@ -424,8 +485,20 @@ export const SeparadosView: React.FC = () => {
                               : 'bg-amber-950 text-amber-300 border border-amber-800'
                           }`}
                         >
-                          {sep.status}
+                          {isCompleted && sep.finalSaleId ? 'En Pedido Activo / Completado' : sep.status}
                         </span>
+                        {upcomingAlert && (
+                          <span
+                            className={`text-[10px] font-black px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${
+                              upcomingAlert.isOverdue
+                                ? 'bg-red-950 text-red-300 border border-red-700 animate-pulse'
+                                : 'bg-amber-950 text-amber-300 border border-amber-600'
+                            }`}
+                          >
+                            <Clock className="w-3 h-3" />
+                            <span>{upcomingAlert.timeLabel}</span>
+                          </span>
+                        )}
                       </div>
                       <h4 className="font-black text-[#FFFDF5] text-sm mt-1 leading-snug">
                         {sep.customerName}
@@ -1214,6 +1287,24 @@ export const SeparadosView: React.FC = () => {
         remainingBalance={receiptRemaining}
         branch={currentBranch}
       />
+
+      {/* 10. MODAL: CONFIRMACIÓN DE PEDIDO Y DESTINO AL ENVIAR SEPARADO A COCINA */}
+      {separadoForKitchenOrder && (
+        <NewOrderModal
+          initialSeparado={separadoForKitchenOrder}
+          onClose={() => setSeparadoForKitchenOrder(null)}
+          onSuccess={() => {
+            const converted = separadoForKitchenOrder;
+            setSeparadoForKitchenOrder(null);
+            showToast(
+              `¡Separado #${converted.code} enviado a cocina y convertido en Pedido Activo con su abono de ${formatCOP(
+                converted.totalAbonado || 0
+              )}!`,
+              'success'
+            );
+          }}
+        />
+      )}
     </div>
   );
 };

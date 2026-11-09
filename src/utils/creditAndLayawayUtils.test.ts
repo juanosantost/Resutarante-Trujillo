@@ -7,6 +7,7 @@ import {
   voidAbonoRecord,
   calculateCustomerMetrics,
   isCarteraOverdue,
+  getUpcomingSeparadosAlert,
   COUNTRY_DIAL_CODES,
 } from './creditAndLayawayUtils';
 import { Abono, Separado, CarteraRecord, Order } from '../types';
@@ -299,3 +300,68 @@ test('COUNTRY_DIAL_CODES - Default contains Colombia +57 and international optio
   assert.equal(colombia?.country, 'Colombia');
   assert.equal(colombia?.flag, '🇨🇴');
 });
+
+test('getUpcomingSeparadosAlert - Returns active separados scheduled within 12 hours or overdue', () => {
+  const now = new Date('2026-05-10T10:00:00');
+  const baseSeparado: Separado = {
+    id: 'sep-base',
+    code: 'SEP-001',
+    branchId: 'sede-buga',
+    customerId: 'cust-1',
+    customerName: 'Ana María',
+    customerPhone: '+57 3001112233',
+    customerDocument: '123456',
+    items: [],
+    totalAmount: 100000,
+    initialDeposit: 40000,
+    totalAbonado: 0,
+    pendingBalance: 60000,
+    deliveryDate: '2026-05-10',
+    deliveryTime: '15:00',
+    reserveInventory: true,
+    sentToKitchen: false,
+    status: 'activo',
+    deliveryStatus: 'pendiente',
+    createdAt: '2026-05-09T10:00:00Z',
+    updatedAt: '2026-05-09T10:00:00Z',
+    createdBy: 'Admin',
+  };
+
+  const list: Separado[] = [
+    // 1. Due in 5 hours (should alert)
+    baseSeparado,
+    // 2. Due in 24 hours (should NOT alert)
+    {
+      ...baseSeparado,
+      id: 'sep-far',
+      code: 'SEP-002',
+      deliveryDate: '2026-05-11',
+      deliveryTime: '10:00',
+    },
+    // 3. Overdue by 2 hours (should alert as isOverdue)
+    {
+      ...baseSeparado,
+      id: 'sep-overdue',
+      code: 'SEP-003',
+      deliveryDate: '2026-05-10',
+      deliveryTime: '08:00',
+    },
+    // 4. Already completed / sent to kitchen (should NOT alert)
+    {
+      ...baseSeparado,
+      id: 'sep-done',
+      code: 'SEP-004',
+      status: 'completado',
+      sentToKitchen: true,
+    },
+  ];
+
+  const alerts = getUpcomingSeparadosAlert(list, 12, now);
+  assert.equal(alerts.length, 2);
+  assert.equal(alerts[0].separado.id, 'sep-overdue');
+  assert.equal(alerts[0].isOverdue, true);
+  assert.equal(alerts[1].separado.id, 'sep-base');
+  assert.equal(alerts[1].isOverdue, false);
+  assert.equal(Math.round(alerts[1].hoursRemaining), 5);
+});
+

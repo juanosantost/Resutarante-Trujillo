@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
-import { MenuItem, OrderType, Table, Product, CustomizedItemSelection } from '../../types';
+import { MenuItem, OrderType, Table, Product, CustomizedItemSelection, Separado } from '../../types';
 import { formatCOP, calculateOrderTotals, getEffectiveTaxRate } from '../../utils/calculations';
 import { ProductCustomizeModal } from '../catalog/ProductCustomizeModal';
 import { buildDefaultDailyMenuItem, sortProductsWithDailyFirst } from '../../utils/productUtils';
@@ -30,11 +30,13 @@ import {
   Edit,
   Tag,
   Sliders,
+  BookmarkCheck,
 } from 'lucide-react';
 
 interface NewOrderModalProps {
   initialTable?: Table | null;
   initialOrderType?: OrderType;
+  initialSeparado?: Separado | null;
   onClose: () => void;
   onSuccess: (orderId: string) => void;
 }
@@ -42,6 +44,7 @@ interface NewOrderModalProps {
 export const NewOrderModal: React.FC<NewOrderModalProps> = ({
   initialTable,
   initialOrderType,
+  initialSeparado,
   onClose,
   onSuccess,
 }) => {
@@ -57,21 +60,45 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
   } = useRestaurant();
 
   const [orderType, setOrderType] = useState<OrderType>(
-    initialTable ? 'mesa' : (initialOrderType || 'mesa')
+    initialTable
+      ? 'mesa'
+      : initialOrderType
+      ? initialOrderType
+      : initialSeparado?.customerAddress
+      ? 'domicilio'
+      : 'mesa'
   );
   const [selectedTableId, setSelectedTableId] = useState<string>(initialTable ? initialTable.id : '');
-  const [customerName, setCustomerName] = useState<string>('');
-  const [customerPhone, setCustomerPhone] = useState<string>('');
-  const [customerAddress, setCustomerAddress] = useState<string>('');
-  const [notes, setNotes] = useState<string>('');
+  const [customerName, setCustomerName] = useState<string>(initialSeparado?.customerName || '');
+  const [customerPhone, setCustomerPhone] = useState<string>(initialSeparado?.customerPhone || '');
+  const [customerAddress, setCustomerAddress] = useState<string>(initialSeparado?.customerAddress || '');
+  const [notes, setNotes] = useState<string>(() => {
+    if (!initialSeparado) return '';
+    return initialSeparado.notes
+      ? `Separado #${initialSeparado.code} · ${initialSeparado.notes}`
+      : `Separado #${initialSeparado.code} (${initialSeparado.deliveryDate} ${initialSeparado.deliveryTime || ''})`.trim();
+  });
   const [selectedCategory, setSelectedCategory] = useState<string>('todos');
   const [searchFilter, setSearchFilter] = useState<string>('');
   const [includeTax, setIncludeTax] = useState<boolean>(() => getEffectiveTaxRate(currentBranch) > 0);
-  const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
+  const [isCartOpen, setIsCartOpen] = useState<boolean>(Boolean(initialSeparado));
   const [validationError, setValidationError] = useState<string>('');
 
   // Customized line items in cart: CustomizedItemSelection[]
-  const [cartItems, setCartItems] = useState<CustomizedItemSelection[]>([]);
+  const [cartItems, setCartItems] = useState<CustomizedItemSelection[]>(() => {
+    if (!initialSeparado || !Array.isArray(initialSeparado.items)) return [];
+    return initialSeparado.items.map((it, idx) => ({
+      lineItemId: `sep-line-${it.id || idx}-${Date.now()}-${idx}`,
+      productId: it.menuItemId || `prod-${idx}`,
+      productName: it.name,
+      basePrice: it.unitPrice,
+      quantity: it.quantity,
+      unitPrice: it.unitPrice,
+      totalPrice: it.totalPrice || it.unitPrice * it.quantity,
+      notes: it.notes,
+      effectiveRecipe: it.recipe || [],
+    }));
+  });
 
   // Modal customization state
   const [customizingProduct, setCustomizingProduct] = useState<Product | null>(null);
@@ -333,9 +360,14 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
       const orderId = await createOrder({
         type: orderType,
         tableId: orderType === 'mesa' ? selectedTableId : undefined,
-        customerName: customerName.trim() || undefined,
-        customerPhone: customerPhone.trim() || undefined,
-        customerAddress: customerAddress.trim() || undefined,
+        customerId: initialSeparado?.customerId || undefined,
+        customerDocument: initialSeparado?.customerDocument || undefined,
+        customerName: customerName.trim() || initialSeparado?.customerName || undefined,
+        customerPhone: customerPhone.trim() || initialSeparado?.customerPhone || undefined,
+        customerAddress: customerAddress.trim() || initialSeparado?.customerAddress || undefined,
+        fromSeparadoId: initialSeparado?.id || undefined,
+        fromSeparadoCode: initialSeparado?.code || undefined,
+        advanceAmount: initialSeparado ? initialSeparado.totalAbonado || 0 : undefined,
         items: cartItems.map((c) => {
           const matchedMenuItem = allActiveProducts.find((m) => m.id === c.productId) || {
             id: c.productId,
@@ -681,15 +713,25 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                     <ShoppingBag className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="font-black text-base text-[#fef3c7]">Confirmación de Pedido</h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-black text-base text-[#fef3c7]">Confirmación de Pedido</h3>
+                      {initialSeparado && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-950/80 text-[#d4af37] border border-[#d4af37]/50 flex items-center gap-1">
+                          <BookmarkCheck className="w-3 h-3" />
+                          <span>{initialSeparado.code}</span>
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[11px] text-[#a8a29e]">
-                      Configura el destino y revisa los {cartItemCount} productos
+                      {initialSeparado
+                        ? `Asigna el destino para enviar el Separado de ${initialSeparado.customerName} a cocina y convertirlo en Pedido Activo`
+                        : `Configura el destino y revisa los ${cartItemCount} productos`}
                     </p>
                   </div>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setIsCartOpen(false)}
+                  onClick={() => (initialSeparado ? onClose() : setIsCartOpen(false))}
                   className="w-8 h-8 rounded-xl bg-[#24222e] hover:bg-[#322f3f] text-[#a8a29e] hover:text-white flex items-center justify-center cursor-pointer transition-colors"
                   aria-label="Cerrar panel de pedido"
                 >
@@ -707,6 +749,22 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
 
               {/* Contenido Desplegable Dividido en Secciones */}
               <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5">
+                {initialSeparado && (
+                  <div className="p-3.5 rounded-2xl bg-amber-950/30 border border-[#d4af37]/50 space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-black text-[#d4af37] flex items-center gap-1.5">
+                        <BookmarkCheck className="w-4 h-4" />
+                        <span>Separado #{initialSeparado.code} · {initialSeparado.customerName}</span>
+                      </span>
+                      <span className="text-[11px] font-mono text-emerald-400 font-bold">
+                        Abono Anticipado: {formatCOP(initialSeparado.totalAbonado || 0)}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-[#d6d3d1] leading-snug">
+                      Selecciona el destino a continuación. Al confirmar, pasará a cocina como un <strong>Pedido Activo</strong> conservando el abono recibido con anticipación y dejará de figurar como separado pendiente.
+                    </p>
+                  </div>
+                )}
                 
                 {/* SECCIÓN 1: DATOS DEL PEDIDO Y SELECCIÓN DE DESTINO */}
                 <div className="p-4 rounded-2xl bg-[#1a1922] border border-[#383124] space-y-3.5 shadow-md">
@@ -1074,6 +1132,21 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                       <span className="text-[#fef3c7]">Total Estimado:</span>
                       <span className="text-[#d4af37] font-mono text-base sm:text-lg">{formatCOP(totals.total)}</span>
                     </div>
+
+                    {initialSeparado && (initialSeparado.totalAbonado || 0) > 0 && (
+                      <div className="pt-2 border-t border-[#2d281e] space-y-1">
+                        <div className="flex justify-between items-center text-xs text-emerald-400 font-bold">
+                          <span>Abono recibido con anticipación ({initialSeparado.code}):</span>
+                          <span className="font-mono">-{formatCOP(initialSeparado.totalAbonado)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm font-black text-[#fef3c7]">
+                          <span>Saldo Restante por Cobrar:</span>
+                          <span className="font-mono text-amber-400">
+                            {formatCOP(Math.max(0, totals.total - (initialSeparado.totalAbonado || 0)))}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1086,7 +1159,7 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                   onClick={() => setIsCartOpen(false)}
                   className="flex-1 py-3 px-3 rounded-xl border border-[#383124] text-xs font-bold text-[#a8a29e] hover:bg-[#1a1922] hover:text-white cursor-pointer text-center transition-colors"
                 >
-                  Seguir Agregando
+                  {initialSeparado ? 'Agregar más productos' : 'Seguir Agregando'}
                 </button>
 
                 <button
@@ -1100,7 +1173,13 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                   }`}
                 >
                   <CheckCircle className="w-4 h-4 stroke-[2.5]" />
-                  <span>{actionLoading ? 'Procesando...' : 'Confirmar Orden →'}</span>
+                  <span>
+                    {actionLoading
+                      ? 'Procesando...'
+                      : initialSeparado
+                      ? 'Enviar a Cocina y Activar Pedido →'
+                      : 'Confirmar Orden →'}
+                  </span>
                 </button>
               </div>
             </div>

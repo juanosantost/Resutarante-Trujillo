@@ -315,6 +315,18 @@ export const OrdersView: React.FC = () => {
                           {formatCOP(order.total)}
                         </span>
                       </div>
+                      {(order.advanceAmount || 0) > 0 && (
+                        <div className="pt-1 border-t border-[#2d281e] space-y-0.5">
+                          <div className="flex justify-between text-emerald-400 font-bold text-[11px]">
+                            <span>Abono Anticipado ({order.fromSeparadoCode || 'Separado'}):</span>
+                            <span className="font-mono">-{formatCOP(order.advanceAmount || 0)}</span>
+                          </div>
+                          <div className="flex justify-between text-amber-300 font-black text-xs">
+                            <span>Saldo por Cobrar:</span>
+                            <span className="font-mono">{formatCOP(Math.max(0, order.total - (order.advanceAmount || 0)))}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="text-[10px] text-[#78716c] flex items-center gap-1 mt-2">

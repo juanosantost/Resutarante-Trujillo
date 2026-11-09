@@ -14,8 +14,9 @@ import React, { useState, useMemo } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { Order, OrderType, OrderStatus, DeliveryStatus, Payment } from '../../types';
+import { Order, OrderType, OrderStatus, DeliveryStatus, Payment, Separado } from '../../types';
 import { formatCOP, formatColombiaDateTime } from '../../utils/calculations';
+import { getUpcomingSeparadosAlert } from '../../utils/creditAndLayawayUtils';
 import { db } from '../../services/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 
@@ -69,6 +70,8 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
   const {
     orders,
     tables,
+    separados,
+    cartera,
     activeShift,
     currentBranch,
     clearAllTransactionalRecords,
@@ -85,6 +88,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
 
   // Modales interactivos
   const [showNewOrderModal, setShowNewOrderModal] = useState<boolean>(false);
+  const [separadoForKitchenOrder, setSeparadoForKitchenOrder] = useState<Separado | null>(null);
   const [showDailyMenuConfig, setShowDailyMenuConfig] = useState<boolean>(false);
   const [selectedOrderForRound, setSelectedOrderForRound] = useState<Order | null>(null);
   const [selectedOrderForCheckout, setSelectedOrderForCheckout] = useState<Order | null>(null);
@@ -96,6 +100,22 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
   const [orderToCancel, setOrderToCancel] = useState<Order | null>(null);
   const [cancelReason, setCancelReason] = useState<string>('');
   const [isCanceling, setIsCanceling] = useState<boolean>(false);
+
+  // Contadores de Separados activos y Cartera pendiente + Alertas de 12 horas
+  const activeSeparadosCount = useMemo(
+    () => separados.filter((s) => s.status === 'activo').length,
+    [separados]
+  );
+
+  const pendingCarteraCount = useMemo(
+    () => cartera.filter((c) => c.status !== 'pagada' && c.balanceDue > 0).length,
+    [cartera]
+  );
+
+  const upcomingSeparados = useMemo(
+    () => getUpcomingSeparadosAlert(separados, 12),
+    [separados]
+  );
 
   // 1. Filtrar únicamente pedidos en curso / abiertos
   const activeOrders = useMemo(() => {
@@ -112,7 +132,10 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
     const listosDespacho = activeOrders.filter(
       (o) => o.deliveryStatus === 'listo_despacho' || o.deliveryStatus === 'en_camino'
     ).length;
-    const totalPorCobrarCOP = activeOrders.reduce((sum, o) => sum + o.total, 0);
+    const totalPorCobrarCOP = activeOrders.reduce(
+      (sum, o) => sum + Math.max(0, o.total - (o.advanceAmount || 0)),
+      0
+    );
 
     return {
       totalActivos,
@@ -301,23 +324,45 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
               <span>Nuevo Pedido</span>
             </button>
 
-            {onNavigate && currentUser?.role === 'administrador' && (
+            {onNavigate && (
               <>
                 <button
                   type="button"
                   onClick={() => onNavigate('separados')}
-                  className="px-3.5 py-2.5 rounded-xl bg-[#242424] hover:bg-[#2d2d2d] border border-[#383838] text-[#FFFDF5] text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                  className={`px-3.5 py-2.5 rounded-xl bg-[#242424] hover:bg-[#2d2d2d] border text-[#FFFDF5] text-xs font-bold inline-flex items-center gap-2 transition-colors cursor-pointer ${
+                    upcomingSeparados.length > 0
+                      ? 'border-amber-500/80 ring-1 ring-amber-500/40'
+                      : 'border-[#383838]'
+                  }`}
+                  title={
+                    upcomingSeparados.length > 0
+                      ? `${activeSeparadosCount} separados activos (${upcomingSeparados.length} próximos en ≤ 12h)`
+                      : `${activeSeparadosCount} separados activos`
+                  }
                 >
                   <BookmarkCheck className="w-4 h-4 text-[#D6A21A]" />
                   <span>Separados</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black font-mono bg-[#292212] text-[#D6A21A] border border-[#B77900]/50">
+                    {activeSeparadosCount}
+                  </span>
+                  {upcomingSeparados.length > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-[#181818] animate-pulse flex items-center gap-0.5">
+                      <Clock className="w-2.5 h-2.5" />
+                      <span>{upcomingSeparados.length}</span>
+                    </span>
+                  )}
                 </button>
                 <button
                   type="button"
                   onClick={() => onNavigate('cartera')}
-                  className="px-3.5 py-2.5 rounded-xl bg-[#242424] hover:bg-[#2d2d2d] border border-[#383838] text-[#FFFDF5] text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                  className="px-3.5 py-2.5 rounded-xl bg-[#242424] hover:bg-[#2d2d2d] border border-[#383838] text-[#FFFDF5] text-xs font-bold inline-flex items-center gap-2 transition-colors cursor-pointer"
+                  title={`${pendingCarteraCount} cuentas pendientes en cartera`}
                 >
                   <CreditCard className="w-4 h-4 text-[#D6A21A]" />
                   <span>Cartera</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black font-mono bg-[#292212] text-[#D6A21A] border border-[#B77900]/50">
+                    {pendingCarteraCount}
+                  </span>
                 </button>
               </>
             )}
@@ -360,6 +405,81 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
         </div>
 
       </div>
+
+      {/* 2.5 Banner de Alerta (≤ 12 Horas) para Separados Próximos */}
+      {upcomingSeparados.length > 0 && (
+        <div className="rounded-3xl bg-amber-950/40 border border-amber-500/70 p-4 sm:p-5 text-[#FFFDF5] shadow-xl space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-400/60 text-amber-300 flex items-center justify-center shrink-0 animate-pulse">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-sm sm:text-base font-black text-amber-300">
+                    ¡Alerta de Separados Próximos! ({upcomingSeparados.length} {upcomingSeparados.length === 1 ? 'pedido' : 'pedidos'} en ≤ 12 horas)
+                  </h2>
+                </div>
+                <p className="text-xs text-[#d6d3d1]">
+                  Se acerca la hora programada del pedido. Envíalo a cocina para asignarle destino y convertirlo en un pedido activo con su abono.
+                </p>
+              </div>
+            </div>
+
+            {onNavigate && (
+              <button
+                type="button"
+                onClick={() => onNavigate('separados')}
+                className="px-3.5 py-2 rounded-xl bg-[#242424] hover:bg-[#2e2e2e] border border-amber-500/40 text-amber-300 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+              >
+                <BookmarkCheck className="w-4 h-4" />
+                <span>Ir a Separados ({activeSeparadosCount})</span>
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+            {upcomingSeparados.map((alert) => (
+              <div
+                key={alert.separado.id}
+                className="p-3 rounded-2xl bg-[#181818]/95 border border-amber-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+              >
+                <div className="min-w-0 space-y-0.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono font-black text-xs text-[#D6A21A]">
+                      {alert.separado.code}
+                    </span>
+                    <span className="text-xs font-bold text-[#FFFDF5] truncate">
+                      {alert.separado.customerName}
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                        alert.isOverdue
+                          ? 'bg-red-950 text-red-300 border border-red-700 animate-pulse'
+                          : 'bg-amber-950 text-amber-300 border border-amber-600'
+                      }`}
+                    >
+                      ⏰ {alert.timeLabel}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-[#a8a29e]">
+                    Entrega: <strong className="text-[#FFFDF5]">{alert.separado.deliveryDate} {alert.separado.deliveryTime || '12:00'}</strong> · Abono recibido: <strong className="text-emerald-400">{formatCOP(alert.separado.totalAbonado)}</strong>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setSeparadoForKitchenOrder(alert.separado)}
+                  className="px-3 py-2 rounded-xl bg-gradient-to-r from-[#B77900] to-[#D6A21A] text-[#181818] text-xs font-black inline-flex items-center justify-center gap-1.5 hover:brightness-110 shadow cursor-pointer shrink-0"
+                >
+                  <Flame className="w-3.5 h-3.5" />
+                  <span>Enviar a Cocina</span>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 3. Barra de Búsqueda y Pestañas de Filtro */}
       <div className="bg-[#181818] p-4 rounded-3xl border border-[#333333] text-[#FFFDF5] flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-lg">
@@ -655,17 +775,33 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
                   </div>
 
                   {/* Total de la Orden */}
-                  <div className="pt-3 mt-3 border-t border-[#2d2d2d] flex items-center justify-between text-xs">
-                    <div>
-                      <span className="text-[10px] text-[#a8a29e] uppercase font-bold block">Total a Cobrar</span>
-                      <span className="text-lg font-black text-[#D6A21A] font-mono">
-                        {formatCOP(order.total)}
-                      </span>
-                    </div>
+                  <div className="pt-3 mt-3 border-t border-[#2d2d2d] space-y-1.5 text-xs">
+                    {(order.advanceAmount || 0) > 0 && (
+                      <div className="p-2 rounded-xl bg-emerald-950/30 border border-emerald-700/40 flex items-center justify-between text-[11px]">
+                        <span className="font-bold text-emerald-400 flex items-center gap-1">
+                          <BookmarkCheck className="w-3.5 h-3.5" />
+                          <span>Abono Anticipado ({order.fromSeparadoCode || 'Separado'}):</span>
+                        </span>
+                        <span className="font-mono font-black text-emerald-300">
+                          -{formatCOP(order.advanceAmount || 0)}
+                        </span>
+                      </div>
+                    )}
 
-                    <div className="text-right text-[10px] text-[#a8a29e]">
-                      <span>Sub: {formatCOP(order.subtotal)}</span>
-                      {order.tip > 0 && <span className="block text-emerald-400">Propina: +{formatCOP(order.tip)}</span>}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] text-[#a8a29e] uppercase font-bold block">
+                          {(order.advanceAmount || 0) > 0 ? 'Saldo Neto a Cobrar' : 'Total a Cobrar'}
+                        </span>
+                        <span className="text-lg font-black text-[#D6A21A] font-mono">
+                          {formatCOP(Math.max(0, order.total - (order.advanceAmount || 0)))}
+                        </span>
+                      </div>
+
+                      <div className="text-right text-[10px] text-[#a8a29e]">
+                        <span>Total Pedido: {formatCOP(order.total)}</span>
+                        {order.tip > 0 && <span className="block text-emerald-400">Propina: +{formatCOP(order.tip)}</span>}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -807,6 +943,24 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
           onSuccess={(orderId) => {
             setShowNewOrderModal(false);
             showToast(`¡Pedido creado exitosamente con comanda a cocina!`, 'success');
+          }}
+        />
+      )}
+
+      {/* MODAL 4.1: Confirmación de Pedido y Destino al Enviar Separado a Cocina desde Home */}
+      {separadoForKitchenOrder && (
+        <NewOrderModal
+          initialSeparado={separadoForKitchenOrder}
+          onClose={() => setSeparadoForKitchenOrder(null)}
+          onSuccess={() => {
+            const converted = separadoForKitchenOrder;
+            setSeparadoForKitchenOrder(null);
+            showToast(
+              `¡Separado #${converted.code} enviado a cocina y convertido en Pedido Activo con su abono de ${formatCOP(
+                converted.totalAbonado || 0
+              )}!`,
+              'success'
+            );
           }}
         />
       )}

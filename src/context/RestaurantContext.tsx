@@ -208,9 +208,14 @@ interface RestaurantContextType {
   createOrder: (params: {
     type: OrderType;
     tableId?: string;
+    customerId?: string;
+    customerDocument?: string;
     customerName?: string;
     customerPhone?: string;
     customerAddress?: string;
+    fromSeparadoId?: string;
+    fromSeparadoCode?: string;
+    advanceAmount?: number;
     items: Array<{
       menuItem: MenuItem;
       quantity: number;
@@ -406,6 +411,19 @@ interface RestaurantContextType {
     notes?: string;
     paymentMethod?: PaymentMethod;
   }) => Promise<{ carteraId: string; receiptAbono?: Abono }>;
+
+  sendOrderToCartera: (params: {
+    orderId: string;
+    customerId?: string;
+    customerName: string;
+    customerPhone: string;
+    customerDocument: string;
+    customerAddress?: string;
+    dueDate: string;
+    notes?: string;
+    updatedItems?: OrderItem[];
+    tipAmount?: number;
+  }) => Promise<CarteraRecord>;
 
   registerCarteraAbono: (params: {
     carteraId: string;
@@ -999,18 +1017,28 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const createOrder = async ({
     type,
     tableId,
+    customerId,
+    customerDocument,
     customerName,
     customerPhone,
     customerAddress,
+    fromSeparadoId,
+    fromSeparadoCode,
+    advanceAmount,
     items,
     notes,
     includeTip = true,
   }: {
     type: OrderType;
     tableId?: string;
+    customerId?: string;
+    customerDocument?: string;
     customerName?: string;
     customerPhone?: string;
     customerAddress?: string;
+    fromSeparadoId?: string;
+    fromSeparadoCode?: string;
+    advanceAmount?: number;
     items: Array<{
       menuItem: MenuItem;
       quantity: number;
@@ -1066,9 +1094,14 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         type,
         tableId: tableId || null,
         tableName,
+        customerId: customerId || undefined,
+        customerDocument: customerDocument || undefined,
         customerName: customerName || (type === 'mesa' ? tableName : 'Cliente General'),
         customerPhone: customerPhone || '',
         customerAddress: customerAddress || '',
+        fromSeparadoId: fromSeparadoId || undefined,
+        fromSeparadoCode: fromSeparadoCode || undefined,
+        advanceAmount: advanceAmount && advanceAmount > 0 ? advanceAmount : undefined,
         deliveryStatus: type === 'domicilio' ? 'recibido' : undefined,
         paymentStatus: type === 'domicilio' ? 'contraentrega' : undefined,
         status: 'abierto',
@@ -1125,6 +1158,26 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         updatedAt: now,
       };
       await setDoc(doc(db, 'comandas', comandaId), sanitizeFirestoreData(comanda));
+
+      // 3.1 Si el pedido proviene de un Separado, marcar el separado como completado / convertido en pedido activo
+      if (fromSeparadoId) {
+        await updateDoc(doc(db, 'separados', fromSeparadoId), {
+          status: 'completado',
+          sentToKitchen: true,
+          deliveryStatus: 'en_cocina',
+          kitchenComandaId: comandaId,
+          finalSaleId: orderId,
+          updatedAt: now,
+        }).catch((err) => console.warn('Error actualizando estado del separado:', err));
+
+        await logAuditAction({
+          entityType: 'pedidos',
+          entityId: orderId,
+          entityName: `Separado #${fromSeparadoCode || fromSeparadoId} → Pedido #${orderNumber}`,
+          action: 'create',
+          details: `Separado #${fromSeparadoCode || fromSeparadoId} enviado a cocina y convertido en Pedido Activo #${orderNumber} (${tableName}) con abono anticipado de ${formatCOP(advanceAmount || 0)}`,
+        });
+      }
 
       // 4. Descontar inventario según recetas (Trazabilidad Kardex)
       const recipeDeductions = calculateRecipeDeductions(
@@ -1498,7 +1551,11 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
       const paymentSubtotal = totalsResult.subtotal;
       const paymentTax = totalsResult.tax;
-      const paymentTotal = totalsResult.total;
+      const grossPaymentTotal = totalsResult.total;
+      const availableAdvance = Math.max(0, order.advanceAmount || 0);
+      const advanceApplied = Math.min(grossPaymentTotal, availableAdvance);
+      const paymentTotal = Math.max(0, grossPaymentTotal - advanceApplied);
+      const remainingAdvance = Math.max(0, availableAdvance - advanceApplied);
       const change = Math.max(0, amountPaid - paymentTotal);
 
       // 1. Obtener sucursal de origen real y congelar snapshot histórico
@@ -1539,11 +1596,12 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         tax: paymentTax,
         tipAmount,
         total: paymentTotal,
+        advanceApplied: advanceApplied > 0 ? advanceApplied : undefined,
         change,
         cashierId: userRole === 'cajero' ? 'usr-cajero' : 'usr-staff',
         cashierName: staffName,
         customerName: customerName || order.customerName,
-        customerNitOrCedula: customerNitOrCedula || '222222222222',
+        customerNitOrCedula: customerNitOrCedula || order.customerDocument || '222222222222',
         createdAt: now,
         branchSnapshot,
         items: totalsResult.selectedItems,
@@ -1568,6 +1626,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         tax: newOrderTax,
         total: newOrderTotal,
         tip: tipAmount,
+        advanceAmount: allItemsPaid ? (order.advanceAmount || 0) : remainingAdvance,
         updatedAt: now,
         branchSnapshot,
       }));
@@ -4603,6 +4662,163 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   };
 
+  const sendOrderToCartera = async (params: {
+    orderId: string;
+    customerId?: string;
+    customerName: string;
+    customerPhone: string;
+    customerDocument: string;
+    customerAddress?: string;
+    dueDate: string;
+    notes?: string;
+    updatedItems?: OrderItem[];
+    tipAmount?: number;
+  }): Promise<CarteraRecord> => {
+    setActionLoading(true);
+    try {
+      const order = orders.find((o) => o.id === params.orderId);
+      if (!order) throw new Error('Pedido no encontrado');
+
+      const now = new Date().toISOString();
+      const currentItems: OrderItem[] = params.updatedItems || order.items || [];
+      const unpaidItems = currentItems.filter((it) => !it.paid);
+      const taxRate = getEffectiveTaxRate(currentBranch);
+
+      const unpaidSubtotal = unpaidItems.reduce((acc, it) => acc + it.price * it.quantity, 0);
+      const unpaidTax = Math.round(unpaidSubtotal * taxRate);
+      const tip = params.tipAmount !== undefined ? params.tipAmount : (order.tip || 0);
+      const unpaidGrossTotal = unpaidSubtotal + unpaidTax + tip;
+
+      const availableAdvance = Math.max(0, order.advanceAmount || 0);
+      const advanceApplied = Math.min(unpaidGrossTotal, availableAdvance);
+      const balanceDue = Math.max(0, unpaidGrossTotal - advanceApplied);
+
+      if (balanceDue <= 0) {
+        throw new Error('Este pedido no tiene saldo pendiente por enviar a cartera.');
+      }
+
+      const cleanName = params.customerName.trim() || order.customerName || 'Cliente Cartera';
+      const cleanDoc = params.customerDocument.trim() || order.customerDocument || '222222222222';
+      const cleanPhone = params.customerPhone.trim() || order.customerPhone || '';
+      const cleanAddress = (params.customerAddress ?? order.customerAddress ?? '').trim();
+
+      // Buscar o vincular cliente registrado
+      const matchedCustomer = customers.find(
+        (c) =>
+          (params.customerId && c.id === params.customerId) ||
+          (order.customerId && c.id === order.customerId) ||
+          (cleanDoc && cleanDoc !== '222222222222' && c.documentNumber === cleanDoc) ||
+          c.name.toLowerCase() === cleanName.toLowerCase()
+      );
+      const resolvedCustomerId = matchedCustomer?.id || params.customerId || order.customerId || `cust-${Date.now()}`;
+
+      const ref = doc(collection(db, 'cartera'));
+      const id = ref.id;
+      const code = `CRD-${order.orderNumber || Math.floor(1000 + Math.random() * 9000)}`;
+
+      const originBranch = branches.find((b) => b.id === (order.branchId || currentBranchId)) || branches[0];
+      const branchSnapshot: BranchReceiptSnapshot = {
+        branchId: originBranch?.id || currentBranchId,
+        name: originBranch?.name || 'SISTEMA COLMENA RESTAURANTE',
+        nit: originBranch?.nit || '901.458.920-4',
+        address: originBranch?.address || '',
+        phone: originBranch?.phone || '',
+        logoUrl: originBranch?.logoUrl || '',
+        notes: originBranch?.notes || '',
+        printConfig: originBranch?.printConfig || DEFAULT_BRANCH_PRINT_CONFIG,
+        resolutionDian: originBranch?.receiptConfig?.resolutionDian || '',
+        prefix: originBranch?.receiptConfig?.prefix || 'CRD-',
+        issuedAt: now,
+      };
+
+      const status: CarteraStatus = isCarteraOverdue(params.dueDate) ? 'vencida' : 'vigente';
+
+      const newCartera: CarteraRecord = {
+        id,
+        code,
+        saleId: order.id,
+        orderNumber: order.orderNumber,
+        branchId: order.branchId || currentBranchId,
+        branchSnapshot,
+        customerId: resolvedCustomerId,
+        customerName: cleanName,
+        customerPhone: cleanPhone,
+        customerDocument: cleanDoc,
+        customerAddress: cleanAddress,
+        totalAmount: unpaidGrossTotal,
+        initialPayment: advanceApplied,
+        totalAbonado: advanceApplied,
+        balanceDue,
+        dueDate: params.dueDate,
+        status,
+        notes:
+          params.notes?.trim() ||
+          (order.fromSeparadoCode
+            ? `Saldo pendiente de Pedido #${order.orderNumber} (Separado #${order.fromSeparadoCode})`
+            : `Saldo pendiente enviado desde Pedido #${order.orderNumber}`),
+        createdAt: now,
+        updatedAt: now,
+        createdBy: staffName,
+      };
+
+      await setDoc(ref, sanitizeFirestoreData(newCartera));
+
+      // Sacar el pedido de los pedidos activos (pasa a 'facturado')
+      const totalOrderSubtotal = currentItems.reduce((acc, it) => acc + it.price * it.quantity, 0);
+      const totalOrderTax = Math.round(totalOrderSubtotal * taxRate);
+      const totalOrderAmount = totalOrderSubtotal + totalOrderTax + tip;
+
+      await updateDoc(
+        doc(db, 'orders', order.id),
+        sanitizeFirestoreData({
+          status: 'facturado',
+          items: currentItems,
+          subtotal: totalOrderSubtotal,
+          tax: totalOrderTax,
+          tip,
+          total: totalOrderAmount,
+          customerId: resolvedCustomerId,
+          customerName: cleanName,
+          customerDocument: cleanDoc,
+          customerPhone: cleanPhone,
+          customerAddress: cleanAddress,
+          notes: `${order.notes ? `${order.notes} | ` : ''}Enviado a Cartera #${code} (Saldo: ${formatCOP(balanceDue)})`,
+          updatedAt: now,
+          branchSnapshot,
+        })
+      );
+
+      // Si el pedido estaba en una mesa, liberarla inmediatamente
+      if (order.tableId) {
+        await updateDoc(doc(db, 'tables', order.tableId), {
+          status: 'libre',
+          currentOrderId: null,
+          assignedWaiterName: null,
+          openedAt: null,
+          currentBillAmount: 0,
+          hasOpenTab: false,
+          updatedAt: now,
+        }).catch(() => {});
+      }
+
+      await logAuditAction({
+        entityType: 'pedidos',
+        entityId: order.id,
+        entityName: `Pedido #${order.orderNumber} → Cartera #${code}`,
+        action: 'status_change',
+        details: `Pedido #${order.orderNumber} cerrado y enviado a Cartera #${code} para ${cleanName} por saldo pendiente de ${formatCOP(balanceDue)}`,
+      });
+
+      return newCartera;
+    } catch (err) {
+      console.error('Error sending order to cartera:', err);
+      handleFirestoreError(err, OperationType.CREATE, 'cartera');
+      throw err;
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const registerCarteraAbono = async (params: {
     carteraId: string;
     amount: number;
@@ -5296,6 +5512,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         finalizeSeparado,
         cancelSeparado,
         createCarteraRecord,
+        sendOrderToCartera,
         registerCarteraAbono,
         editAbono,
         voidAbono,

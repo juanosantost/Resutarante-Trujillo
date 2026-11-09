@@ -191,6 +191,12 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                   <span className="font-black">{formatCOP(payment.tipAmount)}</span>
                 </div>
               )}
+              {(payment.advanceApplied || 0) > 0 && (
+                <div className="flex justify-between font-bold">
+                  <span>Abono Anticipado{order?.fromSeparadoCode ? ` (${order.fromSeparadoCode})` : ''}:</span>
+                  <span className="font-black">-{formatCOP(payment.advanceApplied || 0)}</span>
+                </div>
+              )}
               <div className={`flex justify-between font-black pt-1.5 border-t border-black text-black ${is58mm ? 'text-sm' : 'text-base'}`}>
                 <span>{isPaid ? 'TOTAL PAGADO:' : 'TOTAL:'}</span>
                 <span>{formatCOP(payment.total)}</span>

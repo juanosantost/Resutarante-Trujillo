@@ -448,9 +448,14 @@ export interface Order {
   type: OrderType;
   tableId?: string | null;
   tableName?: string | null;
+  customerId?: string;
+  customerDocument?: string;
   customerName?: string;
   customerPhone?: string;
   customerAddress?: string;
+  fromSeparadoId?: string;
+  fromSeparadoCode?: string;
+  advanceAmount?: number; // Abono recibido con anticipación (ej. desde Separado)
   neighborhood?: string; // Barrio
   addressReference?: string; // Referencia de ubicación
   deliveryFee?: number; // Tarifa de domicilio en COP
@@ -710,6 +715,7 @@ export interface Payment {
   tax: number;
   tipAmount: number;
   total: number;
+  advanceApplied?: number;
   change: number;
   cashierId: string;
   cashierName: string;
