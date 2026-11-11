@@ -39,6 +39,7 @@ import {
   BookOpen,
   Sun,
   Moon,
+  History,
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -70,7 +71,8 @@ export type AppView =
   | 'config'
   | 'config-mesas'
   | 'config-botones'
-  | 'medios-pago';
+  | 'medios-pago'
+  | 'auditoria';
 
 interface AppLayoutProps {
   currentView: AppView;
@@ -209,6 +211,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     Settings,
     Sliders,
     BookOpen,
+    History,
   };
 
   // Construir secciones visibles y ordenadas dinámicamente según configuración de administración y rol

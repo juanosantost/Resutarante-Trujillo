@@ -320,7 +320,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   // Autocompletar desde el catálogo al seleccionar un producto sugerido
   const catalogSuggestions = useMemo(() => {
-    const list = [...(products || []), ...(menuItems || [])];
+    const list = products && products.length > 0 
+      ? products.filter((p) => p.status === 'activo' && p.isAvailableForSale !== false) 
+      : (menuItems || []).filter((m) => m.isAvailable !== false);
     if (!catalogSearch.trim()) return list.slice(0, 6);
     const q = catalogSearch.toLowerCase();
     return list

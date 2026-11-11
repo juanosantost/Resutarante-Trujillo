@@ -258,3 +258,33 @@ export function validatePrepStationPayload(data: Partial<PrepStation>): {
     errors,
   };
 }
+
+/**
+ * Verifica si una mesa puede ser eliminada con seguridad sin afectar pedidos o mesas ocupadas.
+ */
+export function canDeleteTable(
+  table: Table,
+  activeOrders: Array<{ tableId?: string | null; status?: string }> = []
+): { canDelete: boolean; reason?: string } {
+  if (table.status === 'ocupada' || table.status === 'cuenta_solicitada' || table.hasOpenTab) {
+    return {
+      canDelete: false,
+      reason: `La mesa está actualmente ${
+        table.status === 'cuenta_solicitada' ? 'pidiendo cuenta' : 'ocupada'
+      }. Debe ser liberada antes de eliminarse.`,
+    };
+  }
+
+  const hasActiveOrder = activeOrders.some(
+    (o) => o.tableId === table.id && o.status === 'abierto'
+  );
+
+  if (hasActiveOrder) {
+    return {
+      canDelete: false,
+      reason: 'La mesa tiene pedidos abiertos en curso. Deben ser cobrados, facturados o cancelados previamente.',
+    };
+  }
+
+  return { canDelete: true };
+}

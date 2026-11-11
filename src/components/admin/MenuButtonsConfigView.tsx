@@ -37,6 +37,8 @@ import {
   FolderPlus,
   Sparkles,
   HelpCircle,
+  History,
+  BookOpen,
 } from 'lucide-react';
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -58,6 +60,8 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Building2,
   Settings,
   Sliders,
+  History,
+  BookOpen,
 };
 
 export const MenuButtonsConfigView: React.FC = () => {

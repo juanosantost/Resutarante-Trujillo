@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useToast } from '../../context/ToastContext';
 import {
@@ -41,6 +41,7 @@ export const SeparadosView: React.FC = () => {
   const {
     separados,
     abonos,
+    products,
     menuItems,
     currentBranch,
     createSeparado,
@@ -130,9 +131,23 @@ export const SeparadosView: React.FC = () => {
     return true;
   });
 
+  const availableProducts = useMemo(() => {
+    if (products && products.length > 0) {
+      return products
+        .filter((p) => p.status === 'activo' && p.isAvailableForSale !== false)
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          price: p.price,
+          recipe: (p.recipe as any) || [],
+        }));
+    }
+    return (menuItems || []).filter((m) => m.isAvailable !== false);
+  }, [products, menuItems]);
+
   const handleAddItemToCart = () => {
     if (!selectedMenuItemId) return;
-    const mi = menuItems.find((m) => m.id === selectedMenuItemId);
+    const mi = availableProducts.find((m) => m.id === selectedMenuItemId);
     if (!mi) return;
 
     const newItem: SeparadoItem = {
@@ -718,7 +733,7 @@ export const SeparadosView: React.FC = () => {
                       className="w-full bg-[#181818] border border-[#333333] rounded-xl px-3 py-2 text-xs text-[#FFFDF5] focus:outline-none focus:border-[#B77900]"
                     >
                       <option value="">Seleccione un producto...</option>
-                      {menuItems.map((m) => (
+                      {availableProducts.map((m) => (
                         <option key={m.id} value={m.id}>
                           {m.name} — {formatCOP(m.price)}
                         </option>

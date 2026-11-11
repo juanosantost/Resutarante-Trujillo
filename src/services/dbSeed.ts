@@ -411,14 +411,30 @@ export async function checkAndSeedInitialData() {
       }
     }
 
-    // 3. Seed menu items si está vacío
+    // 3. Seed menu items si está vacío (solo Menú del Día por defecto)
     const menuItemsRef = collection(db, 'menuItems');
     const menuItemsSnap = await getDocs(menuItemsRef);
     if (menuItemsSnap.empty) {
-      console.log('Seeding initial Menu Items...');
-      for (const item of INITIAL_MENU_ITEMS) {
-        await setDoc(doc(db, 'menuItems', item.id), item);
-      }
+      console.log('Seeding initial Menu Items (Solo Menú del Día)...');
+      const { DEFAULT_DAILY_MENU_PRODUCT } = await import('./catalogSeed');
+      await setDoc(doc(db, 'menuItems', DEFAULT_DAILY_MENU_PRODUCT.id), {
+        id: DEFAULT_DAILY_MENU_PRODUCT.id,
+        name: DEFAULT_DAILY_MENU_PRODUCT.name,
+        description: DEFAULT_DAILY_MENU_PRODUCT.description,
+        categoryId: DEFAULT_DAILY_MENU_PRODUCT.categoryId,
+        price: DEFAULT_DAILY_MENU_PRODUCT.price,
+        station: 'cocina_caliente',
+        prepTimeMinutes: DEFAULT_DAILY_MENU_PRODUCT.prepTimeMinutes,
+        recipe: [],
+        isAvailable: true,
+        image: DEFAULT_DAILY_MENU_PRODUCT.images?.[0] || '',
+        sku: DEFAULT_DAILY_MENU_PRODUCT.sku,
+        branchId: DEFAULT_DAILY_MENU_PRODUCT.branchId,
+        prepStationId: DEFAULT_DAILY_MENU_PRODUCT.prepStationId,
+        variants: [],
+        isCombo: false,
+        comboConfig: null,
+      });
     }
 
     // 4. Seed inventory items si está vacío
@@ -509,45 +525,37 @@ export async function checkAndSeedInitialData() {
       }
     }
 
-    // Módulo 03: Seed Productos con Variantes y Combos
+    // Módulo 03: Seed Productos con Variantes y Combos (Solo Menú del Día por defecto)
     const productsRef = collection(db, 'products');
     const productsSnap = await getDocs(productsRef);
     if (productsSnap.empty) {
-      console.log('Seeding initial Módulo 03 Products & Combos...');
-      const { INITIAL_PRODUCTS } = await import('./catalogSeed');
-      for (const prod of INITIAL_PRODUCTS) {
-        await setDoc(doc(db, 'products', prod.id), prod);
-        // También sincronizar con menuItems para compatibilidad con pedidos previos
-        await setDoc(
-          doc(db, 'menuItems', prod.id),
-          {
-            id: prod.id,
-            name: prod.name,
-            description: prod.description,
-            categoryId: prod.categoryId,
-            price: prod.price,
-            station:
-              prod.prepStationId === 'st-parrilla'
-                ? 'parrilla'
-                : prod.prepStationId === 'st-bar-bebidas'
-                ? 'bar_bebidas'
-                : prod.prepStationId === 'st-postres'
-                ? 'postres'
-                : 'cocina_caliente',
-            prepTimeMinutes: prod.prepTimeMinutes,
-            recipe: [],
-            isAvailable: prod.isAvailableForSale && prod.status === 'activo',
-            image: prod.images?.[0] || '',
-            sku: prod.sku,
-            branchId: prod.branchId,
-            prepStationId: prod.prepStationId,
-            variants: prod.variants || [],
-            isCombo: Boolean(prod.isCombo),
-            comboConfig: prod.comboConfig || null,
-          },
-          { merge: true }
-        );
-      }
+      console.log('Seeding initial Módulo 03 Products (Solo Menú del Día)...');
+      const { DEFAULT_DAILY_MENU_PRODUCT } = await import('./catalogSeed');
+      const prod = DEFAULT_DAILY_MENU_PRODUCT;
+      await setDoc(doc(db, 'products', prod.id), prod);
+      // También sincronizar con menuItems para compatibilidad con pedidos previos
+      await setDoc(
+        doc(db, 'menuItems', prod.id),
+        {
+          id: prod.id,
+          name: prod.name,
+          description: prod.description,
+          categoryId: prod.categoryId,
+          price: prod.price,
+          station: 'cocina_caliente',
+          prepTimeMinutes: prod.prepTimeMinutes,
+          recipe: [],
+          isAvailable: prod.isAvailableForSale && prod.status === 'activo',
+          image: prod.images?.[0] || '',
+          sku: prod.sku,
+          branchId: prod.branchId,
+          prepStationId: prod.prepStationId,
+          variants: prod.variants || [],
+          isCombo: Boolean(prod.isCombo),
+          comboConfig: prod.comboConfig || null,
+        },
+        { merge: true }
+      );
     }
 
     // Seed de Clientes de prueba

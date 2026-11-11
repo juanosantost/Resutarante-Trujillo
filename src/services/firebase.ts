@@ -13,8 +13,23 @@ import firebaseConfig from '../../firebase-applet-config.json';
 // Silenciar advertencias internas repetitivas de reintento de conexión de Firestore SDK
 setLogLevel('silent');
 
-// Inicializar la aplicación Firebase con la configuración del proyecto aprovisionado
-const app = initializeApp(firebaseConfig);
+// Configuración híbrida: permite variables de entorno en Vercel (VITE_FIREBASE_*)
+// con respaldo automático al archivo firebase-applet-config.json incluido en el repositorio
+const resolvedFirebaseConfig = {
+  ...firebaseConfig,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || firebaseConfig.projectId,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || firebaseConfig.appId,
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || firebaseConfig.apiKey,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfig.authDomain,
+  firestoreDatabaseId:
+    import.meta.env.VITE_FIREBASE_DATABASE_ID || firebaseConfig.firestoreDatabaseId,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || firebaseConfig.storageBucket,
+  messagingSenderId:
+    import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseConfig.messagingSenderId,
+};
+
+// Inicializar la aplicación Firebase con la configuración resuelta
+const app = initializeApp(resolvedFirebaseConfig);
 
 // Base de datos Firestore con el ID de base de datos específico y caché persistente
 export const db = initializeFirestore(
@@ -24,7 +39,7 @@ export const db = initializeFirestore(
       tabManager: persistentMultipleTabManager(),
     }),
   },
-  firebaseConfig.firestoreDatabaseId
+  resolvedFirebaseConfig.firestoreDatabaseId
 );
 
 export const auth = getAuth(app);

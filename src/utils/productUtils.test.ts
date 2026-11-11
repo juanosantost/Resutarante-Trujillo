@@ -10,6 +10,10 @@ import {
   formatProductPrice,
   sortProductsWithDailyFirst,
   buildDefaultDailyMenuItem,
+  canDeleteCategory,
+  parseExcelCOPPrice,
+  extractObjectsFromSheetMatrix,
+  parseExcelProductRows,
 } from './productUtils';
 import {
   Product,
@@ -385,5 +389,80 @@ test('buildDefaultDailyMenuItem builds item with default options and base price'
   assert.equal(item.selectedModifiers?.length, 2);
   assert.equal(item.selectedModifiers?.[0].optionName, 'Sopa: Sopa de Lentejas');
   assert.equal(item.selectedModifiers?.[1].optionName, 'Carne: Pollo a la Plancha');
+});
+
+test('canDeleteCategory protects Menú del Día and reports assigned products', () => {
+  const dailyCat: Category = {
+    id: 'cat-menu-del-dia',
+    name: 'Menú del Día',
+    order: 0,
+    isActive: true,
+    isVisibleInMenu: true,
+  };
+  const dailyRes = canDeleteCategory(dailyCat, []);
+  assert.equal(dailyRes.canDelete, false);
+  assert.equal(dailyRes.isProtected, true);
+  assert.match(dailyRes.reason || '', /protegida/i);
+
+  const entradasCat: Category = {
+    id: 'cat-entradas',
+    name: 'Entradas',
+    order: 1,
+    isActive: true,
+    isVisibleInMenu: true,
+  };
+
+  // Category with 0 products
+  const freeRes = canDeleteCategory(entradasCat, []);
+  assert.equal(freeRes.canDelete, true);
+  assert.equal(freeRes.isProtected, false);
+  assert.equal(freeRes.assignedCount, 0);
+
+  // Category with products
+  const products: any[] = [
+    { id: 'p1', name: 'Empanadas', categoryId: 'cat-entradas' },
+    { id: 'p2', name: 'Arepas', categoryId: 'cat-entradas' },
+    { id: 'p3', name: 'Jugo', categoryId: 'cat-bebidas' },
+  ];
+  const assignedRes = canDeleteCategory(entradasCat, products);
+  assert.equal(assignedRes.canDelete, true);
+  assert.equal(assignedRes.assignedCount, 2);
+  assert.match(assignedRes.reason || '', /2 producto/i);
+});
+
+test('parseExcelCOPPrice parses numeric and Colombian currency formatted strings', () => {
+  assert.equal(parseExcelCOPPrice(28000), 28000);
+  assert.equal(parseExcelCOPPrice('$ 25.000'), 25000);
+  assert.equal(parseExcelCOPPrice('25.000'), 25000);
+  assert.equal(parseExcelCOPPrice('18,500'), 18500);
+  assert.equal(parseExcelCOPPrice('Por definir'), 0);
+  assert.equal(parseExcelCOPPrice(''), 0);
+});
+
+test('parseExcelProductRows parses exact headers and skips duplicates in catalog and within file', () => {
+  const matrix = [
+    ['Categoría', 'Plato o producto', 'Precio (COP)', 'Estado del precio', 'Descripción / ingredientes'],
+    ['Carnes', 'Churrasco Especial', '$ 38.000', 'Definido', 'Corte de res con papas y ensalada'],
+    ['Bebidas', 'Limonada Cerezada', 12000, 'Definido', 'Limón natural y cerezas'],
+    ['Carnes', 'churrasco especial', 40000, 'Definido', 'Duplicado dentro del mismo excel'],
+    ['Almuerzos', 'Menú del Día', 16000, 'Definido', 'Ya existe en el catálogo'],
+  ];
+
+  const extracted = extractObjectsFromSheetMatrix(matrix);
+  assert.equal(extracted.length, 4);
+
+  const result = parseExcelProductRows(extracted, ['Menú del Día']);
+  assert.equal(result.toCreate.length, 2);
+  assert.equal(result.toCreate[0].name, 'Churrasco Especial');
+  assert.equal(result.toCreate[0].categoryName, 'Carnes');
+  assert.equal(result.toCreate[0].price, 38000);
+  assert.equal(result.toCreate[0].priceStatus, 'Definido');
+  assert.equal(result.toCreate[0].description, 'Corte de res con papas y ensalada');
+
+  assert.equal(result.toCreate[1].name, 'Limonada Cerezada');
+  assert.equal(result.toCreate[1].price, 12000);
+
+  // Should have skipped both 'churrasco especial' (duplicate in file) and 'Menú del Día' (existing in catalog)
+  assert.equal(result.skippedDuplicates.length, 2);
 });
 

@@ -60,14 +60,12 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
   const [customizingProduct, setCustomizingProduct] = useState<Product | null>(null);
   const [editingLineItem, setEditingLineItem] = useState<CustomizedItemSelection | null>(null);
 
-  // Unificar productos activos garantizando que siempre haya platos disponibles
+  // Priorizar el catálogo de productos (Módulo 03) como fuente autoritativa
   const allActiveProducts: MenuItem[] = useMemo(() => {
-    const list: MenuItem[] = [...menuItems];
-    const existingIds = new Set(list.map((m) => m.id));
-
-    for (const p of products) {
-      if (!existingIds.has(p.id) && p.status === 'activo' && p.isAvailableForSale !== false) {
-        list.push({
+    if (products && products.length > 0) {
+      const activeProds = products
+        .filter((p) => p.status === 'activo' && p.isAvailableForSale !== false)
+        .map((p) => ({
           id: p.id,
           name: p.name,
           description: p.description || '',
@@ -75,12 +73,12 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
           price: p.price,
           station:
             p.prepStationId === 'st-parrilla'
-              ? 'parrilla'
+              ? ('parrilla' as const)
               : p.prepStationId === 'st-bar-bebidas'
-              ? 'bar_bebidas'
+              ? ('bar_bebidas' as const)
               : p.prepStationId === 'st-postres'
-              ? 'postres'
-              : 'cocina_caliente',
+              ? ('postres' as const)
+              : ('cocina_caliente' as const),
           prepTimeMinutes: p.prepTimeMinutes || 15,
           recipe: (p.recipe as any) || [],
           isAvailable: true,
@@ -88,11 +86,13 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
           sku: p.sku,
           isDailyMenu: p.isDailyMenu,
           featureGroups: p.featureGroups,
-        });
-        existingIds.add(p.id);
-      }
+        }));
+      return sortProductsWithDailyFirst(activeProds);
     }
-    return sortProductsWithDailyFirst(list);
+
+    // Fallback únicamente si la colección de productos estuviera vacía
+    const fallbackList = menuItems.filter((m) => m.isAvailable !== false);
+    return sortProductsWithDailyFirst(fallbackList);
   }, [menuItems, products]);
 
   const filteredMenuItems = useMemo(() => {

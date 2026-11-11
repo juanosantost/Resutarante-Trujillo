@@ -31,6 +31,7 @@ export const ModifierGroupManagementModal: React.FC<ModifierGroupManagementModal
   const [isCreatingNew, setIsCreatingNew] = useState<boolean>(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
   const [groupToDelete, setGroupToDelete] = useState<ModifierGroup | null>(null);
+  const [optionToDelete, setOptionToDelete] = useState<ModifierOption | null>(null);
 
   // Form state
   const [name, setName] = useState<string>('');
@@ -90,6 +91,35 @@ export const ModifierGroupManagementModal: React.FC<ModifierGroupManagementModal
 
   const handleRemoveOption = (id: string) => {
     setOptions(options.filter((o) => o.id !== id));
+  };
+
+  // Confirm and delete option with immediate persistence if editing existing group
+  const handleConfirmDeleteOption = async () => {
+    if (!optionToDelete) return;
+    const optId = optionToDelete.id;
+    const optName = optionToDelete.name || 'Opción';
+
+    if (options.length <= 1) {
+      showToast('El grupo debe conservar al menos una opción', 'warning');
+      setOptionToDelete(null);
+      return;
+    }
+
+    const updatedOptions = options.filter((o) => o.id !== optId);
+    setOptions(updatedOptions);
+
+    if (!isCreatingNew && selectedGroup) {
+      try {
+        await updateModifierGroup(selectedGroup.id, { options: updatedOptions });
+        showToast(`Ítem "${optName}" eliminado del grupo`, 'success');
+      } catch (err) {
+        showToast(`Ítem "${optName}" retirado. Guarda los cambios para aplicar.`, 'info');
+      }
+    } else {
+      showToast(`Ítem "${optName}" retirado de la lista`, 'info');
+    }
+
+    setOptionToDelete(null);
   };
 
   // Manage multiple inventory/product composition ingredients per option
@@ -248,8 +278,18 @@ export const ModifierGroupManagementModal: React.FC<ModifierGroupManagementModal
       await deleteModifierGroup(group.id);
       showToast(`Grupo "${group.name}" borrado exitosamente`, 'success');
       setGroupToDelete(null);
+
+      const remaining = modifierGroups.filter((g) => g.id !== group.id);
       if (selectedGroup?.id === group.id) {
-        setSelectedGroup(null);
+        if (remaining.length > 0) {
+          handleSelectGroup(remaining[0]);
+        } else {
+          setSelectedGroup(null);
+          setIsCreatingNew(false);
+          setName('');
+          setDescription('');
+          setOptions([]);
+        }
       }
     } catch (err) {
       showToast('Error al borrar el grupo de modificadores', 'error');
@@ -533,9 +573,9 @@ export const ModifierGroupManagementModal: React.FC<ModifierGroupManagementModal
 
                             <button
                               type="button"
-                              onClick={() => handleRemoveOption(opt.id)}
+                              onClick={() => setOptionToDelete(opt)}
                               className="p-1 text-red-400 hover:text-red-300 cursor-pointer"
-                              title="Quitar opción"
+                              title="Eliminar este ítem/opción"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -777,6 +817,70 @@ export const ModifierGroupManagementModal: React.FC<ModifierGroupManagementModal
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Sí, Borrar Grupo</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmación de Eliminación de Ítem / Opción */}
+      {optionToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
+          <div className="bg-[#1c1b18] border border-amber-600/70 rounded-3xl p-6 max-w-md w-full shadow-2xl text-[#FFFDF5] space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-amber-950/70 border border-amber-600/60 text-amber-400 flex items-center justify-center shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-white">¿Eliminar Ítem del Grupo?</h3>
+                <p className="text-xs text-zinc-400">Esta acción retirará la opción seleccionada.</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-[#141414] border border-[#2b2b2b] text-xs space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-[#D6A21A] text-sm">
+                  {optionToDelete.name || 'Opción sin nombre'}
+                </span>
+                {optionToDelete.priceSurcharge > 0 ? (
+                  <span className="font-bold text-emerald-400 text-xs">
+                    +{formatProductPrice(optionToDelete.priceSurcharge)}
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-zinc-400">Sin recargo adicional</span>
+                )}
+              </div>
+              {optionToDelete.isDefault && (
+                <div className="text-[11px] text-amber-300 flex items-center gap-1">
+                  <span>• Opción configurada como predeterminada (Default)</span>
+                </div>
+              )}
+              {((optionToDelete.ingredients && optionToDelete.ingredients.length > 0) || optionToDelete.ingredientId) && (
+                <div className="text-[11px] text-zinc-400">
+                  • Contiene {optionToDelete.ingredients?.length || 1} afectación(es) de inventario/receta asociadas.
+                </div>
+              )}
+            </div>
+
+            <p className="text-xs text-zinc-300">
+              ¿Estás seguro de que deseas eliminar la opción <strong className="text-white">"{optionToDelete.name}"</strong> de este grupo? Ya no estará disponible para selección en los pedidos ni en los productos vinculados.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#2d2d2d]">
+              <button
+                type="button"
+                onClick={() => setOptionToDelete(null)}
+                className="px-4 py-2 rounded-xl bg-[#282828] text-zinc-300 hover:bg-[#333] text-xs font-bold cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteOption}
+                className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-black shadow-lg flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Sí, Eliminar Ítem</span>
               </button>
             </div>
           </div>

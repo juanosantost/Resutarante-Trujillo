@@ -31,6 +31,7 @@ import { IncomesView } from './components/incomes/IncomesView';
 import { OtherIncomeRegistrationView } from './components/incomes/OtherIncomeRegistrationView';
 import { MenuButtonsConfigView } from './components/admin/MenuButtonsConfigView';
 import { ManualView } from './components/manual/ManualView';
+import { AuditHistoryView } from './components/admin/AuditHistoryView';
 import { MenuConfigProvider, useMenuConfig } from './context/MenuConfigContext';
 import { Supplier } from './types';
 import { ShieldAlert, ArrowLeft } from 'lucide-react';
@@ -179,6 +180,7 @@ const MainAppContent: React.FC = () => {
           {currentView === 'config-botones' && <MenuButtonsConfigView />}
           {currentView === 'config' && <BranchConfigView onNavigateToButtons={() => setCurrentView('config-botones')} />}
           {currentView === 'manual' && <ManualView />}
+          {currentView === 'auditoria' && <AuditHistoryView />}
         </>
       )}
     </AppLayout>

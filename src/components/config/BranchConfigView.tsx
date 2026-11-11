@@ -1,17 +1,12 @@
 import React from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
-import { useAuth } from '../../context/AuthContext';
-import { useToast } from '../../context/ToastContext';
-import { UserRole, PaperWidth, KitchenFontSize, DEFAULT_BRANCH_PRINT_CONFIG, BranchPrintConfig } from '../../types';
+import { UserRole } from '../../types';
 import {
   Building2,
   ShieldCheck,
   Coins,
-  Check,
   Sliders,
-  Printer,
-  ChefHat,
-  Receipt,
+  Check,
 } from 'lucide-react';
 
 interface BranchConfigViewProps {
@@ -20,28 +15,6 @@ interface BranchConfigViewProps {
 
 export const BranchConfigView: React.FC<BranchConfigViewProps> = ({ onNavigateToButtons }) => {
   const { branches, currentBranch, setCurrentBranchId } = useRestaurant();
-  const { updateBranchData } = useAuth();
-  const { showToast } = useToast();
-
-  const currentPrintConfig: BranchPrintConfig = currentBranch?.printConfig || DEFAULT_BRANCH_PRINT_CONFIG;
-  const activePaperWidth: PaperWidth = currentPrintConfig.paperWidth || '80mm';
-  const activeKitchenFontSize: KitchenFontSize = currentPrintConfig.kitchenFontSize || 'grande';
-  const activeIncludeKitchenPrices: boolean = currentPrintConfig.includeKitchenPrices ?? false;
-
-  const handleUpdateTicketConfig = async (partial: Partial<BranchPrintConfig>) => {
-    if (!currentBranch) return;
-    const nextConfig: BranchPrintConfig = {
-      ...currentPrintConfig,
-      ...partial,
-    };
-    try {
-      await updateBranchData(currentBranch.id, { printConfig: nextConfig });
-      showToast('Configuración de tickets POS actualizada', 'success');
-    } catch (err) {
-      console.error(err);
-      showToast('No se pudo actualizar la configuración de tickets', 'error');
-    }
-  };
 
   // Matriz de permisos configurables por rol
   const rolePermissions: Array<{
@@ -141,145 +114,6 @@ export const BranchConfigView: React.FC<BranchConfigViewProps> = ({ onNavigateTo
           })}
         </div>
       </div>
-
-      {/* 1.5 Configuración de Tickets POS y Preferencias de Cocina */}
-      {currentBranch && (
-        <div className="bg-[#14131a] p-5 rounded-2xl border border-[#d4af37]/40 shadow-xl space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-[#2d281e] gap-2">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-[#292212] border border-[#d4af37]/40 flex items-center justify-center text-[#d4af37]">
-                <Printer className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="font-bold text-sm text-[#fef3c7]">
-                  Configuración de Tickets POS y Preferencias de Cocina ({currentBranch.name})
-                </h3>
-                <p className="text-xs text-[#a8a29e]">
-                  Ajusta el tamaño de letra de impresión, el ancho del papel térmico y las preferencias del ticket de cocina.
-                </p>
-              </div>
-            </div>
-            <span className="text-[10px] uppercase font-black px-2.5 py-1 rounded-full bg-[#292212] text-[#d4af37] border border-[#d4af37]/30 self-start sm:self-auto">
-              1 Sola Copia por Impresión
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Tamaño de la Impresión (Letra de Cocina) */}
-            <div className="bg-[#18171f] p-4 rounded-xl border border-[#2d281e] space-y-2.5">
-              <span className="text-xs font-bold text-[#d4af37] flex items-center gap-1.5">
-                <ChefHat className="w-4 h-4" />
-                <span>1. Tamaño de la Impresión (Cocina)</span>
-              </span>
-              <div className="space-y-1.5">
-                {(
-                  [
-                    { id: 'compacto', label: 'Compacto (Estándar)', desc: 'Ahorra papel en pedidos largos' },
-                    { id: 'grande', label: 'Grande (Recomendado)', desc: 'Letra grande y clara para cocina' },
-                    { id: 'extragrande', label: 'Extra Grande (Adulto Mayor)', desc: 'Máxima legibilidad a distancia' },
-                  ] as const
-                ).map((opt) => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => handleUpdateTicketConfig({ kitchenFontSize: opt.id })}
-                    className={`w-full text-left p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
-                      activeKitchenFontSize === opt.id
-                        ? 'bg-[#292212] border-[#d4af37] text-[#fef3c7]'
-                        : 'bg-[#14131a] border-[#2d281e] text-[#a8a29e] hover:border-[#383124]'
-                    }`}
-                  >
-                    <div>
-                      <div className="text-xs font-black">{opt.label}</div>
-                      <div className="text-[10px] opacity-80">{opt.desc}</div>
-                    </div>
-                    {activeKitchenFontSize === opt.id && <Check className="w-4 h-4 text-[#d4af37] shrink-0" />}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Ancho del Papel Térmico */}
-            <div className="bg-[#18171f] p-4 rounded-xl border border-[#2d281e] space-y-2.5">
-              <span className="text-xs font-bold text-[#d4af37] flex items-center gap-1.5">
-                <Receipt className="w-4 h-4" />
-                <span>2. Ancho del Papel Térmico</span>
-              </span>
-              <p className="text-[11px] text-[#a8a29e]">
-                Aplica tanto al Ticket de Cobro al Cliente como al Ticket POS de Cocina.
-              </p>
-              <div className="grid grid-cols-1 gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => handleUpdateTicketConfig({ paperWidth: '80mm' })}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
-                    activePaperWidth === '80mm'
-                      ? 'bg-[#292212] border-[#d4af37] text-[#fef3c7]'
-                      : 'bg-[#14131a] border-[#2d281e] text-[#a8a29e] hover:border-[#383124]'
-                  }`}
-                >
-                  <div>
-                    <div className="text-xs font-black">80 mm (Estándar POS)</div>
-                    <div className="text-[10px] opacity-80">Ancho imprimible ~72 mm</div>
-                  </div>
-                  {activePaperWidth === '80mm' && <Check className="w-4 h-4 text-[#d4af37]" />}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleUpdateTicketConfig({ paperWidth: '58mm' })}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
-                    activePaperWidth === '58mm'
-                      ? 'bg-[#292212] border-[#d4af37] text-[#fef3c7]'
-                      : 'bg-[#14131a] border-[#2d281e] text-[#a8a29e] hover:border-[#383124]'
-                  }`}
-                >
-                  <div>
-                    <div className="text-xs font-black">58 mm (Rollo Estrecho)</div>
-                    <div className="text-[10px] opacity-80">Ancho imprimible ~48 mm</div>
-                  </div>
-                  {activePaperWidth === '58mm' && <Check className="w-4 h-4 text-[#d4af37]" />}
-                </button>
-              </div>
-            </div>
-
-            {/* Preferencias de Cocina */}
-            <div className="bg-[#18171f] p-4 rounded-xl border border-[#2d281e] space-y-2.5 flex flex-col justify-between">
-              <div className="space-y-2.5">
-                <span className="text-xs font-bold text-[#d4af37] flex items-center gap-1.5">
-                  <Sliders className="w-4 h-4" />
-                  <span>3. Preferencias de Cocina</span>
-                </span>
-                <p className="text-[11px] text-[#a8a29e]">
-                  Configura qué información adicional se incluye en la comanda impresa para los cocineros.
-                </p>
-
-                <label className="flex items-center justify-between p-3 rounded-xl bg-[#14131a] border border-[#2d281e] hover:border-[#d4af37]/50 cursor-pointer transition-all">
-                  <div className="pr-2">
-                    <span className="text-xs font-bold text-[#fef3c7] block">
-                      Mostrar precios en ticket de cocina
-                    </span>
-                    <span className="text-[10px] text-[#a8a29e] block">
-                      Si se desactiva, el ticket de cocina muestra solo cantidades, platos y notas.
-                    </span>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={activeIncludeKitchenPrices}
-                    onChange={(e) =>
-                      handleUpdateTicketConfig({ includeKitchenPrices: e.target.checked })
-                    }
-                    className="w-4 h-4 accent-[#d4af37] cursor-pointer shrink-0"
-                  />
-                </label>
-              </div>
-
-              <div className="p-2.5 rounded-lg bg-[#14131a] border border-[#2d281e] text-[10px] text-[#a8a29e]">
-                Al abrir el botón <strong className="text-[#d4af37]">POS Cocina</strong> en cualquier pedido, se mostrará únicamente el ticket listo para imprimir 1 sola página.
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* 2. Parámetros Legales y Financieros Colombia */}
       <div className="bg-[#14131a] p-5 rounded-2xl border border-[#2d281e] shadow-xl">

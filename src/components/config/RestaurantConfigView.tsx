@@ -6,7 +6,6 @@ import {
   RestaurantArea,
   Table,
   PrepStation,
-  AuditLog,
   TableStatus,
 } from '../../types';
 import {
@@ -14,13 +13,13 @@ import {
   validateTablePayload,
   validatePrepStationPayload,
   getTableStatusConfig,
+  canDeleteTable,
 } from '../../utils/tableOperations';
 import { formatColombiaDateTime } from '../../utils/calculations';
 import {
   Layers,
   LayoutGrid,
   Flame,
-  History,
   Plus,
   Edit2,
   Trash2,
@@ -36,6 +35,8 @@ import {
   Palette,
   X,
   Check,
+  MoreVertical,
+  ChevronDown,
 } from 'lucide-react';
 
 export const RestaurantConfigView: React.FC = () => {
@@ -43,13 +44,14 @@ export const RestaurantConfigView: React.FC = () => {
     currentBranch,
     areas,
     tables,
+    orders,
     prepStations,
-    auditLogs,
     createArea,
     updateArea,
     toggleAreaActive,
     createTable,
     updateTable,
+    deleteTable,
     createPrepStation,
     updatePrepStation,
     togglePrepStationActive,
@@ -57,7 +59,7 @@ export const RestaurantConfigView: React.FC = () => {
   const { currentUser } = useAuth();
   const { showToast } = useToast();
 
-  const [activeTab, setActiveTab] = useState<'areas' | 'tables' | 'stations' | 'history'>('areas');
+  const [activeTab, setActiveTab] = useState<'areas' | 'tables' | 'stations'>('areas');
 
   // Modales
   const [areaModalOpen, setAreaModalOpen] = useState<boolean>(false);
@@ -72,7 +74,6 @@ export const RestaurantConfigView: React.FC = () => {
   // Filtros de búsqueda
   const [tableAreaFilter, setTableAreaFilter] = useState<string>('todos');
   const [searchTable, setSearchTable] = useState<string>('');
-  const [auditEntityFilter, setAuditEntityFilter] = useState<string>('todos');
 
   // Form states - Área
   const [areaForm, setAreaForm] = useState<{
@@ -125,6 +126,38 @@ export const RestaurantConfigView: React.FC = () => {
 
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+
+  // Estados para dropdown de acciones y confirmación de borrado de mesas
+  const [openDropdownTableId, setOpenDropdownTableId] = useState<string | null>(null);
+  const [tableToDelete, setTableToDelete] = useState<Table | null>(null);
+  const [isDeletingTable, setIsDeletingTable] = useState<boolean>(false);
+
+  const handleToggleTableActive = async (table: Table) => {
+    try {
+      const isMesaActive = table.isActive !== false;
+      await updateTable(table.id, { isActive: !isMesaActive });
+      showToast(
+        `Mesa #${table.number} ${!isMesaActive ? 'habilitada' : 'desactivada'} correctamente`,
+        'success'
+      );
+    } catch (err: any) {
+      showToast(err.message || 'Error al cambiar estado de la mesa', 'error');
+    }
+  };
+
+  const handleConfirmDeleteTable = async () => {
+    if (!tableToDelete) return;
+    try {
+      setIsDeletingTable(true);
+      await deleteTable(tableToDelete.id);
+      showToast(`Mesa #${tableToDelete.number} eliminada con éxito`, 'success');
+      setTableToDelete(null);
+    } catch (err: any) {
+      showToast(err.message || 'Error al eliminar mesa', 'error');
+    } finally {
+      setIsDeletingTable(false);
+    }
+  };
 
   // Handlers Área
   const openCreateArea = () => {
@@ -301,12 +334,6 @@ export const RestaurantConfigView: React.FC = () => {
     return matchArea && matchSearch;
   });
 
-  // Filtros de auditoría
-  const filteredAuditLogs = auditLogs.filter((log) => {
-    if (auditEntityFilter === 'todos') return true;
-    return log.entityType === auditEntityFilter;
-  });
-
   return (
     <div className="space-y-6">
       {/* Encabezado del Módulo 02 */}
@@ -386,19 +413,6 @@ export const RestaurantConfigView: React.FC = () => {
           >
             <Flame className="w-4 h-4" />
             <span>Estaciones Operativas ({prepStations.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('history')}
-            className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'history'
-                ? 'bg-gradient-to-r from-[#B77900] to-[#D6A21A] text-[#181818] shadow-lg shadow-[#B77900]/20'
-                : 'bg-[#14131a] text-[#a8a29e] hover:text-[#FFFDF5] border border-[#24211a]'
-            }`}
-          >
-            <History className="w-4 h-4" />
-            <span>Historial de Modificaciones ({auditLogs.length})</span>
           </button>
         </div>
       </div>
@@ -555,7 +569,7 @@ export const RestaurantConfigView: React.FC = () => {
 
           {/* Tabla listado de mesas */}
           <div className="bg-[#181818] border border-[#2d281e] rounded-2xl overflow-hidden shadow-xl">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto min-h-[320px] pb-24">
               <table className="w-full text-left text-xs">
                 <thead className="bg-[#14131a] text-[#a8a29e] uppercase font-bold text-[10px] tracking-wider border-b border-[#2d281e]">
                   <tr>
@@ -625,23 +639,89 @@ export const RestaurantConfigView: React.FC = () => {
                         </td>
 
                         <td className="py-3 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
+                          <div className="relative inline-block text-left">
                             <button
                               type="button"
-                              onClick={() => updateTable(table.id, { isActive: !isMesaActive })}
-                              className="p-1.5 rounded-lg bg-[#24211a] hover:bg-[#333] text-[#d6d3d1] transition-colors cursor-pointer"
-                              title={isMesaActive ? 'Desactivar mesa' : 'Activar mesa'}
+                              onClick={() =>
+                                setOpenDropdownTableId(
+                                  openDropdownTableId === table.id ? null : table.id
+                                )
+                              }
+                              className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm ${
+                                openDropdownTableId === table.id
+                                  ? 'bg-[#292212] border-[#B77900] text-[#D6A21A]'
+                                  : 'bg-[#24211a] hover:bg-[#2d281e] border-[#3d3628] text-[#e7e5e4]'
+                              }`}
+                              title="Opciones de la mesa"
                             >
-                              {isMesaActive ? <XCircle className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
+                              <MoreVertical className="w-3.5 h-3.5 text-[#D6A21A]" />
+                              <span>Acciones</span>
+                              <ChevronDown
+                                className={`w-3 h-3 text-[#a8a29e] transition-transform duration-150 ${
+                                  openDropdownTableId === table.id ? 'rotate-180' : ''
+                                }`}
+                              />
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => openEditTable(table)}
-                              className="px-2.5 py-1 rounded-lg bg-[#292212] border border-[#B77900]/40 text-[#D6A21A] text-[11px] font-bold hover:brightness-110 flex items-center gap-1 cursor-pointer"
-                            >
-                              <Edit2 className="w-3 h-3" />
-                              <span>Editar</span>
-                            </button>
+
+                            {openDropdownTableId === table.id && (
+                              <>
+                                {/* Backdrop transparente para cerrar al hacer clic afuera */}
+                                <div
+                                  className="fixed inset-0 z-20 cursor-default"
+                                  onClick={() => setOpenDropdownTableId(null)}
+                                />
+
+                                {/* Menú desplegable */}
+                                <div className="absolute right-0 top-full mt-1.5 w-48 bg-[#1c1b18] border border-[#3d3628] rounded-xl shadow-2xl py-1 z-30 divide-y divide-[#2a261e] text-left animate-in fade-in zoom-in-95 duration-100">
+                                  <div className="py-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenDropdownTableId(null);
+                                        openEditTable(table);
+                                      }}
+                                      className="w-full px-3 py-2 text-xs text-[#FFFDF5] hover:bg-[#292212] hover:text-[#D6A21A] flex items-center gap-2 font-medium transition-colors cursor-pointer"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5 text-[#D6A21A]" />
+                                      <span>Editar Mesa</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenDropdownTableId(null);
+                                        handleToggleTableActive(table);
+                                      }}
+                                      className="w-full px-3 py-2 text-xs text-[#d6d3d1] hover:bg-[#25221b] flex items-center gap-2 font-medium transition-colors cursor-pointer"
+                                    >
+                                      {isMesaActive ? (
+                                        <>
+                                          <XCircle className="w-3.5 h-3.5 text-amber-400" />
+                                          <span>Desactivar Mesa</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                                          <span>Habilitar Mesa</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
+                                  <div className="py-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenDropdownTableId(null);
+                                        setTableToDelete(table);
+                                      }}
+                                      className="w-full px-3 py-2 text-xs text-rose-400 hover:bg-rose-950/40 hover:text-rose-300 flex items-center gap-2 font-medium transition-colors cursor-pointer"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                                      <span>Eliminar Mesa</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -741,75 +821,6 @@ export const RestaurantConfigView: React.FC = () => {
                 </div>
               </div>
             ))}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 4: HISTORIAL DE MODIFICACIONES (AUDITORÍA) */}
-      {activeTab === 'history' && (
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-black text-[#FFFDF5]">Historial de Modificaciones & Auditoría</h2>
-              <p className="text-xs text-[#a8a29e]">
-                Registro inmutable de todas las creaciones, cambios de estado y modificaciones en la sucursal actual.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-[#a8a29e] font-semibold whitespace-nowrap">Filtrar Entidad:</span>
-              <select
-                value={auditEntityFilter}
-                onChange={(e) => setAuditEntityFilter(e.target.value)}
-                className="bg-[#1c1b24] border border-[#333] rounded-xl px-2.5 py-1.5 text-xs text-[#FFFDF5] focus:outline-none focus:border-[#D6A21A]"
-              >
-                <option value="todos">Todas las Entidades</option>
-                <option value="area">Salones / Áreas</option>
-                <option value="table">Mesas</option>
-                <option value="prep_station">Estaciones Operativas</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="bg-[#181818] border border-[#2d281e] rounded-2xl overflow-hidden shadow-xl">
-            <div className="divide-y divide-[#24211a]">
-              {filteredAuditLogs.map((log) => (
-                <div key={log.id} className="p-4 hover:bg-[#1c1b24] transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-[#292212] border border-[#B77900]/40 text-[#D6A21A] flex items-center justify-center shrink-0 mt-0.5">
-                      {log.entityType === 'area' && <Layers className="w-4 h-4" />}
-                      {log.entityType === 'table' && <LayoutGrid className="w-4 h-4" />}
-                      {log.entityType === 'prep_station' && <Flame className="w-4 h-4" />}
-                    </div>
-
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-black text-[#FFFDF5]">{log.entityName}</span>
-                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-[#24211a] text-[#a8a29e] border border-[#333]">
-                          {log.entityType}
-                        </span>
-                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-[#292212] text-[#D6A21A] border border-[#B77900]/30">
-                          {log.action}
-                        </span>
-                      </div>
-                      <p className="text-xs text-[#d6d3d1] mt-1">{log.details}</p>
-                    </div>
-                  </div>
-
-                  <div className="text-left sm:text-right shrink-0">
-                    <span className="text-xs font-semibold text-[#FFFDF5] block">{log.performedByName}</span>
-                    <span className="text-[11px] text-[#a8a29e] font-mono">
-                      {formatColombiaDateTime(log.timestamp)}
-                    </span>
-                  </div>
-                </div>
-              ))}
-              {filteredAuditLogs.length === 0 && (
-                <div className="text-center py-12 text-[#a8a29e] text-xs">
-                  No se registran eventos de auditoría para el filtro seleccionado.
-                </div>
-              )}
-            </div>
           </div>
         </div>
       )}
@@ -1073,6 +1084,111 @@ export const RestaurantConfigView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* MODAL CONFIRMACIÓN ELIMINAR MESA */}
+      {tableToDelete && (() => {
+        const deleteCheck = canDeleteTable(tableToDelete, orders);
+        const statusMeta = getTableStatusConfig(tableToDelete.status);
+
+        return (
+          <div
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+            onClick={() => !isDeletingTable && setTableToDelete(null)}
+          >
+            <div
+              className="bg-[#181818] border border-rose-500/40 rounded-3xl max-w-md w-full p-5 sm:p-6 text-[#FFFDF5] shadow-2xl relative"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start gap-3.5 pb-4 border-b border-[#2d281e]">
+                <div className="w-10 h-10 rounded-2xl bg-rose-950/80 border border-rose-600/50 flex items-center justify-center text-rose-400 shrink-0">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-base font-black text-[#FFFDF5]">
+                    ¿Eliminar Mesa #{tableToDelete.number}?
+                  </h3>
+                  <p className="text-xs text-[#a8a29e] mt-0.5">
+                    Esta acción eliminará el registro de la mesa del restaurante.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={isDeletingTable}
+                  onClick={() => setTableToDelete(null)}
+                  className="w-7 h-7 rounded-full bg-[#242424] hover:bg-[#333] text-[#d6d3d1] flex items-center justify-center cursor-pointer transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Ficha resumen de la mesa */}
+              <div className="mt-4 p-3.5 rounded-2xl bg-[#14131a] border border-[#2d281e] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#a8a29e]">Nombre / Identificador:</span>
+                  <span className="text-xs font-bold text-[#FFFDF5]">
+                    {tableToDelete.name || `Mesa #${tableToDelete.number}`}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#a8a29e]">Salón / Área:</span>
+                  <span className="text-xs font-semibold text-[#d6d3d1]">
+                    {tableToDelete.zone || 'Salón Principal'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#a8a29e]">Capacidad:</span>
+                  <span className="text-xs font-semibold text-[#FFFDF5]">
+                    {tableToDelete.capacity} personas
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#a8a29e]">Estado actual:</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusMeta.badgeClass}`}
+                  >
+                    {statusMeta.label}
+                  </span>
+                </div>
+              </div>
+
+              {/* Advertencia si no se puede borrar */}
+              {!deleteCheck.canDelete ? (
+                <div className="mt-4 p-3 rounded-2xl bg-amber-950/40 border border-amber-500/40 text-amber-200 text-xs flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold block">No se puede eliminar en este momento:</span>
+                    <p className="mt-0.5 text-amber-300/90">{deleteCheck.reason}</p>
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-4 text-xs text-[#a8a29e] leading-relaxed">
+                  ¿Estás seguro de que deseas eliminar permanentemente esta mesa? Esta operación no se puede deshacer.
+                </p>
+              )}
+
+              <div className="mt-5 pt-3 border-t border-[#2d281e] flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  disabled={isDeletingTable}
+                  onClick={() => setTableToDelete(null)}
+                  className="px-4 py-2 rounded-xl bg-[#242424] hover:bg-[#333] text-[#d6d3d1] text-xs font-bold cursor-pointer transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={!deleteCheck.canDelete || isDeletingTable}
+                  onClick={handleConfirmDeleteTable}
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed text-[#FFFDF5] text-xs font-black flex items-center gap-2 cursor-pointer shadow-lg transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{isDeletingTable ? 'Eliminando...' : 'Sí, Eliminar Mesa'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* MODAL CREAR / EDITAR ESTACIÓN OPERATIVA */}
       {stationModalOpen && (

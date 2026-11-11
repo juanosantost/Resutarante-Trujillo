@@ -10,6 +10,7 @@ import {
   validateAreaPayload,
   validateTablePayload,
   validatePrepStationPayload,
+  canDeleteTable,
 } from './tableOperations';
 import { Table, RestaurantArea, PrepStation } from '../types';
 
@@ -163,4 +164,47 @@ test('validators check requirements for areas, tables and prep stations', () => 
     true
   );
   assert.equal(validatePrepStationPayload({ name: 'Co', code: 'C' }).isValid, false);
+});
+
+test('canDeleteTable validates occupied status and active orders', () => {
+  const tableBase: Table = {
+    id: 'tab-1',
+    branchId: 'b1',
+    areaId: 'a1',
+    number: 1,
+    zone: 'Principal',
+    capacity: 4,
+    status: 'libre',
+    displayOrder: 1,
+    isActive: true,
+  };
+
+  // Free table without orders can be deleted
+  assert.equal(canDeleteTable(tableBase, []).canDelete, true);
+
+  // Occupied table cannot be deleted
+  const occupiedTable: Table = { ...tableBase, status: 'ocupada' };
+  const occupiedRes = canDeleteTable(occupiedTable, []);
+  assert.equal(occupiedRes.canDelete, false);
+  assert.match(occupiedRes.reason || '', /ocupada/i);
+
+  // Table with open tab cannot be deleted
+  const openTabTable: Table = { ...tableBase, hasOpenTab: true };
+  assert.equal(canDeleteTable(openTabTable, []).canDelete, false);
+
+  // Table with active open order cannot be deleted
+  const orders = [
+    { tableId: 'tab-1', status: 'abierto' },
+    { tableId: 'tab-2', status: 'facturado' },
+  ];
+  const orderRes = canDeleteTable(tableBase, orders);
+  assert.equal(orderRes.canDelete, false);
+  assert.match(orderRes.reason || '', /pedidos abiertos/i);
+
+  // Table with completed/cancelled orders CAN be deleted
+  const pastOrders = [
+    { tableId: 'tab-1', status: 'facturado' },
+    { tableId: 'tab-1', status: 'cancelado' },
+  ];
+  assert.equal(canDeleteTable(tableBase, pastOrders).canDelete, true);
 });

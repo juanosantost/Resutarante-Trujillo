@@ -120,6 +120,10 @@ import {
   voidPurchasePaymentRecord,
   voidSupplierAdvanceRecord,
 } from '../utils/supplierAndPayablesUtils';
+import {
+  parseExcelProductRows,
+  normalizeTextKey,
+} from '../utils/productUtils';
 
 interface RestaurantContextType {
   // Estado base
@@ -164,6 +168,14 @@ interface RestaurantContextType {
   }) => Promise<void>;
 
   createProduct: (data: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string>;
+  importProductsFromExcel: (
+    rawRows: Array<Record<string, unknown>>
+  ) => Promise<{
+    createdCount: number;
+    createdCategoriesCount: number;
+    skippedDuplicates: string[];
+    skippedEmpty: number;
+  }>;
   updateProduct: (id: string, data: Partial<Product>) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
   toggleProductStatus: (id: string, status: ProductStatus) => Promise<void>;
@@ -173,6 +185,7 @@ interface RestaurantContextType {
   toggleCategoryActive: (id: string, isActive: boolean) => Promise<void>;
   toggleCategoryVisibility: (id: string, isVisible: boolean) => Promise<void>;
   reorderCategories: (orderedIds: string[]) => Promise<void>;
+  deleteCategory: (id: string) => Promise<void>;
 
   createModifierGroup: (data: Omit<ModifierGroup, 'id'>) => Promise<string>;
   updateModifierGroup: (id: string, data: Partial<ModifierGroup>) => Promise<void>;
@@ -185,6 +198,7 @@ interface RestaurantContextType {
 
   createTable: (data: Omit<Table, 'id' | 'branchId'>) => Promise<string>;
   updateTable: (id: string, data: Partial<Table>) => Promise<void>;
+  deleteTable: (id: string) => Promise<void>;
   setTableStatus: (
     tableId: string,
     status: TableStatus,
@@ -622,7 +636,12 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     // Módulo 03: Categorías
     const unsubCatalogCategories = onSnapshot(collection(db, 'categories'), (snap) => {
       const list: Category[] = [];
-      snap.forEach((d) => list.push({ ...d.data(), id: d.id } as Category));
+      snap.forEach((d) => {
+        const item = { ...d.data(), id: d.id } as Category & { isDeleted?: boolean };
+        if (!item.isDeleted) {
+          list.push(item as Category);
+        }
+      });
       const hasDailyCategory = list.some((c) => c.id === 'cat-menu-del-dia');
       if (!hasDailyCategory) {
         const dailyCat: Category = {
@@ -638,16 +657,23 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         list.unshift(dailyCat);
         setDoc(doc(db, 'categories', dailyCat.id), sanitizeFirestoreData(dailyCat), { merge: true }).catch(() => {});
       }
-      if (list.length > 0) {
-        setCatalogCategories(list.sort((a, b) => (a.order || 0) - (b.order || 0)));
-      }
+      setCatalogCategories(list.sort((a, b) => (a.order || 0) - (b.order || 0)));
     }, (error) => handleFirestoreError(error, OperationType.GET, 'categories'));
 
     // Módulo 03: Modificadores
     const unsubModGroups = onSnapshot(collection(db, 'modifierGroups'), (snap) => {
       const list: ModifierGroup[] = [];
-      snap.forEach((d) => list.push({ ...d.data(), id: d.id } as ModifierGroup));
-      if (list.length > 0) setModifierGroups(list);
+      snap.forEach((d) => {
+        const item = { ...d.data(), id: d.id } as ModifierGroup;
+        if (item.isActive !== false) {
+          list.push(item);
+        }
+      });
+      if (!snap.empty || snap.metadata.hasPendingWrites) {
+        setModifierGroups(list);
+      } else if (list.length > 0) {
+        setModifierGroups(list);
+      }
     }, (error) => handleFirestoreError(error, OperationType.GET, 'modifierGroups'));
 
     // Módulo 03: Productos
@@ -812,7 +838,12 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const tablesQ = query(collection(db, 'tables'), where('branchId', '==', currentBranchId));
     const unsubTables = onSnapshot(tablesQ, (snap) => {
       const list: Table[] = [];
-      snap.forEach((d) => list.push({ ...d.data(), id: d.id } as Table));
+      snap.forEach((d) => {
+        const item = { ...d.data(), id: d.id } as Table & { isDeleted?: boolean };
+        if (!item.isDeleted) {
+          list.push(item as Table);
+        }
+      });
       setTables(list.sort((a, b) => a.number - b.number));
     }, (error) => handleFirestoreError(error, OperationType.GET, 'tables'));
 
@@ -2631,6 +2662,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }
       }
       await updateDoc(doc(db, 'tables', id), updatePayload);
+      setTables((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, ...updatePayload } : t))
+      );
       const existing = tables.find((t) => t.id === id);
       await logAuditAction({
         entityType: 'table',
@@ -2642,6 +2676,44 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     } catch (error) {
       console.error('Error updating table:', error);
       handleFirestoreError(error, OperationType.UPDATE, 'tables');
+      throw error;
+    }
+  };
+
+  const deleteTable = async (id: string): Promise<void> => {
+    try {
+      const existing = tables.find((t) => t.id === id);
+      const tableName = existing?.name || (existing?.number ? `Mesa #${existing.number}` : id);
+
+      // 1. Validar que la mesa no esté ocupada ni tenga pedidos en curso
+      const hasActiveOrder = orders.some(
+        (o) => o.tableId === id && o.status === 'abierto'
+      );
+      if (hasActiveOrder || existing?.status === 'ocupada' || existing?.status === 'cuenta_solicitada' || existing?.hasOpenTab) {
+        throw new Error(
+          `No se puede eliminar la ${tableName} porque se encuentra ocupada o tiene un pedido activo en curso.`
+        );
+      }
+
+      // 2. Eliminar permanentemente de Firestore (con deleteDoc y fallback seguro)
+      await deleteDoc(doc(db, 'tables', id)).catch(async (delErr) => {
+        console.warn('deleteDoc tables falló, intentando soft-delete:', delErr);
+        await updateDoc(doc(db, 'tables', id), { isActive: false, isDeleted: true });
+      });
+
+      // 3. Actualizar estado local reactivo inmediatamente
+      setTables((prev) => prev.filter((t) => t.id !== id));
+
+      await logAuditAction({
+        entityType: 'table',
+        entityId: id,
+        entityName: tableName,
+        action: 'delete',
+        details: `Mesa ${tableName} eliminada permanentemente del sistema`,
+      });
+    } catch (error) {
+      console.error('Error deleting table:', error);
+      handleFirestoreError(error, OperationType.DELETE, 'tables');
       throw error;
     }
   };
@@ -2827,28 +2899,29 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         'st-cocina-caliente': 'cocina_caliente',
       };
 
-      await setDoc(
-        doc(db, 'menuItems', id),
-        sanitizeFirestoreData({
-          id,
-          name: newProduct.name,
-          description: newProduct.description,
-          categoryId: newProduct.categoryId,
-          price: newProduct.price,
-          station: stationMap[newProduct.prepStationId] || 'cocina_caliente',
-          prepTimeMinutes: newProduct.prepTimeMinutes,
-          recipe: newProduct.recipe || [],
-          isAvailable: newProduct.isAvailableForSale && newProduct.status === 'activo',
-          image: newProduct.images?.[0] || '',
-          sku: newProduct.sku,
-          branchId: newProduct.branchId,
-          prepStationId: newProduct.prepStationId,
-          variants: newProduct.variants || [],
-          isCombo: Boolean(newProduct.isCombo),
-          comboConfig: newProduct.comboConfig || null,
-        }),
-        { merge: true }
-      );
+      const menuItemPayload: MenuItem = sanitizeFirestoreData({
+        id,
+        name: newProduct.name,
+        description: newProduct.description,
+        categoryId: newProduct.categoryId,
+        price: newProduct.price,
+        station: stationMap[newProduct.prepStationId] || 'cocina_caliente',
+        prepTimeMinutes: newProduct.prepTimeMinutes,
+        recipe: newProduct.recipe || [],
+        isAvailable: newProduct.isAvailableForSale && newProduct.status === 'activo',
+        image: newProduct.images?.[0] || '',
+        sku: newProduct.sku,
+        branchId: newProduct.branchId,
+        prepStationId: newProduct.prepStationId,
+        variants: newProduct.variants || [],
+        isCombo: Boolean(newProduct.isCombo),
+        comboConfig: newProduct.comboConfig,
+      });
+
+      await setDoc(doc(db, 'menuItems', id), menuItemPayload, { merge: true });
+
+      setProducts((prev) => [...prev.filter((p) => p.id !== id), newProduct]);
+      setMenuItems((prev) => [...prev.filter((m) => m.id !== id), menuItemPayload]);
 
       await logAuditAction({
         entityType: 'product',
@@ -2868,17 +2941,245 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   };
 
+  const importProductsFromExcel = async (
+    rawRows: Array<Record<string, unknown>>
+  ): Promise<{
+    createdCount: number;
+    createdCategoriesCount: number;
+    skippedDuplicates: string[];
+    skippedEmpty: number;
+  }> => {
+    try {
+      setActionLoading(true);
+      const existingNames = products.map((p) => p.name);
+      const { toCreate, skippedDuplicates, skippedEmpty } = parseExcelProductRows(
+        rawRows,
+        existingNames
+      );
+
+      if (toCreate.length === 0) {
+        return {
+          createdCount: 0,
+          createdCategoriesCount: 0,
+          skippedDuplicates,
+          skippedEmpty,
+        };
+      }
+
+      const categoryMap = new Map<string, Category>();
+      for (const cat of catalogCategories) {
+        categoryMap.set(normalizeTextKey(cat.name), cat);
+      }
+
+      const newlyCreatedCategories: Category[] = [];
+      const newlyCreatedMenuCategories: MenuCategory[] = [];
+      let nextCatOrder = catalogCategories.length + 1;
+
+      const stationMap: Record<string, any> = {
+        'st-parrilla': 'parrilla',
+        'st-bar-bebidas': 'bar_bebidas',
+        'st-postres': 'postres',
+        'st-cocina-fria': 'cocina_caliente',
+        'st-cocina-caliente': 'cocina_caliente',
+      };
+
+      const inferStationId = (catName: string): string => {
+        const k = normalizeTextKey(catName);
+        if (
+          k.includes('bebida') ||
+          k.includes('jugo') ||
+          k.includes('bar') ||
+          k.includes('gaseosa') ||
+          k.includes('limonada') ||
+          k.includes('cerveza') ||
+          k.includes('coctel')
+        ) {
+          const found = prepStations.find((s) => s.id === 'st-bar-bebidas' || normalizeTextKey(s.name).includes('bar') || normalizeTextKey(s.name).includes('bebida'));
+          if (found) return found.id;
+          return 'st-bar-bebidas';
+        }
+        if (k.includes('postre') || k.includes('helado') || k.includes('dulce')) {
+          const found = prepStations.find((s) => s.id === 'st-postres' || normalizeTextKey(s.name).includes('postre'));
+          if (found) return found.id;
+          return 'st-postres';
+        }
+        if (
+          k.includes('parrilla') ||
+          k.includes('asado') ||
+          k.includes('carne') ||
+          k.includes('hamburguesa') ||
+          k.includes('costilla') ||
+          k.includes('churrasco')
+        ) {
+          const found = prepStations.find((s) => s.id === 'st-parrilla' || normalizeTextKey(s.name).includes('parrilla'));
+          if (found) return found.id;
+          return 'st-parrilla';
+        }
+        return prepStations[0]?.id || 'st-cocina-caliente';
+      };
+
+      const newlyCreatedProducts: Product[] = [];
+      const newlyCreatedMenuItems: MenuItem[] = [];
+      const now = new Date().toISOString();
+
+      for (let idx = 0; idx < toCreate.length; idx++) {
+        const row = toCreate[idx];
+        const catKey = normalizeTextKey(row.categoryName);
+        let categoryObj = categoryMap.get(catKey);
+
+        if (!categoryObj) {
+          const catRef = doc(collection(db, 'categories'));
+          const catId = catRef.id;
+          categoryObj = {
+            id: catId,
+            name: row.categoryName,
+            description: `Categoría importada desde Excel: ${row.categoryName}`,
+            order: nextCatOrder++,
+            isActive: true,
+            isVisibleInMenu: true,
+            icon: 'Utensils',
+            createdAt: now,
+          };
+          await setDoc(catRef, categoryObj, { merge: true });
+          const menuCat: MenuCategory = {
+            id: catId,
+            name: row.categoryName,
+            order: categoryObj.order,
+            icon: 'Utensils',
+          };
+          await setDoc(doc(db, 'menuCategories', catId), menuCat, { merge: true }).catch(() => {});
+          categoryMap.set(catKey, categoryObj);
+          newlyCreatedCategories.push(categoryObj);
+          newlyCreatedMenuCategories.push(menuCat);
+        }
+
+        const prodRef = doc(collection(db, 'products'));
+        const prodId = prodRef.id;
+        const prefix =
+          row.categoryName
+            .replace(/[^a-zA-Z0-9]/g, '')
+            .toUpperCase()
+            .slice(0, 3) || 'PRD';
+        const sku = `${prefix}-${String(products.length + idx + 101).padStart(3, '0')}`;
+        const prepStationId = inferStationId(row.categoryName);
+
+        const newProduct: Product = sanitizeFirestoreData({
+          id: prodId,
+          name: row.name,
+          description: row.description,
+          categoryId: categoryObj.id,
+          categoryName: categoryObj.name,
+          price: row.price,
+          sku,
+          reference: '',
+          barcode: '',
+          size: '',
+          color: '',
+          unit: 'und',
+          observations: row.priceStatus ? `Estado del precio: ${row.priceStatus}` : '',
+          images: [],
+          branchId: 'all',
+          prepStationId,
+          prepTimeMinutes: 15,
+          isAvailableForSale: row.status === 'activo',
+          isAvailableForDelivery: true,
+          isVisibleInMenu: true,
+          status: row.status,
+          variants: [],
+          modifierGroupIds: [],
+          featureGroups: [],
+          recipe: [],
+          isCombo: false,
+          createdAt: now,
+          updatedAt: now,
+        });
+
+        await setDoc(prodRef, newProduct, { merge: true });
+
+        const menuItemPayload: MenuItem = sanitizeFirestoreData({
+          id: prodId,
+          name: newProduct.name,
+          description: newProduct.description,
+          categoryId: newProduct.categoryId,
+          price: newProduct.price,
+          station: stationMap[prepStationId] || 'cocina_caliente',
+          prepTimeMinutes: newProduct.prepTimeMinutes,
+          recipe: [],
+          isAvailable: newProduct.isAvailableForSale && newProduct.status === 'activo',
+          image: '',
+          sku: newProduct.sku,
+          branchId: 'all',
+          prepStationId,
+          variants: [],
+          isCombo: false,
+        });
+
+        await setDoc(doc(db, 'menuItems', prodId), menuItemPayload, { merge: true }).catch(() => {});
+
+        newlyCreatedProducts.push(newProduct);
+        newlyCreatedMenuItems.push(menuItemPayload);
+      }
+
+      if (newlyCreatedCategories.length > 0) {
+        setCatalogCategories((prev) => {
+          const existingIds = new Set(prev.map((c) => c.id));
+          const uniqueNew = newlyCreatedCategories.filter((c) => !existingIds.has(c.id));
+          return [...prev, ...uniqueNew];
+        });
+        setCategories((prev) => {
+          const existingIds = new Set(prev.map((c) => c.id));
+          const uniqueNew = newlyCreatedMenuCategories.filter((c) => !existingIds.has(c.id));
+          return [...prev, ...uniqueNew];
+        });
+      }
+
+      if (newlyCreatedProducts.length > 0) {
+        setProducts((prev) => {
+          const existingIds = new Set(prev.map((p) => p.id));
+          const uniqueNew = newlyCreatedProducts.filter((p) => !existingIds.has(p.id));
+          return [...prev, ...uniqueNew];
+        });
+        setMenuItems((prev) => {
+          const existingIds = new Set(prev.map((m) => m.id));
+          const uniqueNew = newlyCreatedMenuItems.filter((m) => !existingIds.has(m.id));
+          return [...prev, ...uniqueNew];
+        });
+      }
+
+      await logAuditAction({
+        entityType: 'product',
+        entityId: 'excel-import',
+        entityName: 'Importación Masiva Excel',
+        action: 'create',
+        details: `Importación desde Excel: ${newlyCreatedProducts.length} productos agregados, ${newlyCreatedCategories.length} categorías nuevas, ${skippedDuplicates.length} duplicados omitidos`,
+      });
+
+      return {
+        createdCount: newlyCreatedProducts.length,
+        createdCategoriesCount: newlyCreatedCategories.length,
+        skippedDuplicates,
+        skippedEmpty,
+      };
+    } catch (error) {
+      console.error('Error importing products from Excel:', error);
+      handleFirestoreError(error, OperationType.CREATE, 'products');
+      throw error;
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const updateProduct = async (id: string, data: Partial<Product>): Promise<void> => {
     try {
       setActionLoading(true);
       const now = new Date().toISOString();
-      await updateDoc(doc(db, 'products', id), sanitizeFirestoreData({
+      await setDoc(doc(db, 'products', id), sanitizeFirestoreData({
         ...data,
         updatedAt: now,
-      }));
+      }), { merge: true });
 
       // Sincronizar con menuItems
-      const menuItemUpdate: Record<string, any> = {};
+      const menuItemUpdate: Record<string, any> = { id };
       if (data.name !== undefined) menuItemUpdate.name = data.name;
       if (data.description !== undefined) menuItemUpdate.description = data.description;
       if (data.price !== undefined) menuItemUpdate.price = data.price;
@@ -2892,8 +3193,10 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           (data.status !== undefined ? data.status === 'activo' : true) &&
           (data.isAvailableForSale !== undefined ? data.isAvailableForSale : true);
       }
-      if (Object.keys(menuItemUpdate).length > 0) {
-        await updateDoc(doc(db, 'menuItems', id), menuItemUpdate);
+      if (Object.keys(menuItemUpdate).length > 1) {
+        await setDoc(doc(db, 'menuItems', id), menuItemUpdate, { merge: true }).catch((err) => {
+          console.warn('Sync to menuItems skipped:', err);
+        });
       }
 
       const prod = products.find((p) => p.id === id);
@@ -2952,13 +3255,15 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const toggleProductStatus = async (id: string, status: ProductStatus): Promise<void> => {
     try {
       setActionLoading(true);
-      await updateDoc(doc(db, 'products', id), {
+      await setDoc(doc(db, 'products', id), {
         status,
         isAvailableForSale: status === 'activo',
         updatedAt: new Date().toISOString(),
-      });
-      await updateDoc(doc(db, 'menuItems', id), {
+      }, { merge: true });
+      await setDoc(doc(db, 'menuItems', id), {
         isAvailable: status === 'activo',
+      }, { merge: true }).catch((err) => {
+        console.warn('Sync to menuItems skipped:', err);
       });
       const prod = products.find((p) => p.id === id);
       await logAuditAction({
@@ -3120,7 +3425,12 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         name: data.name,
         order: data.order,
         icon: data.icon || 'Utensils',
-      });
+      }, { merge: true }).catch(() => {});
+      setCatalogCategories((prev) => [...prev.filter((c) => c.id !== id), newCat]);
+      setCategories((prev) => [
+        ...prev.filter((c) => c.id !== id),
+        { id, name: data.name, order: data.order, icon: data.icon || 'Utensils' },
+      ]);
       await logAuditAction({
         entityType: 'category',
         entityId: id,
@@ -3141,14 +3451,22 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const updateCategory = async (id: string, data: Partial<Category>): Promise<void> => {
     try {
       setActionLoading(true);
-      await updateDoc(doc(db, 'categories', id), data);
+      await setDoc(doc(db, 'categories', id), data, { merge: true });
       if (data.name !== undefined || data.order !== undefined || data.icon !== undefined) {
         const menuCatUpdate: Record<string, any> = {};
         if (data.name !== undefined) menuCatUpdate.name = data.name;
         if (data.order !== undefined) menuCatUpdate.order = data.order;
         if (data.icon !== undefined) menuCatUpdate.icon = data.icon;
-        await updateDoc(doc(db, 'menuCategories', id), menuCatUpdate);
+        await setDoc(doc(db, 'menuCategories', id), menuCatUpdate, { merge: true }).catch((err) => {
+          console.warn(`[updateCategory] Note: menuCategories/${id} secondary sync skipped:`, err?.message || err);
+        });
       }
+      setCatalogCategories((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, ...data, updatedAt: new Date() } : c))
+      );
+      setCategories((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, ...data } : c))
+      );
       const cat = catalogCategories.find((c) => c.id === id);
       await logAuditAction({
         entityType: 'category',
@@ -3168,7 +3486,10 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const toggleCategoryActive = async (id: string, isActive: boolean): Promise<void> => {
     try {
-      await updateDoc(doc(db, 'categories', id), { isActive });
+      await setDoc(doc(db, 'categories', id), { isActive }, { merge: true });
+      setCatalogCategories((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, isActive } : c))
+      );
       const cat = catalogCategories.find((c) => c.id === id);
       await logAuditAction({
         entityType: 'category',
@@ -3186,7 +3507,10 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const toggleCategoryVisibility = async (id: string, isVisible: boolean): Promise<void> => {
     try {
-      await updateDoc(doc(db, 'categories', id), { isVisibleInMenu: isVisible });
+      await setDoc(doc(db, 'categories', id), { isVisibleInMenu: isVisible }, { merge: true });
+      setCatalogCategories((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, isVisibleInMenu: isVisible } : c))
+      );
       const cat = catalogCategories.find((c) => c.id === id);
       await logAuditAction({
         entityType: 'category',
@@ -3206,9 +3530,15 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       for (let i = 0; i < orderedIds.length; i++) {
         const catId = orderedIds[i];
-        await updateDoc(doc(db, 'categories', catId), { order: i + 1 });
-        await updateDoc(doc(db, 'menuCategories', catId), { order: i + 1 }).catch(() => {});
+        await setDoc(doc(db, 'categories', catId), { order: i + 1 }, { merge: true });
+        await setDoc(doc(db, 'menuCategories', catId), { order: i + 1 }, { merge: true }).catch(() => {});
       }
+      setCatalogCategories((prev) => {
+        const orderMap = new Map(orderedIds.map((id, index) => [id, index + 1]));
+        return [...prev]
+          .map((c) => (orderMap.has(c.id) ? { ...c, order: orderMap.get(c.id)! } : c))
+          .sort((a, b) => a.order - b.order);
+      });
       await logAuditAction({
         entityType: 'category',
         entityId: 'all',
@@ -3223,6 +3553,42 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   };
 
+  const deleteCategory = async (id: string): Promise<void> => {
+    try {
+      if (id === 'cat-menu-del-dia' || id.includes('menu-del-dia')) {
+        throw new Error('La categoría "Menú del Día" está protegida por el sistema y no puede ser eliminada.');
+      }
+      setActionLoading(true);
+      const cat = catalogCategories.find((c) => c.id === id);
+      const catName = cat?.name || id;
+
+      // 1. Eliminar permanentemente de Firestore
+      await deleteDoc(doc(db, 'categories', id)).catch(async (err) => {
+        console.warn('deleteDoc categories falló, intentando soft-delete:', err);
+        await setDoc(doc(db, 'categories', id), { isActive: false, isDeleted: true }, { merge: true });
+      });
+      await deleteDoc(doc(db, 'menuCategories', id)).catch(() => {});
+
+      // 2. Actualizar estado local reactivo inmediatamente
+      setCatalogCategories((prev) => prev.filter((c) => c.id !== id));
+      setCategories((prev) => prev.filter((c) => c.id !== id));
+
+      await logAuditAction({
+        entityType: 'category',
+        entityId: id,
+        entityName: catName,
+        action: 'delete',
+        details: `Categoría gastronómica "${catName}" eliminada permanentemente del sistema`,
+      });
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      handleFirestoreError(error, OperationType.DELETE, 'categories');
+      throw error;
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const createModifierGroup = async (
     data: Omit<ModifierGroup, 'id'>
   ): Promise<string> => {
@@ -3231,7 +3597,11 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const newRef = doc(collection(db, 'modifierGroups'));
       const id = newRef.id;
       const newGroup: ModifierGroup = { ...data, id };
-      await setDoc(newRef, newGroup);
+      await setDoc(newRef, sanitizeFirestoreData(newGroup));
+
+      // Actualizar estado local inmediatamente
+      setModifierGroups((prev) => [...prev.filter((g) => g.id !== id), newGroup]);
+
       await logAuditAction({
         entityType: 'modifier_group',
         entityId: id,
@@ -3255,7 +3625,11 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   ): Promise<void> => {
     try {
       setActionLoading(true);
-      await updateDoc(doc(db, 'modifierGroups', id), data);
+      await setDoc(doc(db, 'modifierGroups', id), sanitizeFirestoreData(data), { merge: true });
+
+      // Actualizar estado local inmediatamente
+      setModifierGroups((prev) => prev.map((g) => (g.id === id ? { ...g, ...data } : g)));
+
       const grp = modifierGroups.find((g) => g.id === id);
       await logAuditAction({
         entityType: 'modifier_group',
@@ -3276,18 +3650,42 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const deleteModifierGroup = async (id: string): Promise<void> => {
     try {
       setActionLoading(true);
-      await updateDoc(doc(db, 'modifierGroups', id), { isActive: false });
       const grp = modifierGroups.find((g) => g.id === id);
+      const grpName = grp?.name || id;
+
+      // 1. Eliminar permanentemente de Firestore
+      try {
+        await deleteDoc(doc(db, 'modifierGroups', id));
+      } catch (delErr) {
+        console.warn('deleteDoc modifierGroups falló, intentando soft-delete:', delErr);
+        await setDoc(doc(db, 'modifierGroups', id), { isActive: false }, { merge: true }).catch(() => {});
+      }
+
+      // 2. Actualizar estado local inmediatamente para reactividad instantánea
+      setModifierGroups((prev) => prev.filter((g) => g.id !== id));
+
+      // 3. Desvincular de productos que tengan este modificador asignado
+      setProducts((prev) =>
+        prev.map((p) => {
+          if (p.modifierGroupIds && p.modifierGroupIds.includes(id)) {
+            const updatedIds = p.modifierGroupIds.filter((gid) => gid !== id);
+            setDoc(doc(db, 'products', p.id), { modifierGroupIds: updatedIds }, { merge: true }).catch(() => {});
+            return { ...p, modifierGroupIds: updatedIds };
+          }
+          return p;
+        })
+      );
+
       await logAuditAction({
         entityType: 'modifier_group',
         entityId: id,
-        entityName: grp?.name || id,
-        action: 'deactivate',
-        details: 'Grupo de modificadores desactivado',
+        entityName: grpName,
+        action: 'delete',
+        details: `Grupo de modificadores eliminado: ${grpName}`,
       });
     } catch (error) {
       console.error('Error deleting modifier group:', error);
-      handleFirestoreError(error, OperationType.UPDATE, 'modifierGroups');
+      handleFirestoreError(error, OperationType.DELETE, 'modifierGroups');
       throw error;
     } finally {
       setActionLoading(false);
@@ -5429,6 +5827,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         dailyMenuProduct,
         saveDailyMenuConfig,
         createProduct,
+        importProductsFromExcel,
         updateProduct,
         deleteProduct,
         toggleProductStatus,
@@ -5437,6 +5836,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         toggleCategoryActive,
         toggleCategoryVisibility,
         reorderCategories,
+        deleteCategory,
         createModifierGroup,
         updateModifierGroup,
         deleteModifierGroup,
@@ -5446,6 +5846,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         toggleAreaActive,
         createTable,
         updateTable,
+        deleteTable,
         setTableStatus,
         liberateTable,
         createPrepStation,

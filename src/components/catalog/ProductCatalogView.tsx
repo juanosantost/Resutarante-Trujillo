@@ -9,6 +9,7 @@ import { ProductCustomizeModal } from './ProductCustomizeModal';
 import { ProductManagementModal } from './ProductManagementModal';
 import { CategoryManagementModal } from './CategoryManagementModal';
 import { ModifierGroupManagementModal } from './ModifierGroupManagementModal';
+import { ProductExcelImportPanel } from './ProductExcelImportPanel';
 import {
   UtensilsCrossed,
   Search,
@@ -206,6 +207,9 @@ export const ProductCatalogView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* 2.5. Espacio de Carga Masiva por Excel */}
+      {canManage && <ProductExcelImportPanel />}
 
       {/* 3. Category Tabs Bar */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">

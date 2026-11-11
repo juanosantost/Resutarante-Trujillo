@@ -293,6 +293,16 @@ export const DEFAULT_MENU_BUTTONS: MenuButtonItemConfig[] = [
     isVisible: true,
     description: 'Guía paso a paso, ilustraciones y funcionamiento integral',
   },
+  {
+    id: 'auditoria',
+    label: 'Historial de Modificaciones',
+    iconName: 'History',
+    sectionId: 'administracion',
+    order: 8,
+    allowedRoles: ['administrador'],
+    isVisible: true,
+    description: 'Registro inmutable de modificaciones y eventos de auditoría',
+  },
 ];
 
 export const DEFAULT_MENU_CONFIG: MenuConfig = {

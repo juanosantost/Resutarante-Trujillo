@@ -470,3 +470,235 @@ export function buildDefaultDailyMenuItem(
     effectiveRecipe,
   };
 }
+
+/**
+ * Verifica si una categoría de productos puede ser eliminada.
+ * La categoría 'Menú del Día' está protegida por el sistema y no puede eliminarse.
+ */
+export function canDeleteCategory(
+  category: Category,
+  products: Product[] = []
+): { canDelete: boolean; isProtected: boolean; assignedCount: number; reason?: string } {
+  const isProtected =
+    category.id === 'cat-menu-del-dia' ||
+    category.name.trim().toLowerCase() === 'menú del día' ||
+    category.name.trim().toLowerCase() === 'almuerzo del día';
+
+  if (isProtected) {
+    return {
+      canDelete: false,
+      isProtected: true,
+      assignedCount: products.filter((p) => p.categoryId === category.id).length,
+      reason: 'La categoría "Menú del Día" está protegida por el sistema y no puede ser eliminada.',
+    };
+  }
+
+  const assignedCount = products.filter(
+    (p) => p.categoryId === category.id
+  ).length;
+
+  return {
+    canDelete: true,
+    isProtected: false,
+    assignedCount,
+    reason:
+      assignedCount > 0
+        ? `Esta categoría tiene ${assignedCount} producto(s) asignado(s).`
+        : undefined,
+  };
+}
+
+export interface ExcelProductRowParsed {
+  categoryName: string;
+  name: string;
+  price: number;
+  priceStatus: string;
+  description: string;
+  status: 'activo' | 'agotado' | 'inactivo';
+}
+
+export function normalizeTextKey(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+/**
+ * Normaliza el nombre de un plato o producto para detectar duplicados sin importar mayúsculas, tildes o espacios extra.
+ */
+export function normalizeProductNameForDedup(name: string): string {
+  return normalizeTextKey(name);
+}
+
+/**
+ * Convierte valores de celda de Excel para "Precio (COP)" a número entero en pesos colombianos.
+ */
+export function parseExcelCOPPrice(raw: unknown): number {
+  if (typeof raw === 'number') {
+    return Number.isFinite(raw) ? Math.max(0, Math.round(raw)) : 0;
+  }
+  const str = String(raw ?? '').trim();
+  if (!str) return 0;
+
+  // Quitar símbolos de moneda, letras y espacios
+  const cleaned = str.replace(/[$a-zA-Z\s]/g, '');
+  if (!cleaned) return 0;
+
+  // Formato colombiano con puntos de miles: ej. "25.000" o "1.250.000" o "25.000,00"
+  if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(cleaned)) {
+    const withoutThousandDots = cleaned.replace(/\./g, '').replace(',', '.');
+    const num = Number(withoutThousandDots);
+    return Number.isFinite(num) ? Math.max(0, Math.round(num)) : 0;
+  }
+
+  // Formato con comas de miles: ej. "25,000" o "25,000.00"
+  if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(cleaned)) {
+    const withoutThousandCommas = cleaned.replace(/,/g, '');
+    const num = Number(withoutThousandCommas);
+    return Number.isFinite(num) ? Math.max(0, Math.round(num)) : 0;
+  }
+
+  const digitsOnly = cleaned.replace(/[^\d.-]/g, '');
+  const parsed = Number(digitsOnly);
+  return Number.isFinite(parsed) ? Math.max(0, Math.round(parsed)) : 0;
+}
+
+/**
+ * Encuentra la fila de encabezados dentro de una matriz 2D de Excel (por si hay filas de título arriba)
+ * y devuelve objetos clave-valor por cada fila de datos.
+ */
+export function extractObjectsFromSheetMatrix(matrix: unknown[][]): Array<Record<string, unknown>> {
+  if (!Array.isArray(matrix) || matrix.length === 0) return [];
+
+  let headerRowIndex = 0;
+  for (let i = 0; i < Math.min(matrix.length, 15); i++) {
+    const row = matrix[i];
+    if (!Array.isArray(row)) continue;
+    const normalizedCells = row.map((c) => normalizeTextKey(c));
+    const hasPlatoOrCat = normalizedCells.some(
+      (c) =>
+        c.includes('plato') ||
+        c.includes('producto') ||
+        c.includes('categor')
+    );
+    if (hasPlatoOrCat) {
+      headerRowIndex = i;
+      break;
+    }
+  }
+
+  const headers = (matrix[headerRowIndex] || []).map((h, idx) => {
+    const clean = String(h ?? '').trim();
+    return clean || `__col_${idx}`;
+  });
+
+  const result: Array<Record<string, unknown>> = [];
+  for (let r = headerRowIndex + 1; r < matrix.length; r++) {
+    const row = matrix[r];
+    if (!Array.isArray(row)) continue;
+    const isCompletelyEmpty = row.every((cell) => String(cell ?? '').trim() === '');
+    if (isCompletelyEmpty) continue;
+
+    const obj: Record<string, unknown> = {};
+    headers.forEach((h, colIdx) => {
+      obj[h] = row[colIdx] ?? '';
+    });
+    result.push(obj);
+  }
+
+  return result;
+}
+
+/**
+ * Procesa las filas del Excel con encabezados:
+ * Categoría | Plato o producto | Precio (COP) | Estado del precio | Descripción / ingredientes
+ * Ignora automáticamente cualquier producto cuyo nombre ya exista en el catálogo o esté repetido en el mismo archivo.
+ */
+export function parseExcelProductRows(
+  rawRows: Array<Record<string, unknown>>,
+  existingProductNames: string[] = []
+): {
+  toCreate: ExcelProductRowParsed[];
+  skippedDuplicates: string[];
+  skippedEmpty: number;
+} {
+  const seenNames = new Set<string>(
+    existingProductNames.map((n) => normalizeProductNameForDedup(n)).filter(Boolean)
+  );
+
+  const toCreate: ExcelProductRowParsed[] = [];
+  const skippedDuplicates: string[] = [];
+  let skippedEmpty = 0;
+
+  for (const row of rawRows) {
+    if (!row || typeof row !== 'object') continue;
+
+    let categoryVal: unknown = '';
+    let nameVal: unknown = '';
+    let priceVal: unknown = '';
+    let priceStatusVal: unknown = '';
+    let descriptionVal: unknown = '';
+
+    const entries = Object.entries(row);
+    for (const [key, val] of entries) {
+      const k = normalizeTextKey(key);
+      if (k.includes('categor') || k === 'cat') {
+        categoryVal = val;
+      } else if (k.includes('plato') || k.includes('producto') || k === 'nombre') {
+        nameVal = val;
+      } else if (k.includes('estado')) {
+        priceStatusVal = val;
+      } else if (k.includes('precio') || k.includes('valor') || k.includes('cop')) {
+        priceVal = val;
+      } else if (k.includes('descrip') || k.includes('ingred') || k.includes('detalle')) {
+        descriptionVal = val;
+      }
+    }
+
+    const cleanName = String(nameVal ?? '').trim();
+    if (!cleanName) {
+      skippedEmpty++;
+      continue;
+    }
+
+    const normalizedName = normalizeProductNameForDedup(cleanName);
+    if (seenNames.has(normalizedName)) {
+      skippedDuplicates.push(cleanName);
+      continue;
+    }
+
+    seenNames.add(normalizedName);
+
+    const cleanCategory = String(categoryVal ?? '').trim() || 'General';
+    const parsedPrice = parseExcelCOPPrice(priceVal);
+    const cleanPriceStatus = String(priceStatusVal ?? '').trim() || 'Definido';
+    const cleanDescription = String(descriptionVal ?? '').trim();
+
+    const normStatus = normalizeTextKey(cleanPriceStatus);
+    let status: 'activo' | 'agotado' | 'inactivo' = 'activo';
+    if (normStatus.includes('inactivo') || normStatus.includes('suspendido')) {
+      status = 'inactivo';
+    } else if (normStatus.includes('agotado')) {
+      status = 'agotado';
+    }
+
+    toCreate.push({
+      categoryName: cleanCategory,
+      name: cleanName,
+      price: parsedPrice,
+      priceStatus: cleanPriceStatus,
+      description: cleanDescription,
+      status,
+    });
+  }
+
+  return {
+    toCreate,
+    skippedDuplicates,
+    skippedEmpty,
+  };
+}
+

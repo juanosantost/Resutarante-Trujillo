@@ -3,7 +3,6 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import {
   Sparkles,
-  Shield,
   Building2,
   LogIn,
   User,
@@ -16,20 +15,13 @@ export const LoginView: React.FC = () => {
   const {
     loginGoogle,
     loginWithIdentifier,
-    bootstrapFirstAdmin,
     branches,
   } = useAuth();
   const { showToast } = useToast();
   const { isLight, toggleTheme } = useTheme();
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [showBootstrapModal, setShowBootstrapModal] = useState<boolean>(false);
   const [identifierInput, setIdentifierInput] = useState<string>('');
-  
-  // Datos para registrar primer administrador (vacíos por defecto)
-  const [adminName, setAdminName] = useState<string>('');
-  const [adminDoc, setAdminDoc] = useState<string>('');
-  const [adminEmail, setAdminEmail] = useState<string>('');
 
   const handleCredentialLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,30 +50,6 @@ export const LoginView: React.FC = () => {
     } catch (err: any) {
       console.error(err);
       showToast(err.message || 'Error al iniciar sesión con Google', 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleBootstrap = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!adminName.trim() || !adminDoc.trim() || !adminEmail.trim()) {
-      showToast('Por favor completa todos los campos del administrador', 'warning');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      await bootstrapFirstAdmin({
-        fullName: adminName.trim(),
-        documentNumber: adminDoc.trim(),
-        email: adminEmail.trim(),
-      });
-      showToast('¡Primer Administrador configurado con éxito!', 'success');
-      setShowBootstrapModal(false);
-    } catch (err: any) {
-      console.error(err);
-      showToast('Error al registrar administrador', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -183,95 +151,7 @@ export const LoginView: React.FC = () => {
         >
           <span>Iniciar Sesión con Google</span>
         </button>
-
-        <div className="mt-6 text-center">
-          <button
-            type="button"
-            onClick={() => setShowBootstrapModal(true)}
-            className="text-[11px] text-[#D6A21A] hover:underline font-bold"
-          >
-            Configurar Primer Administrador (Si la base está vacía)
-          </button>
-        </div>
-
       </div>
-
-      {/* Modal: Procedimiento Seguro para el Primer Administrador */}
-      {showBootstrapModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#181818] border border-[#B77900] rounded-2xl w-full max-w-md p-6 text-[#FFFDF5] shadow-2xl">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-[#B77900]/20 border border-[#B77900] flex items-center justify-center text-[#D6A21A]">
-                <Shield className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-black text-base text-[#FFFDF5]">
-                  Asignar Primer Administrador
-                </h3>
-                <p className="text-xs text-[#a8a29e]">
-                  Configura las credenciales maestras de la Colmena.
-                </p>
-              </div>
-            </div>
-
-            <form onSubmit={handleBootstrap} className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-[#a8a29e] mb-1">Nombre Completo</label>
-                <input
-                  type="text"
-                  required
-                  value={adminName}
-                  onChange={(e) => setAdminName(e.target.value)}
-                  placeholder="Ej: Juan Pérez"
-                  className="w-full bg-[#242424] border border-[#383838] rounded-lg px-3 py-2 text-xs text-[#FFFDF5] focus:outline-none focus:border-[#D6A21A]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#a8a29e] mb-1">Número de Documento (C.C.)</label>
-                <input
-                  type="text"
-                  required
-                  value={adminDoc}
-                  onChange={(e) => setAdminDoc(e.target.value)}
-                  placeholder="Ej: 1020304050"
-                  className="w-full bg-[#242424] border border-[#383838] rounded-lg px-3 py-2 text-xs text-[#FFFDF5] focus:outline-none focus:border-[#D6A21A]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#a8a29e] mb-1">Correo Electrónico</label>
-                <input
-                  type="email"
-                  required
-                  value={adminEmail}
-                  onChange={(e) => setAdminEmail(e.target.value)}
-                  placeholder="Ej: admin@colmena.com"
-                  className="w-full bg-[#242424] border border-[#383838] rounded-lg px-3 py-2 text-xs text-[#FFFDF5] focus:outline-none focus:border-[#D6A21A]"
-                />
-              </div>
-
-              <div className="mt-5 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowBootstrapModal(false)}
-                  className="px-4 py-2 rounded-xl bg-[#242424] text-xs font-bold text-[#a8a29e] hover:text-[#FFFDF5]"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-[#B77900] to-[#D6A21A] text-[#181818] font-black text-xs hover:brightness-110"
-                >
-                  Guardar Administrador
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
     </div>
   );
 };
