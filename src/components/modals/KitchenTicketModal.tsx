@@ -172,12 +172,12 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
           <div
             id="printable-kitchen-pos-ticket"
             data-testid="kitchen-pos-ticket"
-            className={`colmena-printable-ticket p-5 bg-[#fffdfa] text-[#0a0a0a] font-mono shadow-inner select-all rounded-sm transition-all print:shadow-none print:border-none print:m-0 print:p-0 print:text-black print:bg-white ${
+            className={`colmena-printable-ticket p-5 bg-white text-black font-mono shadow-inner select-all rounded-sm transition-all print:shadow-none print:border-none print:m-0 print:p-0 print:text-black print:bg-white ${
               is58mm ? 'w-full max-w-[270px]' : 'w-full max-w-[360px]'
             }`}
           >
             {/* ENCABEZADO DINÁMICO DE SUCURSAL */}
-            <div className="pb-2 border-b border-dashed border-[#a8a29e]">
+            <div className="pb-2 border-b-2 border-dashed border-black">
               <BranchReceiptHeader
                 branch={branch}
                 snapshot={order?.branchSnapshot}
@@ -186,20 +186,20 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
               />
             </div>
 
-            {/* TÍTULO DE COMANDA DE COCINA */}
-            <div className="my-2 py-1.5 px-2 bg-black text-white font-black tracking-widest text-center uppercase rounded-xs">
+            {/* TÍTULO DE COMANDA DE COCINA (Limpio, sin bloques negros pesados) */}
+            <div className="my-2 py-1.5 px-2 border-2 border-black font-black tracking-widest text-center uppercase bg-white text-black">
               <span className={typographyClasses.headerBadge}>*** COMANDA DE COCINA ***</span>
             </div>
 
-            {/* DESTINO GIGANTE: MESA O MODALIDAD */}
-            <div className="my-2.5 py-2 px-2 border-2 border-black rounded-xs text-center bg-neutral-100">
-              <div className="text-[11px] font-black uppercase text-neutral-700">DESTINO / ENTREGA</div>
-              <div className={`${typographyClasses.destination} text-black uppercase leading-tight`}>
+            {/* DESTINO: MESA O MODALIDAD (Fondo blanco nítido con borde negro visible) */}
+            <div className="my-2.5 py-2 px-2 border-2 border-black text-center bg-white">
+              <div className="text-[11px] font-black uppercase text-black tracking-wider">DESTINO / ENTREGA</div>
+              <div className={`${typographyClasses.destination} text-black uppercase leading-tight font-black`}>
                 {tableName}
               </div>
               {order?.customerName && orderType !== 'mesa' && (
-                <div className="text-xs font-black text-black mt-0.5">
-                  Cliente: {order.customerName}
+                <div className="text-xs font-black text-black mt-1 border-t border-black pt-1 uppercase">
+                  CLIENTE: {order.customerName}
                 </div>
               )}
             </div>
@@ -211,15 +211,15 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
                 <span className="font-black text-base sm:text-lg">#{orderNumber}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span>HORA:</span>
-                <span>{formatColombiaDateTime(createdAt)}</span>
+                <span className="font-bold">HORA:</span>
+                <span className="font-bold">{formatColombiaDateTime(createdAt)}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span>MESERO / RESPONSABLE:</span>
+                <span className="font-bold">MESERO / RESPONSABLE:</span>
                 <span className="font-bold">{waiterName}</span>
               </div>
               {selectedRound !== 'all' && (
-                <div className="flex justify-between items-center font-black bg-neutral-200 px-1 py-0.5 mt-1 rounded-xs">
+                <div className="flex justify-between items-center font-black border border-black bg-white px-1.5 py-0.5 mt-1">
                   <span>RONDA EN PREPARACIÓN:</span>
                   <span>RONDA #{selectedRound}</span>
                 </div>
@@ -228,9 +228,9 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
 
             {/* NOTA GENERAL DEL PEDIDO (SI EXISTE) */}
             {generalNotes && (
-              <div className="my-2 p-2 border-2 border-black bg-amber-50 rounded-xs">
+              <div className="my-2 p-2 border-2 border-black bg-white">
                 <div className="text-[10px] font-black uppercase tracking-wider text-black flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3 text-black" />
+                  <AlertCircle className="w-3.5 h-3.5 text-black" />
                   <span>NOTA GENERAL DEL CLIENTE:</span>
                 </div>
                 <div className="text-xs sm:text-sm font-black text-black mt-0.5 leading-snug">
@@ -241,7 +241,7 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
 
             {/* LISTA DE PLATOS Y PRODUCTOS */}
             <div className="py-2 space-y-3">
-              <div className="text-center font-black text-xs uppercase tracking-widest border-b border-black pb-1">
+              <div className="text-center font-black text-xs uppercase tracking-widest border-b-2 border-black pb-1">
                 -- PLATOS A PREPARAR --
               </div>
 
@@ -249,38 +249,38 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
                 <div key={roundNum} className="space-y-2.5">
                   {/* Indicador de Ronda si se imprimen todas */}
                   {selectedRound === 'all' && availableRounds.length > 1 && (
-                    <div className={`pt-1 pb-0.5 border-b-2 border-black flex items-center justify-between ${typographyClasses.roundHeader}`}>
-                      <span className="bg-black text-white px-2 py-0.5 rounded-xs">
+                    <div className={`pt-1 pb-1 border-b-2 border-black flex items-center justify-between ${typographyClasses.roundHeader}`}>
+                      <span className="border-2 border-black bg-white text-black px-2 py-0.5 font-black">
                         RONDA #{roundNum}
                       </span>
-                      <span className="text-[11px] font-bold text-neutral-700">
+                      <span className="text-[11px] font-black text-black">
                         {items.length} {items.length === 1 ? 'plato' : 'platos'}
                       </span>
                     </div>
                   )}
 
-                  {/* Ítems individuales con cantidad y nombre enorme */}
+                  {/* Ítems individuales con cantidad destacada y nombre legible */}
                   {items.map((it, idx) => (
                     <div
                       key={it.id || idx}
-                      className="pb-2.5 border-b border-dashed border-neutral-400 last:border-b-0 space-y-1"
+                      className="pb-2.5 border-b border-dashed border-black last:border-b-0 space-y-1"
                     >
-                      {/* Fila principal: Cantidad prominente + Nombre del plato */}
+                      {/* Fila principal: Cantidad prominente con marco limpio + Nombre del plato */}
                       <div className="flex items-start gap-2">
-                        {/* Cuadro de cantidad gigante */}
+                        {/* Cuadro de cantidad grande sin relleno oscuro para no quemar el cabezal térmico */}
                         <div
-                          className={`${typographyClasses.qtyBadge} bg-black text-white text-center rounded-xs shrink-0 flex items-center justify-center`}
+                          className={`${typographyClasses.qtyBadge} border-2 border-black bg-white text-black text-center shrink-0 flex items-center justify-center font-black`}
                         >
                           {it.quantity}X
                         </div>
 
                         {/* Nombre del plato */}
                         <div className="flex-1">
-                          <div className={`${typographyClasses.itemName} text-black uppercase`}>
+                          <div className={`${typographyClasses.itemName} text-black uppercase font-black`}>
                             {it.name}
                           </div>
                           {includePrices && it.price > 0 && (
-                            <div className="text-[10px] font-mono text-neutral-600">
+                            <div className="text-[10px] font-mono text-black font-bold">
                               ${(it.price * it.quantity).toLocaleString('es-CO')}
                             </div>
                           )}
@@ -289,9 +289,9 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
 
                       {/* Modificadores o acompañamientos seleccionados */}
                       {it.selectedModifiers && it.selectedModifiers.length > 0 && (
-                        <div className={`pl-9 space-y-0.5 ${typographyClasses.modifiers} text-neutral-800`}>
+                        <div className={`pl-9 space-y-0.5 ${typographyClasses.modifiers} text-black`}>
                           {it.selectedModifiers.map((mod, mIdx) => (
-                            <div key={mIdx} className="flex items-center gap-1">
+                            <div key={mIdx} className="flex items-center gap-1 font-bold">
                               <span className="font-black text-black">›</span>
                               <span>{mod.optionName || mod.textValue || (mod as any).name || 'Modificador'}</span>
                             </div>
@@ -302,11 +302,11 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
                       {/* Observaciones o Notas de cocina destacadas */}
                       {it.notes && it.notes.trim() && (
                         <div className="pl-8 pt-0.5">
-                          <div className={`${typographyClasses.notesBox} border-black bg-neutral-100 rounded-xs text-black`}>
+                          <div className={`${typographyClasses.notesBox} border-2 border-black bg-white text-black`}>
                             <span className="block text-[10px] font-black uppercase tracking-wider text-black">
                               ¡OJO COCINA!:
                             </span>
-                            <span className="block text-black uppercase">
+                            <span className="block text-black uppercase font-black">
                               {it.notes}
                             </span>
                           </div>
@@ -315,7 +315,7 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
 
                       {/* Estación de cocina si aplica */}
                       {it.station && it.station !== 'cocina_caliente' && (
-                        <div className="pl-9 text-[10px] font-black uppercase text-neutral-600">
+                        <div className="pl-9 text-[10px] font-black uppercase text-black">
                           Estación: [{it.station.replace('_', ' ')}]
                         </div>
                       )}
@@ -329,16 +329,16 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
             <div className="pt-2 border-t-2 border-black space-y-1">
               <div className="flex justify-between items-center text-xs font-black text-black">
                 <span>TOTAL PLATOS / ITEMS:</span>
-                <span className="text-base font-black px-2 py-0.5 bg-black text-white rounded-xs">
+                <span className="text-base font-black px-2.5 py-0.5 border-2 border-black bg-white text-black">
                   {totalItemCount}
                 </span>
               </div>
 
-              <div className="text-center pt-2 text-[10px] font-bold text-neutral-700 uppercase">
+              <div className="text-center pt-2 text-[10px] font-black text-black uppercase">
                 *** VERIFICAR ANTES DE DESPACHAR ***
               </div>
 
-              <div className="text-center text-[9px] font-mono text-neutral-500 pt-0.5">
+              <div className="text-center text-[9px] font-mono font-bold text-black pt-0.5">
                 Colmena POS · Impreso: {new Date().toLocaleTimeString('es-CO')}
               </div>
             </div>

@@ -113,27 +113,13 @@
   }
 
   #colmena-printable-receipt *,
+  #printable-kitchen-pos-ticket *,
   #printable-pos-ticket-preview *,
   #thermal-abono-ticket * {
     background: transparent !important;
     background-color: transparent !important;
     color: #000000 !important;
     border-color: #000000 !important;
-  }
-
-  #printable-kitchen-pos-ticket * {
-    color: #000000 !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  #printable-kitchen-pos-ticket .bg-black {
-    background-color: #000000 !important;
-    color: #ffffff !important;
-  }
-
-  #printable-kitchen-pos-ticket .bg-black * {
-    color: #ffffff !important;
   }
 }
 

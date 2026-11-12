@@ -1354,15 +1354,9 @@ html.theme-light .colmena-printable-ticket {
   color: #000000 !important;
 }
 html.theme-light #colmena-printable-receipt *,
+html.theme-light #printable-kitchen-pos-ticket *,
 html.theme-light #printable-pos-ticket-preview * {
   background-color: transparent !important;
   color: #000000 !important;
-}
-html.theme-light #printable-kitchen-pos-ticket .bg-black {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-}
-html.theme-light #printable-kitchen-pos-ticket .bg-black * {
-  color: #ffffff !important;
 }
 
