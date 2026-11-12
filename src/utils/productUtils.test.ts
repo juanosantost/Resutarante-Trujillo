@@ -386,9 +386,10 @@ test('buildDefaultDailyMenuItem builds item with default options and base price'
   assert.equal(item.basePrice, 16000);
   assert.equal(item.unitPrice, 16000);
   assert.equal(item.totalPrice, 16000);
-  assert.equal(item.selectedModifiers?.length, 2);
-  assert.equal(item.selectedModifiers?.[0].optionName, 'Sopa: Sopa de Lentejas');
-  assert.equal(item.selectedModifiers?.[1].optionName, 'Carne: Pollo a la Plancha');
+  assert.equal(item.selectedModifiers?.[0].optionName, 'Sopa de Lentejas');
+  assert.equal(item.selectedModifiers?.[1].optionName, 'Pollo a la Plancha');
+  assert.equal(item.selectedModifiers?.[0].isDefault, true);
+  assert.equal(item.selectedModifiers?.[1].isDefault, true);
 });
 
 test('canDeleteCategory protects Menú del Día and reports assigned products', () => {

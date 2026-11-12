@@ -166,28 +166,16 @@ export function expandOrderItemsToSingleUnits(items: OrderItem[]): OrderItem[] {
   return expanded;
 }
 
+import { formatModifiersDisplaySummary } from './orderModifierUtils';
+
 /**
- * Formatea en texto claro las opciones seleccionadas del plato (ej: Sopa, Principio, Carne, Acompañamientos, Bebida)
- * para mostrar la descripción completa en cada ítem aunque se repita.
+ * Formatea en texto claro las opciones seleccionadas del plato (ej: Sopa de verduras, Carne asada, Frijoles)
+ * - Sin nombres de categorías (Sopa, Carne, Principio, Acompañamiento #).
+ * - Oculta los acompañamientos que sean los predeterminados y solo muestra los que hayan sido cambiados.
  */
 export function formatOrderItemModifiersSummary(item: OrderItem): string {
   if (!item.selectedModifiers || item.selectedModifiers.length === 0) return '';
-  return item.selectedModifiers
-    .map((m) => {
-      const cleanOpt =
-        m.groupName && m.optionName.startsWith(`${m.groupName}: `)
-          ? m.optionName.substring(m.groupName.length + 2)
-          : m.optionName;
-      const label = m.groupName ? `${m.groupName}: ${cleanOpt}` : cleanOpt;
-      const qtyStr = m.quantity && m.quantity > 1 ? ` (x${m.quantity})` : '';
-      const textStr = m.textValue ? ` "${m.textValue}"` : '';
-      const surchargeStr =
-        m.priceSurcharge && m.priceSurcharge > 0
-          ? ` (+$${(m.priceSurcharge * (m.quantity || 1)).toLocaleString('es-CO')})`
-          : '';
-      return `${label}${qtyStr}${textStr}${surchargeStr}`;
-    })
-    .join(' · ');
+  return formatModifiersDisplaySummary(item.selectedModifiers);
 }
 
 

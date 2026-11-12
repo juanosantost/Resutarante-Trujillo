@@ -369,14 +369,17 @@ export const ProductCustomizeModal: React.FC<ProductCustomizeModalProps> = ({
     const finalModifiers: SelectedModifierDetail[] = [];
     for (const group of allGroups) {
       const groupMods = selectedDetailsList.filter((m) => m.groupId === group.id);
+      const activeOpts = group.options.filter((o) => o.isActive !== false);
+      const defaultOpt = activeOpts.find((o) => o.isDefault) || activeOpts[0];
+
       if (groupMods.length > 0) {
         for (const gm of groupMods) {
+          const isDefault = Boolean(defaultOpt && gm.optionId === defaultOpt.id);
           finalModifiers.push({
             ...gm,
-            optionName:
-              product.isDailyMenu || group.noSelectionDiscount !== undefined
-                ? `${group.name}: ${gm.optionName}`
-                : gm.optionName,
+            isDefault,
+            // Guardar directamente el nombre limpio del plato u opción sin prefijo de categoría (Sopa:, Carne:, etc.)
+            optionName: gm.optionName,
           });
         }
       } else if (product.isDailyMenu || group.noSelectionDiscount !== undefined) {

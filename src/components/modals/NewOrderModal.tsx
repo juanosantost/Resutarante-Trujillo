@@ -4,6 +4,7 @@ import { MenuItem, OrderType, Table, Product, CustomizedItemSelection, Separado 
 import { formatCOP, calculateOrderTotals, getEffectiveTaxRate } from '../../utils/calculations';
 import { ProductCustomizeModal } from '../catalog/ProductCustomizeModal';
 import { buildDefaultDailyMenuItem, sortProductsWithDailyFirst } from '../../utils/productUtils';
+import { getVisibleOrderModifiers } from '../../utils/orderModifierUtils';
 import {
   X,
   Plus,
@@ -430,7 +431,7 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base sm:text-lg font-black text-[#fef3c7] tracking-tight">
-                  Kiosco de Pedidos · Guadalajara de Buga
+                  Kiosco de Pedidos · Restrepo (Valle)
                 </h2>
                 <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-[#2b2416] text-[#d4af37] border border-[#d4af37]/40">
                   Catálogo Principal
@@ -823,7 +824,7 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                         }}
                         className="w-full bg-[#121117] border border-[#483d29] rounded-xl px-3 py-2 text-xs text-[#fef3c7] font-bold focus:outline-none focus:border-[#d4af37]"
                       >
-                        <option value="">-- Elige la mesa en Guadalajara de Buga --</option>
+                        <option value="">-- Elige la mesa en Restrepo (Valle) --</option>
                         {availableTables.map((t) => (
                           <option key={t.id} value={t.id}>
                             Mesa {t.number} — {t.zone} (Capacidad: {t.capacity} personas)
@@ -939,7 +940,7 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                           <MapPin className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#d4af37]" />
                           <input
                             type="text"
-                            placeholder="Calle 12 # 14-20, Buga..."
+                            placeholder="Calle 10 # 8-20, Restrepo..."
                             value={customerAddress}
                             onChange={(e) => {
                               setCustomerAddress(e.target.value);
@@ -988,25 +989,29 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                               )}
                             </div>
 
-                            {/* Modifiers breakdown */}
-                            {line.selectedModifiers && line.selectedModifiers.length > 0 && (
-                              <div className="text-[11px] text-[#a8a29e] mt-1 space-y-0.5">
-                                {line.selectedModifiers.map((m) => (
-                                  <div key={m.optionId} className="flex items-center justify-between">
-                                    <span>
-                                      • {m.groupName}: <strong className="text-white">{m.optionName.startsWith(`${m.groupName}: `) ? m.optionName.substring(m.groupName.length + 2) : m.optionName}</strong>
-                                      {m.quantity && m.quantity > 1 ? ` (x${m.quantity})` : ''}
-                                      {m.textValue ? ` "${m.textValue}"` : ''}
-                                    </span>
-                                    {m.priceSurcharge > 0 && (
-                                      <span className="text-[#d4af37] text-[10px] font-mono">
-                                        +{formatCOP(m.priceSurcharge * (m.quantity || 1))}
+                            {/* Modifiers breakdown (limpio, sin prefijos de categoría ni acompañamientos por defecto) */}
+                            {line.selectedModifiers && line.selectedModifiers.length > 0 && (() => {
+                              const visibleMods = getVisibleOrderModifiers(line.selectedModifiers);
+                              if (visibleMods.length === 0) return null;
+                              return (
+                                <div className="text-[11px] text-[#a8a29e] mt-1 space-y-0.5">
+                                  {visibleMods.map((m, mIdx) => (
+                                    <div key={m.detail.optionId || mIdx} className="flex items-center justify-between">
+                                      <span>
+                                        • <strong className="text-white">{m.cleanName}</strong>
+                                        {m.detail.quantity && m.detail.quantity > 1 ? ` (x${m.detail.quantity})` : ''}
+                                        {m.detail.textValue ? ` "${m.detail.textValue}"` : ''}
                                       </span>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
+                                      {m.detail.priceSurcharge > 0 && (
+                                        <span className="text-[#d4af37] text-[10px] font-mono">
+                                          +{formatCOP(m.detail.priceSurcharge * (m.detail.quantity || 1))}
+                                        </span>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })()}
 
                             {/* Adjustments line */}
                             {line.adjustments && line.adjustments.length > 0 && (

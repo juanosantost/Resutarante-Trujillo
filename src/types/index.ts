@@ -50,9 +50,11 @@ export interface ReceiptConfig {
 
 export type PaperWidth = '58mm' | '80mm';
 export type KitchenFontSize = 'compacto' | 'grande' | 'extragrande';
+export type LogoSize = 'pequeno' | 'mediano' | 'grande';
 
 export interface BranchPrintConfig {
   showLogo: boolean;
+  logoSize?: LogoSize;
   showTradeName: boolean;
   showNit: boolean;
   showAddress: boolean;
@@ -64,6 +66,7 @@ export interface BranchPrintConfig {
 
 export const DEFAULT_BRANCH_PRINT_CONFIG: BranchPrintConfig = {
   showLogo: true,
+  logoSize: 'mediano',
   showTradeName: true,
   showNit: true,
   showAddress: true,
@@ -268,6 +271,7 @@ export interface SelectedModifierDetail {
   priceSurcharge: number;
   quantity?: number;
   textValue?: string;
+  isDefault?: boolean;
   ingredientType?: 'inventory' | 'product';
   ingredientId?: string;
   ingredientQuantity?: number;

@@ -170,16 +170,16 @@ export const AbonoReceiptModal: React.FC<AbonoReceiptModalProps> = ({
             </div>
 
             {/* Detalle Financiero del Abono */}
-            <div className="my-3 space-y-1.5 bg-neutral-100 p-2.5 rounded-lg border border-neutral-200">
+            <div className="my-3 space-y-1.5 p-2.5 border border-dotted border-gray-300 print:border-gray-300">
               <div className="flex justify-between items-center text-xs">
-                <span className="font-bold uppercase text-neutral-700">VALOR ABONADO:</span>
-                <span className="font-black text-sm text-[#181818]">
+                <span className="font-bold uppercase text-black">VALOR ABONADO:</span>
+                <span className="font-black text-sm text-black">
                   {formatCOP(abono.amount)}
                 </span>
               </div>
               <div className="flex justify-between text-[10px]">
-                <span className="text-neutral-500">Medio de Pago:</span>
-                <span className="font-semibold text-neutral-800">{getMethodLabel(abono.paymentMethod)}</span>
+                <span className="font-bold text-black">Medio de Pago:</span>
+                <span className="font-bold text-black">{getMethodLabel(abono.paymentMethod)}</span>
               </div>
               {parentTotalAmount !== undefined && (
                 <div className="flex justify-between text-[10px] pt-1 border-t border-neutral-200">

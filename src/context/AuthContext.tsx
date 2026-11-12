@@ -21,6 +21,7 @@ import {
 import { auth, db, handleFirestoreError, OperationType } from '../services/firebase';
 import { ColmenaUser, UserRole, Branch, ReceiptConfig, BranchPrintConfig, DEFAULT_BRANCH_PRINT_CONFIG } from '../types';
 import { canUserAccessBranch, canUserAccessModule, normalizeUserRole } from '../utils/auth';
+import { estimateDataUrlSizeBytes } from '../utils/imageUtils';
 
 interface AuthContextType {
   firebaseUser: FirebaseUser | null;
@@ -66,10 +67,10 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export const DEFAULT_RECEIPT_CONFIG: ReceiptConfig = {
   headerText: 'SISTEMA COLMENA RESTAURANTE',
-  footerText: '¡Gracias por su visita! Guadalajara de Buga. Propina voluntaria según Ley 1935 de 2018.',
+  footerText: '¡Gracias por su visita! Restrepo (Valle). Propina voluntaria según Ley 1935 de 2018.',
   resolutionDian: 'Resolución DIAN No. 18764000129 de 2026',
   resolutionDate: '2026-01-15',
-  prefix: 'BUG-',
+  prefix: 'RES-',
   currentNumber: 101,
   showTax: true,
   showTip: true,
@@ -78,18 +79,18 @@ export const DEFAULT_RECEIPT_CONFIG: ReceiptConfig = {
 export const INITIAL_BRANCHES: Branch[] = [
   {
     id: 'sede-buga',
-    name: 'Sede Principal — Guadalajara de Buga',
+    name: 'Sede Principal — Restrepo (Valle)',
     nit: '901.458.920-4',
-    address: 'Cl. 4 # 13 - 28, Guadalajara de Buga',
+    address: 'Restrepo, Valle del Cauca, Colombia',
     phone: '+57 (602) 237-4589',
-    city: 'Guadalajara de Buga, Valle del Cauca',
+    city: 'Restrepo (Valle)',
     taxRate: 0.08,
     isActive: true,
     status: 'activa',
-    notes: 'Sede principal restaurante y barra con atención de mesas y domicilios.',
+    notes: 'Sede principal restaurante y barra con atención de mesas y domicilios en Restrepo.',
     receiptConfig: {
       ...DEFAULT_RECEIPT_CONFIG,
-      prefix: 'BUG-',
+      prefix: 'RES-',
     },
     printConfig: DEFAULT_BRANCH_PRINT_CONFIG,
     createdAt: new Date().toISOString(),
@@ -246,14 +247,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const list: Branch[] = [];
         snap.forEach((d) => {
           const raw = d.data();
+          const rawCity = raw.city || '';
+          const cleanCity = rawCity.includes('Buga') ? 'Restrepo (Valle)' : (rawCity || 'Restrepo (Valle)');
+          const rawAddress = raw.address || '';
+          const cleanAddress = rawAddress.includes('Buga') ? 'Restrepo, Valle del Cauca, Colombia' : (rawAddress || 'Restrepo, Valle del Cauca, Colombia');
+          const rawName = raw.name || '';
+          const cleanName = rawName.includes('Buga') ? 'Sede Principal — Restrepo (Valle)' : (rawName || 'Sede Principal Restrepo');
+
           const branchItem: Branch = {
             ...raw,
             id: d.id,
-            name: raw.name || 'Sede Colmena',
+            name: cleanName,
             nit: raw.nit || '901.458.920-4',
-            address: raw.address || 'Guadalajara de Buga, Colombia',
+            address: cleanAddress,
             phone: raw.phone || '+57 (602) 237-4589',
-            city: raw.city || 'Guadalajara de Buga',
+            city: cleanCity,
             logoUrl: raw.logoUrl || undefined,
             notes: raw.notes || '',
             taxRate: raw.taxRate !== undefined ? Number(raw.taxRate) : (raw.receiptConfig?.showTax === false ? 0 : 0.08),
@@ -261,7 +269,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             status: (raw.isActive ?? true) ? 'activa' : 'inactiva',
             receiptConfig: raw.receiptConfig || {
               ...DEFAULT_RECEIPT_CONFIG,
-              prefix: d.id.includes('93') ? 'P93-' : 'BUG-',
+              prefix: 'RES-',
             },
             printConfig: raw.printConfig || DEFAULT_BRANCH_PRINT_CONFIG,
             createdAt: raw.createdAt || new Date().toISOString(),
@@ -339,21 +347,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     seedInitialUsersIfEmpty();
   }, []);
 
-  // Asegurar que exista únicamente la sede de Guadalajara de Buga y limpiar sucursales obsoletas
+  // Asegurar que exista la sede de Restrepo (Valle) y actualizar datos de ubicación
   useEffect(() => {
     async function seedBranchesIfEmpty() {
       try {
         const snap = await getDocs(collection(db, 'branches'));
-        const bugaBranch = INITIAL_BRANCHES[0];
+        const restrepoBranch = INITIAL_BRANCHES[0];
         
-        // Asegurar que sede-buga esté registrada
-        const bugaRef = doc(db, 'branches', 'sede-buga');
-        const bugaSnap = await getDoc(bugaRef);
-        if (!bugaSnap.exists()) {
-          await setDoc(bugaRef, bugaBranch);
+        // Asegurar que la sede principal esté registrada en Restrepo (Valle)
+        const branchRef = doc(db, 'branches', 'sede-buga');
+        const branchSnap = await getDoc(branchRef);
+        if (!branchSnap.exists()) {
+          await setDoc(branchRef, restrepoBranch);
+        } else {
+          const currentData = branchSnap.data() as Partial<Branch>;
+          if (
+            currentData.city?.includes('Buga') ||
+            currentData.name?.includes('Buga') ||
+            currentData.address?.includes('Buga') ||
+            currentData.receiptConfig?.footerText?.includes('Buga')
+          ) {
+            await updateDoc(branchRef, {
+              name: 'Sede Principal — Restrepo (Valle)',
+              city: 'Restrepo (Valle)',
+              address: 'Restrepo, Valle del Cauca, Colombia',
+              'receiptConfig.footerText': '¡Gracias por su visita! Restrepo (Valle). Propina voluntaria según Ley 1935 de 2018.',
+              'receiptConfig.prefix': 'RES-',
+            }).catch(() => {});
+          }
         }
 
-        // Limpiar sucursales obsoletas no pertenecientes a Guadalajara de Buga
+        // Limpiar sucursales obsoletas no pertenecientes a la sede principal
         for (const bDoc of snap.docs) {
           if (bDoc.id === 'sede-chapinero' || bDoc.id === 'sede-parque93') {
             await deleteDoc(doc(db, 'branches', bDoc.id)).catch(() => {});
@@ -725,12 +749,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .slice(0, 18);
     const branchId = `sede-${slug}-${Date.now().toString().slice(-5)}`;
     
+    // Validación de seguridad para Firestore: el tamaño de un documento no puede exceder 1 MiB
+    if (branchData.logoUrl && estimateDataUrlSizeBytes(branchData.logoUrl) > 350_000) {
+      throw new Error(
+        'El archivo del logotipo es demasiado pesado para la base de datos (límite 350 KB). Por favor carga una imagen más ligera o deja que el sistema la comprima automáticamente.'
+      );
+    }
+
     const newBranch: Branch = {
       name: branchData.name.trim(),
       nit: branchData.nit.trim(),
       address: branchData.address.trim(),
       phone: branchData.phone.trim(),
-      city: branchData.city?.trim() || 'Guadalajara de Buga',
+      city: branchData.city?.trim() || 'Restrepo (Valle)',
       taxRate: typeof branchData.taxRate === 'number' ? branchData.taxRate : (branchData.receiptConfig?.showTax === false ? 0 : 0.08),
       isActive: branchData.isActive ?? true,
       status: (branchData.isActive ?? true) ? 'activa' : 'inactiva',
@@ -748,7 +779,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (val !== undefined) cleanDoc[key] = val;
     });
 
-    await setDoc(doc(db, 'branches', branchId), cleanDoc);
+    await setDoc(doc(db, 'branches', branchId), cleanDoc, { merge: true });
     setBranches((prev) => [...prev, newBranch]);
     return branchId;
   };
@@ -757,6 +788,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateBranchData = async (branchId: string, branchData: Partial<Branch>) => {
     // Proteger campos inmutables
     const { id: _ignoreId, createdAt: _ignoreCreatedAt, ...allowedUpdates } = branchData;
+
+    // Validación de seguridad para Firestore: el tamaño de un documento no puede exceder 1 MiB
+    if (allowedUpdates.logoUrl && estimateDataUrlSizeBytes(allowedUpdates.logoUrl) > 350_000) {
+      throw new Error(
+        'El archivo del logotipo es demasiado pesado para la base de datos (límite 350 KB). Por favor carga una imagen más ligera o deja que el sistema la comprima automáticamente.'
+      );
+    }
 
     const payload: Record<string, any> = {
       ...allowedUpdates,
@@ -773,7 +811,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (val !== undefined) cleanPayload[key] = val;
     });
 
-    await updateDoc(doc(db, 'branches', branchId), cleanPayload);
+    await setDoc(doc(db, 'branches', branchId), cleanPayload, { merge: true });
 
     setBranches((prev) =>
       prev.map((b) => (b.id === branchId ? { ...b, ...cleanPayload } : b))

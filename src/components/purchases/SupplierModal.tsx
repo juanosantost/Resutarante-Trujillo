@@ -280,7 +280,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
                 type="text"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
-                placeholder="Cl. 4 # 13 - 28, Buga"
+                placeholder="Cl. 10 # 8 - 20, Restrepo (Valle)"
                 className="w-full bg-[#121214] border border-[#333333] rounded-xl px-3 py-2.5 text-xs text-[#FFFDF5] placeholder:text-neutral-500 focus:outline-none focus:border-[#B77900]"
               />
             </div>

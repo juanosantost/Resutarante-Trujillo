@@ -195,6 +195,7 @@ interface RestaurantContextType {
   createArea: (data: Omit<RestaurantArea, 'id' | 'branchId'>) => Promise<string>;
   updateArea: (id: string, data: Partial<RestaurantArea>) => Promise<void>;
   toggleAreaActive: (id: string, isActive: boolean) => Promise<void>;
+  deleteArea: (id: string) => Promise<void>;
 
   createTable: (data: Omit<Table, 'id' | 'branchId'>) => Promise<string>;
   updateTable: (id: string, data: Partial<Table>) => Promise<void>;
@@ -2612,6 +2613,92 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     } catch (error) {
       console.error('Error toggling area:', error);
       handleFirestoreError(error, OperationType.UPDATE, 'areas');
+      throw error;
+    }
+  };
+
+  const deleteArea = async (id: string): Promise<void> => {
+    try {
+      const area = areas.find((a) => a.id === id);
+      const areaName = area?.name || id;
+
+      // 1. Validar que ninguna mesa asignada a este salón esté ocupada o con pedido activo
+      const areaTables = tables.filter((t) => t.areaId === id || t.zone === areaName);
+      const hasActiveTable = areaTables.some((t) => {
+        const hasOrder = orders.some((o) => o.tableId === t.id && o.status === 'abierto');
+        return hasOrder || t.status === 'ocupada' || t.status === 'cuenta_solicitada' || t.hasOpenTab;
+      });
+
+      if (hasActiveTable) {
+        throw new Error(
+          `No se puede eliminar el salón "${areaName}" porque tiene mesas ocupadas o con pedidos activos en curso. Por favor finalice o traslade los pedidos antes de eliminarlo.`
+        );
+      }
+
+      // 2. Reasignar mesas asociadas a otro salón disponible para no dejar mesas huérfanas
+      const otherAreas = areas.filter((a) => a.id !== id);
+      const fallbackArea = otherAreas.find((a) => a.isActive) || otherAreas[0] || null;
+
+      for (const t of areaTables) {
+        try {
+          if (fallbackArea) {
+            await updateDoc(doc(db, 'tables', t.id), {
+              areaId: fallbackArea.id,
+              zone: fallbackArea.name,
+              updatedAt: new Date().toISOString(),
+            });
+          } else {
+            await updateDoc(doc(db, 'tables', t.id), {
+              areaId: 'general',
+              zone: 'General',
+              updatedAt: new Date().toISOString(),
+            });
+          }
+        } catch (tableErr) {
+          console.warn(`Error reasignando mesa ${t.id} tras eliminar salón:`, tableErr);
+        }
+      }
+
+      // 3. Eliminar permanentemente de Firestore (con deleteDoc y fallback)
+      await deleteDoc(doc(db, 'areas', id)).catch(async (delErr) => {
+        console.warn('deleteDoc areas falló, intentando soft-delete:', delErr);
+        await updateDoc(doc(db, 'areas', id), { isActive: false, isDeleted: true });
+      });
+
+      // 4. Actualizar estado local reactivo inmediatamente
+      setAreas((prev) => prev.filter((a) => a.id !== id));
+      if (fallbackArea) {
+        setTables((prev) =>
+          prev.map((t) =>
+            t.areaId === id || t.zone === areaName
+              ? { ...t, areaId: fallbackArea.id, zone: fallbackArea.name }
+              : t
+          )
+        );
+      } else {
+        setTables((prev) =>
+          prev.map((t) =>
+            t.areaId === id || t.zone === areaName
+              ? { ...t, areaId: 'general', zone: 'General' }
+              : t
+          )
+        );
+      }
+
+      await logAuditAction({
+        entityType: 'area',
+        entityId: id,
+        entityName: areaName,
+        action: 'delete',
+        details: `Salón/Espacio "${areaName}" eliminado del restaurante. ${
+          areaTables.length > 0
+            ? `${areaTables.length} mesas fueron reasignadas a "${fallbackArea ? fallbackArea.name : 'General'}"`
+            : 'Sin mesas asociadas'
+        }`,
+      });
+    } catch (error) {
+      console.error('Error deleting area:', error);
+      handleFirestoreError(error, OperationType.DELETE, 'areas');
       throw error;
     }
   };
@@ -5844,6 +5931,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         createArea,
         updateArea,
         toggleAreaActive,
+        deleteArea,
         createTable,
         updateTable,
         deleteTable,
@@ -5981,11 +6069,12 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
               // Ensure sede-buga is saved
               await setDoc(doc(db, 'branches', 'sede-buga'), {
                 id: 'sede-buga',
-                name: 'Sede Principal Buga',
-                address: 'Cl. 4 # 13 - 28, Guadalajara de Buga, Valle del Cauca',
+                name: 'Sede Principal — Restrepo (Valle)',
+                address: 'Restrepo, Valle del Cauca, Colombia',
+                city: 'Restrepo (Valle)',
                 phone: '+57 (602) 237-4589',
                 isActive: true,
-                orderPrefix: 'BUG-',
+                orderPrefix: 'RES-',
                 createdAt: new Date().toISOString(),
               }, { merge: true });
             } catch (branchErr) {
@@ -6011,7 +6100,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
               console.warn('Error restableciendo mesas:', tErr);
             }
 
-            // Create initial active shift for Guadalajara de Buga
+            // Create initial active shift for Restrepo (Valle)
             const now = new Date().toISOString();
             const initialShiftId = `shift-sede-buga-${Date.now()}`;
             const initialShift: CashShift = {
@@ -6031,7 +6120,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
               actualCash: null,
               difference: null,
               status: 'abierto',
-              notes: 'Apertura de turno inicial para Guadalajara de Buga',
+              notes: 'Apertura de turno inicial para Restrepo (Valle)',
             };
             await setDoc(doc(db, 'cashShifts', initialShiftId), initialShift);
 
@@ -6042,7 +6131,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
               branchId: 'sede-buga',
               entityType: 'branch',
               entityId: 'sede-buga',
-              entityName: 'Sede Guadalajara de Buga',
+              entityName: 'Sede Restrepo (Valle)',
               action: 'delete',
               details: 'Limpieza de datos demo y registros de prueba completada con éxito',
               userId: staffName,

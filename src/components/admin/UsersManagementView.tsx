@@ -750,7 +750,7 @@ export const UsersManagementView: React.FC = () => {
                   value={email}
                   disabled={!!editingUser}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Ej: usuario@colmenabuga.com"
+                  placeholder="Ej: usuario@colmenarestrepo.com"
                   className={`w-full bg-[#242424] border border-[#383838] rounded-xl px-3.5 py-2 text-xs text-[#FFFDF5] font-mono focus:outline-none focus:border-[#D6A21A] ${
                     editingUser ? 'opacity-60 cursor-not-allowed' : ''
                   }`}

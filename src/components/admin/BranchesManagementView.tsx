@@ -1,10 +1,16 @@
 import React, { useState, useRef } from 'react';
 import { useAuth, DEFAULT_RECEIPT_CONFIG } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { Branch, ReceiptConfig, BranchPrintConfig, DEFAULT_BRANCH_PRINT_CONFIG, PaperWidth, KitchenFontSize } from '../../types';
+import { Branch, ReceiptConfig, BranchPrintConfig, DEFAULT_BRANCH_PRINT_CONFIG, PaperWidth, KitchenFontSize, LogoSize } from '../../types';
 import { BranchReceiptHeader } from '../common/BranchReceiptHeader';
 import { BranchReceiptPreviewModal } from '../modals/BranchReceiptPreviewModal';
 import { formatColombiaDateTime } from '../../utils/calculations';
+import {
+  validateLogoFile,
+  compressLogoImage,
+  estimateDataUrlSizeBytes,
+  formatByteSize,
+} from '../../utils/imageUtils';
 import {
   Building2,
   Plus,
@@ -52,7 +58,7 @@ export const BranchesManagementView: React.FC = () => {
   const [nit, setNit] = useState<string>('');
   const [address, setAddress] = useState<string>('');
   const [phone, setPhone] = useState<string>('');
-  const [city, setCity] = useState<string>('Guadalajara de Buga');
+  const [city, setCity] = useState<string>('Restrepo (Valle)');
   const [notes, setNotes] = useState<string>('');
   const [isActive, setIsActive] = useState<boolean>(true);
   const [taxRate, setTaxRate] = useState<number>(0.08);
@@ -64,6 +70,7 @@ export const BranchesManagementView: React.FC = () => {
 
   // Form state: Configuración de impresión de comprobantes (5 controles independientes)
   const [showLogo, setShowLogo] = useState<boolean>(true);
+  const [logoSize, setLogoSize] = useState<LogoSize>('mediano');
   const [showTradeName, setShowTradeName] = useState<boolean>(true);
   const [showNit, setShowNit] = useState<boolean>(true);
   const [showAddress, setShowAddress] = useState<boolean>(true);
@@ -77,7 +84,7 @@ export const BranchesManagementView: React.FC = () => {
   const [footerText, setFooterText] = useState<string>('¡Gracias por su visita! Propina voluntaria según Ley 1935 de 2018.');
   const [resolutionDian, setResolutionDian] = useState<string>('Resolución DIAN No. 18764000129 de 2026');
   const [resolutionDate, setResolutionDate] = useState<string>('2026-01-15');
-  const [prefix, setPrefix] = useState<string>('BUG-');
+  const [prefix, setPrefix] = useState<string>('RES-');
   const [currentNumber, setCurrentNumber] = useState<number>(101);
   const [showTax, setShowTax] = useState<boolean>(true);
   const [showTip, setShowTip] = useState<boolean>(true);
@@ -94,7 +101,7 @@ export const BranchesManagementView: React.FC = () => {
     setNit('901.458.920-4');
     setAddress('');
     setPhone('+57 (602) 237-4589');
-    setCity('Guadalajara de Buga');
+    setCity('Restrepo (Valle)');
     setNotes('');
     setIsActive(true);
     setTaxRate(0.08);
@@ -103,8 +110,9 @@ export const BranchesManagementView: React.FC = () => {
     setLogoUrl('');
     setLogoError('');
 
-    // Reset 5 controles de impresión
+    // Reset controles de impresión
     setShowLogo(true);
+    setLogoSize('mediano');
     setShowTradeName(true);
     setShowNit(true);
     setShowAddress(true);
@@ -113,10 +121,10 @@ export const BranchesManagementView: React.FC = () => {
 
     // Reset DIAN
     setHeaderText('SISTEMA COLMENA RESTAURANTE');
-    setFooterText('¡Gracias por su visita! Guadalajara de Buga. Propina voluntaria según Ley 1935 de 2018.');
+    setFooterText('¡Gracias por su visita! Restrepo (Valle). Propina voluntaria según Ley 1935 de 2018.');
     setResolutionDian('Resolución DIAN No. 18764000129 de 2026');
     setResolutionDate('2026-01-15');
-    setPrefix('SUC-');
+    setPrefix('RES-');
     setCurrentNumber(1);
     setShowTax(true);
     setShowTip(true);
@@ -130,7 +138,7 @@ export const BranchesManagementView: React.FC = () => {
     setNit(b.nit);
     setAddress(b.address);
     setPhone(b.phone);
-    setCity(b.city || 'Guadalajara de Buga');
+    setCity(b.city && !b.city.includes('Buga') ? b.city : 'Restrepo (Valle)');
     setNotes(b.notes || '');
     setIsActive(b.isActive ?? true);
     const isTaxActive = b.receiptConfig?.showTax !== false && b.taxRate !== 0;
@@ -143,6 +151,7 @@ export const BranchesManagementView: React.FC = () => {
     // Impresión y Preferencias de Cocina
     const printConfig = b.printConfig || DEFAULT_BRANCH_PRINT_CONFIG;
     setShowLogo(printConfig.showLogo ?? true);
+    setLogoSize(printConfig.logoSize || 'mediano');
     setShowTradeName(printConfig.showTradeName ?? true);
     setShowNit(printConfig.showNit ?? true);
     setShowAddress(printConfig.showAddress ?? true);
@@ -164,42 +173,42 @@ export const BranchesManagementView: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  // Manejo de carga de logotipo con validación de tipo y tamaño
-  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Manejo de carga de logotipo con validación de tipo y compresión automática
+  const handleLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setLogoError('');
     const file = e.target.files?.[0];
     if (!file) return;
 
     // Validación de formatos aceptados: PNG, JPG, JPEG, WEBP
-    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
-      const err = 'Formato no compatible. Únicamente se aceptan imágenes en formato PNG, JPG o WEBP.';
+    const validation = validateLogoFile(file);
+    if (!validation.isValid) {
+      const err = validation.error || 'Formato no compatible. Únicamente se aceptan imágenes en formato PNG, JPG o WEBP.';
       setLogoError(err);
       showToast(err, 'error');
       return;
     }
 
-    // Validación de tamaño: máximo 2.5 MB para almacenar de forma segura y eficiente
-    const maxSizeInBytes = 2.5 * 1024 * 1024;
-    if (file.size > maxSizeInBytes) {
-      const err = `El tamaño de la imagen (${(file.size / (1024 * 1024)).toFixed(2)} MB) supera el límite máximo permitido de 2.5 MB.`;
-      setLogoError(err);
-      showToast(err, 'error');
-      return;
-    }
+    try {
+      showToast('Optimizando logotipo para comprobantes térmicos...', 'info');
+      const { dataUrl, sizeBytes } = await compressLogoImage(file, {
+        maxWidth: 360,
+        maxHeight: 180,
+        quality: 0.85,
+        maxSizeBytes: 100 * 1024,
+      });
 
-    // Lectura persistente a Base64
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      setLogoUrl(result);
-      showToast('Logotipo cargado con éxito en la vista previa', 'success');
-    };
-    reader.onerror = () => {
-      setLogoError('No fue posible procesar el archivo seleccionado.');
-      showToast('Error al leer el archivo de imagen', 'error');
-    };
-    reader.readAsDataURL(file);
+      setLogoUrl(dataUrl);
+      showToast(`Logotipo optimizado (${formatByteSize(sizeBytes)}) listo para guardar`, 'success');
+    } catch (err: any) {
+      console.error('Error optimizando logotipo:', err);
+      const msg = err?.message || 'No fue posible procesar el archivo seleccionado.';
+      setLogoError(msg);
+      showToast(msg, 'error');
+    } finally {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
   };
 
   const handleRemoveLogo = () => {
@@ -226,10 +235,23 @@ export const BranchesManagementView: React.FC = () => {
       return;
     }
 
+    // Validación de seguridad para Firestore: garantizar que el logotipo no exceda el límite de documento
+    if (logoUrl.trim()) {
+      const logoSizeBytes = estimateDataUrlSizeBytes(logoUrl.trim());
+      if (logoSizeBytes > 350_000) {
+        showToast(
+          `El logotipo es demasiado pesado (${formatByteSize(logoSizeBytes)}) para guardarse en la base de datos. Por favor vuelve a cargarlo para que se optimice automáticamente.`,
+          'warning'
+        );
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
       const printConfig: BranchPrintConfig = {
         showLogo,
+        logoSize,
         showTradeName,
         showNit,
         showAddress,
@@ -328,6 +350,7 @@ export const BranchesManagementView: React.FC = () => {
       logoUrl,
       printConfig: {
         showLogo,
+        logoSize,
         showTradeName,
         showNit,
         showAddress,
@@ -490,7 +513,7 @@ export const BranchesManagementView: React.FC = () => {
                       }`}
                     >
                       <ImageIcon className="w-2.5 h-2.5" />
-                      <span>Logotipo</span>
+                      <span>Logotipo{config.showLogo ? ` (${config.logoSize || 'mediano'})` : ''}</span>
                     </span>
 
                     <span
@@ -699,7 +722,7 @@ export const BranchesManagementView: React.FC = () => {
                     <input
                       type="text"
                       required
-                      placeholder="Ej: Sede Guadalajara de Buga — Salón Principal"
+                      placeholder="Ej: Sede Restrepo (Valle) — Salón Principal"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       className="w-full bg-[#242424] border border-[#383838] rounded-xl px-3 py-2 text-xs text-[#FFFDF5] focus:outline-none focus:border-[#D6A21A]"
@@ -741,7 +764,7 @@ export const BranchesManagementView: React.FC = () => {
                     <input
                       type="text"
                       required
-                      placeholder="Cl. 4 # 13 - 28, Guadalajara de Buga"
+                      placeholder="Cl. 10 # 8 - 20, Restrepo (Valle)"
                       value={address}
                       onChange={(e) => setAddress(e.target.value)}
                       className="w-full bg-[#242424] border border-[#383838] rounded-xl px-3 py-2 text-xs text-[#FFFDF5] focus:outline-none focus:border-[#D6A21A]"
@@ -754,7 +777,7 @@ export const BranchesManagementView: React.FC = () => {
                     </label>
                     <input
                       type="text"
-                      placeholder="Guadalajara de Buga"
+                      placeholder="Restrepo (Valle)"
                       value={city}
                       onChange={(e) => setCity(e.target.value)}
                       className="w-full bg-[#242424] border border-[#383838] rounded-xl px-3 py-2 text-xs text-[#FFFDF5] focus:outline-none focus:border-[#D6A21A]"
@@ -847,23 +870,30 @@ export const BranchesManagementView: React.FC = () => {
                   <span>2. Logotipo de la Sucursal</span>
                 </h4>
                 <p className="text-xs text-[#a8a29e]">
-                  Cada sucursal gestiona su propio logotipo independiente. Formatos admitidos: PNG, JPG y WEBP (hasta 2.5 MB).
+                  Cada sucursal gestiona su propio logotipo independiente. Se optimiza y redimensiona automáticamente para impresoras térmicas POS y almacenamiento en base de datos.
                 </p>
 
                 <div className="p-4 rounded-2xl bg-[#222222] border border-[#333333] flex flex-col sm:flex-row items-center gap-5">
                   {/* Vista Previa del Logotipo */}
-                  <div className="w-24 h-24 rounded-2xl bg-[#181818] border-2 border-dashed border-[#444] flex items-center justify-center overflow-hidden shrink-0 shadow-inner relative group">
-                    {logoUrl ? (
-                      <img
-                        src={logoUrl}
-                        alt="Vista previa logotipo"
-                        className="w-full h-full object-contain p-2"
-                      />
-                    ) : (
-                      <div className="text-center p-2 text-[#777]">
-                        <ImageIcon className="w-6 h-6 mx-auto mb-1 text-[#555]" />
-                        <span className="text-[10px] block font-medium">Sin logo</span>
-                      </div>
+                  <div className="flex flex-col items-center gap-1.5 shrink-0">
+                    <div className="w-24 h-24 rounded-2xl bg-[#181818] border-2 border-dashed border-[#444] flex items-center justify-center overflow-hidden shadow-inner relative group">
+                      {logoUrl ? (
+                        <img
+                          src={logoUrl}
+                          alt="Vista previa logotipo"
+                          className="w-full h-full object-contain p-2"
+                        />
+                      ) : (
+                        <div className="text-center p-2 text-[#777]">
+                          <ImageIcon className="w-6 h-6 mx-auto mb-1 text-[#555]" />
+                          <span className="text-[10px] block font-medium">Sin logo</span>
+                        </div>
+                      )}
+                    </div>
+                    {logoUrl && (
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-950/80 border border-emerald-700/60 text-emerald-300 text-[10px] font-bold">
+                        {formatByteSize(estimateDataUrlSizeBytes(logoUrl))}
+                      </span>
                     )}
                   </div>
 
@@ -910,6 +940,45 @@ export const BranchesManagementView: React.FC = () => {
                         Se conservará el logotipo existente al guardar cambios en otros datos comerciales.
                       </p>
                     )}
+                  </div>
+                </div>
+
+                {/* Selector de Tamaño del Logotipo en Comprobantes */}
+                <div className="p-3.5 rounded-2xl bg-[#222222] border border-[#333333] space-y-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                    <label className="text-xs font-bold text-[#FFFDF5] flex items-center gap-1.5">
+                      <ImageIcon className="w-3.5 h-3.5 text-[#D6A21A]" />
+                      <span>Tamaño del Logotipo en Comprobantes Térmicos:</span>
+                    </label>
+                    <span className="text-[11px] font-bold text-[#D6A21A] capitalize">
+                      {logoSize === 'pequeno' ? 'Pequeño (Discreto)' : logoSize === 'mediano' ? 'Mediano (Equilibrado)' : 'Grande (Destacado)'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[#a8a29e]">
+                    Ajusta las dimensiones del logotipo en las tirillas y facturas POS para que se aprecie con el tamaño deseado.
+                  </p>
+                  <div className="grid grid-cols-3 gap-2 pt-1">
+                    {[
+                      { id: 'pequeno', label: 'Pequeño', desc: 'Discreto (48–64px)' },
+                      { id: 'mediano', label: 'Mediano', desc: 'Equilibrado (80–112px)' },
+                      { id: 'grande', label: 'Grande', desc: 'Destacado (128–176px)' },
+                    ].map((sz) => (
+                      <button
+                        key={sz.id}
+                        type="button"
+                        onClick={() => setLogoSize(sz.id as LogoSize)}
+                        className={`p-2.5 rounded-xl border text-xs font-bold text-center transition-all cursor-pointer ${
+                          logoSize === sz.id
+                            ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] font-black shadow-md'
+                            : 'bg-[#181818] text-[#a8a29e] border-[#383838] hover:border-[#B77900]'
+                        }`}
+                      >
+                        <span className="block font-black">{sz.label}</span>
+                        <span className={`text-[10px] block mt-0.5 ${logoSize === sz.id ? 'text-[#181818]/90 font-bold' : 'text-[#777]'}`}>
+                          {sz.desc}
+                        </span>
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -985,19 +1054,49 @@ export const BranchesManagementView: React.FC = () => {
                   </span>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {/* Control 1: Mostrar logotipo */}
-                    <label className="flex items-center justify-between p-3 rounded-xl bg-[#222222] border border-[#333333] hover:border-[#B77900]/60 cursor-pointer transition-all">
-                      <div className="flex items-center gap-2.5">
-                        <ImageIcon className="w-4 h-4 text-[#D6A21A]" />
-                        <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar logotipo</span>
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={showLogo}
-                        onChange={(e) => setShowLogo(e.target.checked)}
-                        className="w-4 h-4 accent-[#B77900] cursor-pointer"
-                      />
-                    </label>
+                    {/* Control 1: Mostrar logotipo con selector de tamaño */}
+                    <div className="p-3 rounded-xl bg-[#222222] border border-[#333333] space-y-2">
+                      <label className="flex items-center justify-between cursor-pointer">
+                        <div className="flex items-center gap-2.5">
+                          <ImageIcon className="w-4 h-4 text-[#D6A21A]" />
+                          <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar logotipo</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={showLogo}
+                          onChange={(e) => setShowLogo(e.target.checked)}
+                          className="w-4 h-4 accent-[#B77900] cursor-pointer"
+                        />
+                      </label>
+                      {showLogo && (
+                        <div className="pt-2 border-t border-[#333333] space-y-1">
+                          <div className="flex justify-between items-center text-[10px] text-[#a8a29e]">
+                            <span className="text-[#D6A21A] font-bold">Tamaño de Impresión:</span>
+                            <span className="capitalize text-[#FFFDF5] font-semibold">{logoSize}</span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-1">
+                            {[
+                              { id: 'pequeno', label: 'Pequeño' },
+                              { id: 'mediano', label: 'Mediano' },
+                              { id: 'grande', label: 'Grande' },
+                            ].map((sz) => (
+                              <button
+                                key={sz.id}
+                                type="button"
+                                onClick={() => setLogoSize(sz.id as LogoSize)}
+                                className={`py-1 px-1.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
+                                  logoSize === sz.id
+                                    ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] font-black shadow-sm'
+                                    : 'bg-[#181818] text-[#a8a29e] border-[#383838] hover:border-[#B77900]'
+                                }`}
+                              >
+                                {sz.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
                     {/* Control 2: Mostrar nombre comercial */}
                     <label className="flex items-center justify-between p-3 rounded-xl bg-[#222222] border border-[#333333] hover:border-[#B77900]/60 cursor-pointer transition-all">
@@ -1305,6 +1404,7 @@ export const BranchesManagementView: React.FC = () => {
             // Si la vista previa se abrió desde el formulario, sincronizar los controles
             if (isModalOpen) {
               setShowLogo(cfg.showLogo);
+              if (cfg.logoSize) setLogoSize(cfg.logoSize);
               setShowTradeName(cfg.showTradeName);
               setShowNit(cfg.showNit);
               setShowAddress(cfg.showAddress);

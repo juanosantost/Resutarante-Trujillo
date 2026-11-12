@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Branch, BranchPrintConfig, DEFAULT_BRANCH_PRINT_CONFIG, PaperWidth } from '../../types';
+import { Branch, BranchPrintConfig, DEFAULT_BRANCH_PRINT_CONFIG, PaperWidth, LogoSize } from '../../types';
 import { BranchReceiptHeader } from '../common/BranchReceiptHeader';
 import { formatCOP } from '../../utils/calculations';
 import {
@@ -82,20 +82,31 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
     }
   };
 
+  const handleLogoSizeChange = (s: LogoSize) => {
+    const updated: BranchPrintConfig = {
+      ...activeConfig,
+      logoSize: s,
+    };
+    setActiveConfig(updated);
+    if (onUpdatePrintConfig) {
+      onUpdatePrintConfig(updated);
+    }
+  };
+
   const handlePrintTest = () => {
     window.print();
   };
 
   const name = overrideData?.name ?? branch?.name ?? 'SISTEMA COLMENA RESTAURANTE';
   const nit = overrideData?.nit ?? branch?.nit ?? '901.458.920-4';
-  const address = overrideData?.address ?? branch?.address ?? 'Cl. 4 # 13 - 28, Guadalajara de Buga';
+  const address = overrideData?.address ?? branch?.address ?? 'Restrepo (Valle), Colombia';
   const phone = overrideData?.phone ?? branch?.phone ?? '+57 (602) 237-4589';
   const logoUrl = overrideData?.logoUrl !== undefined ? overrideData.logoUrl : branch?.logoUrl;
   const resolutionDian =
     overrideData?.resolutionDian ||
     branch?.receiptConfig?.resolutionDian ||
     'Resolución DIAN No. 18764000129 de 2026';
-  const prefix = overrideData?.prefix || branch?.receiptConfig?.prefix || 'BUG-';
+  const prefix = overrideData?.prefix || branch?.receiptConfig?.prefix || 'RES-';
   const currentNumber = overrideData?.currentNumber || branch?.receiptConfig?.currentNumber || 101;
   const footerText =
     overrideData?.footerText ||
@@ -202,18 +213,50 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
                 </span>
 
                 {/* 1. Logotipo */}
-                <label className="flex items-center justify-between p-2.5 rounded-xl bg-[#181818] border border-[#333333] hover:border-[#B77900]/50 cursor-pointer transition-all">
-                  <div className="flex items-center gap-2.5">
-                    <ImageIcon className="w-4 h-4 text-[#D6A21A]" />
-                    <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar logotipo</span>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={activeConfig.showLogo}
-                    onChange={() => handleToggle('showLogo')}
-                    className="w-4 h-4 accent-[#B77900] cursor-pointer"
-                  />
-                </label>
+                <div className="space-y-1.5">
+                  <label className="flex items-center justify-between p-2.5 rounded-xl bg-[#181818] border border-[#333333] hover:border-[#B77900]/50 cursor-pointer transition-all">
+                    <div className="flex items-center gap-2.5">
+                      <ImageIcon className="w-4 h-4 text-[#D6A21A]" />
+                      <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar logotipo</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={activeConfig.showLogo}
+                      onChange={() => handleToggle('showLogo')}
+                      className="w-4 h-4 accent-[#B77900] cursor-pointer"
+                    />
+                  </label>
+
+                  {/* Selector de Tamaño de Logotipo */}
+                  {activeConfig.showLogo && (
+                    <div className="p-2 rounded-xl bg-[#151515] border border-[#2e2e2e] space-y-1">
+                      <div className="flex justify-between items-center text-[10px] text-[#a8a29e] px-0.5">
+                        <span className="font-bold text-[#D6A21A]">Tamaño del Logotipo:</span>
+                        <span className="capitalize text-[#FFFDF5] font-semibold">{activeConfig.logoSize || 'mediano'}</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-1">
+                        {[
+                          { id: 'pequeno', label: 'Pequeño' },
+                          { id: 'mediano', label: 'Mediano' },
+                          { id: 'grande', label: 'Grande' },
+                        ].map((sz) => (
+                          <button
+                            key={sz.id}
+                            type="button"
+                            onClick={() => handleLogoSizeChange(sz.id as LogoSize)}
+                            className={`py-1 px-1.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
+                              (activeConfig.logoSize || 'mediano') === sz.id
+                                ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] font-black shadow-sm'
+                                : 'bg-[#202020] text-[#a8a29e] border-[#383838] hover:border-[#B77900]'
+                            }`}
+                          >
+                            {sz.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 {/* 2. Nombre comercial */}
                 <label className="flex items-center justify-between p-2.5 rounded-xl bg-[#181818] border border-[#333333] hover:border-[#B77900]/50 cursor-pointer transition-all">
@@ -321,28 +364,28 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
               />
 
               {/* Información del Documento de Simulación */}
-              <div className={`py-2.5 my-2 border-y border-dashed border-black space-y-1 text-black ${is58mm ? 'text-[11px]' : 'text-xs'}`}>
+              <div className={`py-2.5 my-2 border-y border-dotted border-gray-300 print:border-gray-300 space-y-1 text-black ${is58mm ? 'text-[11px]' : 'text-xs'}`}>
                 <div className="flex justify-between">
-                  <span className="font-semibold">Factura de Venta POS:</span>
+                  <span className="font-bold">Factura de Venta POS:</span>
                   <span className="font-black">{prefix}{currentNumber}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="font-semibold">Fecha:</span>
+                  <span className="font-bold">Fecha:</span>
                   <span className="font-bold">{new Date().toLocaleDateString('es-CO')} {new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="font-semibold">Cajero:</span>
+                  <span className="font-bold">Cajero:</span>
                   <span className="font-bold">Cajero General / POS</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="font-semibold">Cliente:</span>
+                  <span className="font-bold">Cliente:</span>
                   <span className="font-bold">Consumidor Final (222222222222)</span>
                 </div>
               </div>
 
               {/* Items simulados */}
-              <div className="py-2 border-b border-dashed border-black space-y-1.5 text-black">
-                <div className={`flex justify-between font-black text-black pb-1 border-b border-black ${is58mm ? 'text-[11px]' : 'text-xs'}`}>
+              <div className="py-2 border-b border-dotted border-gray-300 print:border-gray-300 space-y-1.5 text-black">
+                <div className={`flex justify-between font-black text-black pb-1 border-b border-dotted border-gray-300 print:border-gray-300 ${is58mm ? 'text-[11px]' : 'text-xs'}`}>
                   <span>CANT / PRODUCTO</span>
                   <span>TOTAL</span>
                 </div>
@@ -373,13 +416,13 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
                 const taxRatePercent = Math.round(((branch?.taxRate ?? 0.08) || 0.08) * 100);
 
                 return (
-                  <div className="py-2.5 border-b border-dashed border-black space-y-1 text-black">
-                    <div className="flex justify-between font-semibold">
+                  <div className="py-2.5 border-b border-dotted border-gray-300 print:border-gray-300 space-y-1 text-black">
+                    <div className="flex justify-between font-bold">
                       <span>Subtotal:</span>
                       <span className="font-bold">{formatCOP(subtotal)}</span>
                     </div>
                     {effectiveShowTax && (
-                      <div className="flex justify-between font-semibold">
+                      <div className="flex justify-between font-bold">
                         <span>Impoconsumo ({taxRatePercent}%):</span>
                         <span className="font-bold">{formatCOP(tax)}</span>
                       </div>
@@ -388,7 +431,7 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
                       <span>Propina Voluntaria (10%):</span>
                       <span className="font-black">{formatCOP(tip)}</span>
                     </div>
-                    <div className={`flex justify-between font-black pt-1.5 border-t border-black text-black ${is58mm ? 'text-sm' : 'text-base'}`}>
+                    <div className={`flex justify-between font-black pt-1.5 border-t border-dotted border-gray-300 print:border-gray-300 text-black ${is58mm ? 'text-sm' : 'text-base'}`}>
                       <span>TOTAL:</span>
                       <span>{formatCOP(total)}</span>
                     </div>
@@ -397,7 +440,7 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
               })()}
 
               {/* Medios de Pago */}
-              <div className={`py-2 border-b border-dashed border-black space-y-0.5 text-black ${is58mm ? 'text-[11px]' : 'text-xs'}`}>
+              <div className={`py-2 border-b border-dotted border-gray-300 print:border-gray-300 space-y-0.5 text-black ${is58mm ? 'text-[11px]' : 'text-xs'}`}>
                 <div className="flex justify-between">
                   <span className="font-semibold">Forma de Pago:</span>
                   <span className="font-black">Efectivo</span>

@@ -347,7 +347,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
               </div>
             </div>
 
-            {/* Centro: Sede Única — Guadalajara de Buga */}
+            {/* Centro: Sede Única — Restrepo (Valle) */}
             <div className="hidden md:flex items-center bg-[#242424] border border-[#383838] rounded-2xl px-3.5 py-1.5 gap-2.5 shadow-sm">
               <MapPin className="w-4 h-4 text-[#D6A21A] shrink-0" />
               <div className="text-left">
@@ -355,7 +355,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                   Sede Oficial
                 </span>
                 <span className="text-xs font-black text-[#FFFDF5]">
-                  Guadalajara de Buga (Valle del Cauca)
+                  {currentBranch?.city && !currentBranch.city.includes('Buga') ? currentBranch.city : 'Restrepo (Valle)'}
                 </span>
               </div>
             </div>
@@ -411,7 +411,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           <div className="md:hidden py-2 border-t border-[#2e2e2e] flex items-center justify-between text-xs">
             <div className="flex items-center gap-1.5 text-[#a8a29e]">
               <MapPin className="w-3.5 h-3.5 text-[#D6A21A]" />
-              <span className="text-xs font-bold text-[#FFFDF5]">Guadalajara de Buga</span>
+              <span className="text-xs font-bold text-[#FFFDF5]">
+                {currentBranch?.city && !currentBranch.city.includes('Buga') ? currentBranch.city : 'Restrepo (Valle)'}
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -428,7 +430,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                 <span className="text-[10px] font-semibold">{isLight ? 'Oscuro' : 'Claro'}</span>
               </button>
               <div className="text-[11px] text-[#D6A21A] font-mono font-semibold">
-                {colombiaTime} (Buga)
+                {colombiaTime} (Restrepo)
               </div>
             </div>
           </div>

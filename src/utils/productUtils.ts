@@ -439,9 +439,10 @@ export function buildDefaultDailyMenuItem(
       groupId: group.id,
       groupName: group.name,
       optionId: chosen.id,
-      optionName: `${group.name}: ${chosen.name}`,
+      optionName: chosen.name,
       priceSurcharge: surcharge,
       quantity: 1,
+      isDefault: true,
     });
   }
 

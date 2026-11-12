@@ -9,6 +9,7 @@ import {
   validateTableStatusTransition,
 } from '../../utils/tableOperations';
 import { formatCOP } from '../../utils/calculations';
+import { formatModifiersDisplaySummary } from '../../utils/orderModifierUtils';
 import { KitchenTicketModal } from './KitchenTicketModal';
 import {
   X,
@@ -320,15 +321,7 @@ export const TableDetailModal: React.FC<TableDetailModalProps> = ({
               </div>
               <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1 text-xs">
                 {activeOrder.items.map((item, idx) => {
-                  const modSummary = (item.selectedModifiers || [])
-                    .map((m) => {
-                      const cleanOpt =
-                        m.groupName && m.optionName.startsWith(`${m.groupName}: `)
-                          ? m.optionName.substring(m.groupName.length + 2)
-                          : m.optionName;
-                      return m.groupName ? `${m.groupName}: ${cleanOpt}` : cleanOpt;
-                    })
-                    .join(' · ');
+                  const modSummary = formatModifiersDisplaySummary(item.selectedModifiers);
 
                   return (
                     <div key={idx} className="text-[11px] text-[#a8a29e] border-b border-[#24211a] pb-1 last:border-0">

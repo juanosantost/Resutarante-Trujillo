@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { Comanda, KitchenStation, ComandaStatus, ComandaItemStatus } from '../../types';
 import { formatColombiaDateTime } from '../../utils/calculations';
+import { getVisibleOrderModifiers } from '../../utils/orderModifierUtils';
 import { KitchenTicketModal } from '../modals/KitchenTicketModal';
 import {
   Flame,
@@ -237,18 +238,22 @@ export const KitchenKDSView: React.FC = () => {
                             </p>
                           )}
 
-                          {item.selectedModifiers && item.selectedModifiers.length > 0 && (
-                            <div className="mt-1 text-[10.5px] text-[#d4af37] space-y-0.5 font-medium">
-                              {item.selectedModifiers.map((m: any, idx: number) => (
-                                <div key={idx} className="flex items-center gap-1">
-                                  <span>• {m.groupName}:</span>
-                                  <strong className="text-white">{m.optionName}</strong>
-                                  {m.quantity && m.quantity > 1 ? ` (x${m.quantity})` : ''}
-                                  {m.textValue ? ` "${m.textValue}"` : ''}
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                          {item.selectedModifiers && item.selectedModifiers.length > 0 && (() => {
+                            const visibleMods = getVisibleOrderModifiers(item.selectedModifiers);
+                            if (visibleMods.length === 0) return null;
+                            return (
+                              <div className="mt-1 text-[10.5px] text-[#d4af37] space-y-0.5 font-medium">
+                                {visibleMods.map(({ cleanName, detail }, idx: number) => (
+                                  <div key={idx} className="flex items-center gap-1">
+                                    <span>•</span>
+                                    <strong className="text-white">{cleanName}</strong>
+                                    {detail.quantity && detail.quantity > 1 ? ` (x${detail.quantity})` : ''}
+                                    {detail.textValue ? ` "${detail.textValue}"` : ''}
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     );

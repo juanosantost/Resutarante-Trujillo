@@ -49,6 +49,7 @@ export const RestaurantConfigView: React.FC = () => {
     createArea,
     updateArea,
     toggleAreaActive,
+    deleteArea,
     createTable,
     updateTable,
     deleteTable,
@@ -127,10 +128,27 @@ export const RestaurantConfigView: React.FC = () => {
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
-  // Estados para dropdown de acciones y confirmación de borrado de mesas
+  // Estados para dropdown de acciones y confirmación de borrado de mesas y salones
   const [openDropdownTableId, setOpenDropdownTableId] = useState<string | null>(null);
   const [tableToDelete, setTableToDelete] = useState<Table | null>(null);
   const [isDeletingTable, setIsDeletingTable] = useState<boolean>(false);
+
+  const [areaToDelete, setAreaToDelete] = useState<RestaurantArea | null>(null);
+  const [isDeletingArea, setIsDeletingArea] = useState<boolean>(false);
+
+  const handleConfirmDeleteArea = async () => {
+    if (!areaToDelete) return;
+    try {
+      setIsDeletingArea(true);
+      await deleteArea(areaToDelete.id);
+      showToast(`Salón "${areaToDelete.name}" eliminado con éxito`, 'success');
+      setAreaToDelete(null);
+    } catch (err: any) {
+      showToast(err.message || 'Error al eliminar salón', 'error');
+    } finally {
+      setIsDeletingArea(false);
+    }
+  };
 
   const handleToggleTableActive = async (table: Table) => {
     try {
@@ -501,14 +519,27 @@ export const RestaurantConfigView: React.FC = () => {
                       {area.isActive ? 'Desactivar' : 'Activar'}
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={() => openEditArea(area)}
-                      className="px-3 py-1.5 rounded-xl bg-[#292212] border border-[#B77900]/40 text-[#D6A21A] text-xs font-bold hover:brightness-110 flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                      <span>Editar</span>
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => openEditArea(area)}
+                        className="px-3 py-1.5 rounded-xl bg-[#292212] border border-[#B77900]/40 text-[#D6A21A] text-xs font-bold hover:brightness-110 flex items-center gap-1.5 cursor-pointer"
+                        title="Editar nombre y datos del salón"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                        <span>Editar</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setAreaToDelete(area)}
+                        className="px-2.5 py-1.5 rounded-xl bg-rose-950/40 border border-rose-800/40 text-rose-300 hover:bg-rose-900/60 hover:text-rose-200 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                        title="Eliminar salón o espacio del restaurante"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                        <span>Borrar</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -911,21 +942,39 @@ export const RestaurantConfigView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-[#2d281e] flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAreaModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-[#242424] text-[#d6d3d1] text-xs font-bold hover:bg-[#333] cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#B77900] to-[#D6A21A] text-[#181818] font-black text-xs hover:brightness-110 cursor-pointer shadow-md"
-                >
-                  {isSaving ? 'Guardando...' : editingArea ? 'Guardar Cambios' : 'Crear Salón'}
-                </button>
+              <div className="pt-3 border-t border-[#2d281e] flex items-center justify-between gap-2">
+                {editingArea ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const areaRef = editingArea;
+                      setAreaModalOpen(false);
+                      setAreaToDelete(areaRef);
+                    }}
+                    className="px-3 py-2 rounded-xl bg-rose-950/40 border border-rose-800/40 text-rose-300 hover:bg-rose-900/60 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Borrar Salón</span>
+                  </button>
+                ) : (
+                  <div />
+                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAreaModalOpen(false)}
+                    className="px-4 py-2 rounded-xl bg-[#242424] text-[#d6d3d1] text-xs font-bold hover:bg-[#333] cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#B77900] to-[#D6A21A] text-[#181818] font-black text-xs hover:brightness-110 cursor-pointer shadow-md"
+                  >
+                    {isSaving ? 'Guardando...' : editingArea ? 'Guardar Cambios' : 'Crear Salón'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -1183,6 +1232,140 @@ export const RestaurantConfigView: React.FC = () => {
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   <span>{isDeletingTable ? 'Eliminando...' : 'Sí, Eliminar Mesa'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* MODAL CONFIRMAR ELIMINACIÓN DE ÁREA / SALÓN */}
+      {areaToDelete && (() => {
+        const areaTables = tables.filter((t) => t.areaId === areaToDelete.id || t.zone === areaToDelete.name);
+        const capacityTotal = areaTables.reduce((sum, t) => sum + (t.capacity || 0), 0);
+        const activeOccupiedTables = areaTables.filter((t) => {
+          const hasOrder = orders.some((o) => o.tableId === t.id && o.status === 'abierto');
+          return hasOrder || t.status === 'ocupada' || t.status === 'cuenta_solicitada' || t.hasOpenTab;
+        });
+
+        const isOnlyArea = areas.length <= 1;
+        let canDelete = true;
+        let blockReason = '';
+
+        if (isOnlyArea) {
+          canDelete = false;
+          blockReason = 'El restaurante debe conservar al menos un salón o espacio físico configurado.';
+        } else if (activeOccupiedTables.length > 0) {
+          canDelete = false;
+          const tableNumbers = activeOccupiedTables.map((t) => `#${t.number}`).join(', ');
+          blockReason = `Este salón tiene mesas ocupadas o con pedidos activos en curso (${tableNumbers}). Por favor finalice o traslade los pedidos antes de eliminarlo.`;
+        }
+
+        const otherAreas = areas.filter((a) => a.id !== areaToDelete.id);
+        const fallbackArea = otherAreas.find((a) => a.isActive) || otherAreas[0] || null;
+
+        return (
+          <div
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+            onClick={() => !isDeletingArea && setAreaToDelete(null)}
+          >
+            <div
+              className="bg-[#181818] border border-rose-600/40 rounded-3xl max-w-md w-full p-5 sm:p-6 text-[#FFFDF5] shadow-2xl relative"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start gap-3.5 pb-4 border-b border-[#2d281e]">
+                <div className="w-10 h-10 rounded-2xl bg-rose-950/80 border border-rose-600/50 flex items-center justify-center text-rose-400 shrink-0">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-base font-black text-[#FFFDF5]">
+                    ¿Eliminar Salón "{areaToDelete.name}"?
+                  </h3>
+                  <p className="text-xs text-[#a8a29e] mt-0.5">
+                    Esta acción eliminará el espacio físico configurado para el restaurante.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={isDeletingArea}
+                  onClick={() => setAreaToDelete(null)}
+                  className="w-7 h-7 rounded-full bg-[#242424] hover:bg-[#333] text-[#d6d3d1] flex items-center justify-center cursor-pointer transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Ficha resumen del área */}
+              <div className="mt-4 p-3.5 rounded-2xl bg-[#14131a] border border-[#2d281e] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#a8a29e]">Nombre del Salón:</span>
+                  <span className="text-xs font-bold text-[#FFFDF5]">{areaToDelete.name}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#a8a29e]">Orden de visualización:</span>
+                  <span className="text-xs font-bold text-[#D6A21A]">Orden #{areaToDelete.order}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#a8a29e]">Mesas asignadas:</span>
+                  <span className="text-xs font-semibold text-[#FFFDF5]">{areaTables.length} mesas</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#a8a29e]">Aforo estimado:</span>
+                  <span className="text-xs font-semibold text-[#D6A21A]">{capacityTotal} comensales</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#a8a29e]">Estado:</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                      areaToDelete.isActive
+                        ? 'bg-emerald-950/60 text-emerald-400 border-emerald-600/40'
+                        : 'bg-stone-900 text-stone-400 border-stone-700'
+                    }`}
+                  >
+                    {areaToDelete.isActive ? 'Activo' : 'Inactivo'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Advertencia si no se puede borrar */}
+              {!canDelete ? (
+                <div className="mt-4 p-3 rounded-2xl bg-amber-950/40 border border-amber-500/40 text-amber-200 text-xs flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold block">No se puede eliminar en este momento:</span>
+                    <p className="mt-0.5 text-amber-300/90">{blockReason}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-4 space-y-2">
+                  <p className="text-xs text-[#a8a29e] leading-relaxed">
+                    ¿Estás seguro de que deseas eliminar permanentemente este salón? Esta acción no se puede deshacer.
+                  </p>
+                  {areaTables.length > 0 && (
+                    <div className="p-2.5 rounded-xl bg-blue-950/30 border border-blue-500/30 text-blue-200 text-[11px]">
+                      ℹ️ Las <strong>{areaTables.length} mesas</strong> de este salón se reasignarán automáticamente al salón <strong>"{fallbackArea?.name || 'General'}"</strong> para conservar su configuración.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="mt-5 pt-3 border-t border-[#2d281e] flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  disabled={isDeletingArea}
+                  onClick={() => setAreaToDelete(null)}
+                  className="px-4 py-2 rounded-xl bg-[#242424] hover:bg-[#333] text-[#d6d3d1] text-xs font-bold cursor-pointer transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={!canDelete || isDeletingArea}
+                  onClick={handleConfirmDeleteArea}
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed text-[#FFFDF5] text-xs font-black flex items-center gap-2 cursor-pointer shadow-lg transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{isDeletingArea ? 'Eliminando...' : 'Sí, Eliminar Salón'}</span>
                 </button>
               </div>
             </div>

@@ -105,6 +105,13 @@ export const BranchReceiptHeader: React.FC<BranchReceiptHeaderProps> = ({
     return null;
   }
 
+  const logoSize = printConfig.logoSize || 'mediano';
+  const logoDimensions = {
+    pequeno: is58mm ? 'max-h-12 max-w-[120px]' : 'max-h-16 max-w-[160px]',
+    mediano: is58mm ? 'max-h-20 max-w-[190px]' : 'max-h-28 max-w-[250px]',
+    grande: is58mm ? 'max-h-32 max-w-[240px]' : 'max-h-44 max-w-[340px]',
+  }[logoSize];
+
   return (
     <header
       data-testid="branch-receipt-header"
@@ -118,9 +125,7 @@ export const BranchReceiptHeader: React.FC<BranchReceiptHeaderProps> = ({
           <img
             src={logoUrl}
             alt={name || 'Logotipo Sucursal'}
-            className={`object-contain max-w-full ${
-              is58mm ? 'max-h-12 max-w-[120px]' : 'max-h-16 max-w-[170px]'
-            } filter contrast-150`}
+            className={`object-contain max-w-full ${logoDimensions} filter contrast-150 transition-all`}
             style={{ imageRendering: 'crisp-edges' }}
             onError={(e) => {
               // Ocultar suavemente si falla carga de imagen
@@ -164,7 +169,7 @@ export const BranchReceiptHeader: React.FC<BranchReceiptHeaderProps> = ({
 
       {/* Resolución DIAN Opcional en el encabezado */}
       {showDianResolution && resolutionDian && (
-        <div className="text-[10px] font-bold text-black pt-0.5 border-t border-black mt-1 max-w-full break-words">
+        <div className="text-[10px] font-bold text-black pt-0.5 border-t border-dotted border-gray-300 print:border-gray-300 mt-1 max-w-full break-words">
           {resolutionDian}
         </div>
       )}

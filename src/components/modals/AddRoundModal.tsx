@@ -4,6 +4,7 @@ import { MenuItem, Order, Product, CustomizedItemSelection } from '../../types';
 import { formatCOP, calculateOrderTotals, getEffectiveTaxRate } from '../../utils/calculations';
 import { ProductCustomizeModal } from '../catalog/ProductCustomizeModal';
 import { buildDefaultDailyMenuItem, sortProductsWithDailyFirst } from '../../utils/productUtils';
+import { getVisibleOrderModifiers } from '../../utils/orderModifierUtils';
 import {
   X,
   Plus,
@@ -715,16 +716,20 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
                             {formatCOP(lineItem.totalPrice)}
                           </span>
 
-                          {/* Modificadores o detalles */}
-                          {lineItem.selectedModifiers && lineItem.selectedModifiers.length > 0 && (
-                            <div className="mt-1 space-y-0.5 text-[10px] text-[#a8a29e]">
-                              {lineItem.selectedModifiers.map((mod, mIdx) => (
-                                <div key={mIdx} className="truncate">
-                                  • {mod.optionName}
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                          {/* Modificadores o detalles (limpio, sin categorías ni acompañamientos por defecto) */}
+                          {lineItem.selectedModifiers && lineItem.selectedModifiers.length > 0 && (() => {
+                            const visibleMods = getVisibleOrderModifiers(lineItem.selectedModifiers);
+                            if (visibleMods.length === 0) return null;
+                            return (
+                              <div className="mt-1 space-y-0.5 text-[10px] text-[#a8a29e]">
+                                {visibleMods.map((mod, mIdx) => (
+                                  <div key={mIdx} className="truncate">
+                                    • {mod.cleanName}
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })()}
                         </div>
 
                         {/* Botón Editar + Controles de Cantidad */}

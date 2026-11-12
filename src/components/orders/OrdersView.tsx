@@ -8,6 +8,7 @@ import { CheckoutModal } from '../modals/CheckoutModal';
 import { ReceiptModal } from '../modals/ReceiptModal';
 import { NewOrderModal } from '../modals/NewOrderModal';
 import { KitchenTicketModal } from '../modals/KitchenTicketModal';
+import { formatModifiersDisplaySummary } from '../../utils/orderModifierUtils';
 import {
   ClipboardList,
   Search,
@@ -232,15 +233,7 @@ export const OrdersView: React.FC = () => {
                           </div>
                           <div className="space-y-1.5 text-xs">
                             {items.map((it) => {
-                              const modSummary = (it.selectedModifiers || [])
-                                .map((m) => {
-                                  const cleanOpt =
-                                    m.groupName && m.optionName.startsWith(`${m.groupName}: `)
-                                      ? m.optionName.substring(m.groupName.length + 2)
-                                      : m.optionName;
-                                  return m.groupName ? `${m.groupName}: ${cleanOpt}` : cleanOpt;
-                                })
-                                .join(' · ');
+                              const modSummary = formatModifiersDisplaySummary(it.selectedModifiers);
 
                               return (
                                 <div key={it.id} className="border-b border-[#24211a] pb-1 last:border-0">

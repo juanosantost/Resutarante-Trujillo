@@ -1,13 +1,13 @@
 /**
  * SISTEMA COLMENA RESTAURANTE — Tablero Principal de Pedidos Activos
- * Guadalajara de Buga (Valle del Cauca, Colombia)
+ * Restrepo (Valle del Cauca, Colombia)
  * 
  * Centro de mando operativo:
  * - Muestra en tiempo real todos los pedidos activos (Mesas, Domicilios, Para Llevar, Mostrador).
  * - Agregar nuevos productos o rondas con un solo clic.
  * - Cambiar estados operativos (Cocina KDS, Listo, En Camino, Servido).
  * - Generar cobros y pagos inmediatos por cualquier medio (Efectivo con devuelta, Nequi, Daviplata, Tarjetas, Mixto).
- * - Herramienta para limpiar datos de prueba y dejar el sistema listo para operar con datos reales en Buga.
+ * - Herramienta para limpiar datos de prueba y dejar el sistema listo para operar con datos reales en Restrepo.
  */
 
 import React, { useState, useMemo } from 'react';
@@ -16,6 +16,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { Order, OrderType, OrderStatus, DeliveryStatus, Payment, Separado } from '../../types';
 import { formatCOP, formatColombiaDateTime } from '../../utils/calculations';
+import { formatModifiersDisplaySummary } from '../../utils/orderModifierUtils';
 import { getUpcomingSeparadosAlert } from '../../utils/creditAndLayawayUtils';
 import { db } from '../../services/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -267,7 +268,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
     const cleanPhone = phone.replace(/[^0-9]/g, '');
     const fullPhone = cleanPhone.startsWith('57') ? cleanPhone : `57${cleanPhone}`;
     const text = encodeURIComponent(
-      `Hola ${customerName || 'Estimado cliente'}, te saludamos de Sistema Colmena Restaurante (Guadalajara de Buga). Tu pedido #${orderNum} por ${formatCOP(
+      `Hola ${customerName || 'Estimado cliente'}, te saludamos de Sistema Colmena Restaurante (Restrepo - Valle). Tu pedido #${orderNum} por ${formatCOP(
         total
       )} está en proceso y pronto llegará a tu dirección. ¡Muchas gracias por preferirnos!`
     );
@@ -281,7 +282,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
   return (
     <div className="space-y-6">
       
-      {/* 1. Banner Principal de Bienvenida y Ubicación en Guadalajara de Buga */}
+      {/* 1. Banner Principal de Bienvenida y Ubicación en Restrepo (Valle) */}
       <div className="rounded-3xl bg-[#181818] border border-[#333333] p-6 text-[#FFFDF5] shadow-xl relative overflow-hidden">
         <div className="absolute -top-16 -right-16 w-56 h-56 bg-[#B77900]/15 rounded-full blur-3xl pointer-events-none" />
 
@@ -290,7 +291,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
             <div className="flex flex-wrap items-center gap-2 mb-2">
               <span className="px-3 py-0.5 rounded-full bg-[#292212] border border-[#B77900]/40 text-[#D6A21A] text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-[#D6A21A]" />
-                <span>Guadalajara de Buga · Sede Única</span>
+                <span>Restrepo (Valle) · Sede Única</span>
               </span>
               <span className="text-xs text-[#a8a29e]">Valle del Cauca · Pesos Colombianos (COP)</span>
             </div>
@@ -576,7 +577,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
               No hay pedidos activos {filterType !== 'todos' ? `en la categoría '${filterType}'` : 'en este momento'}
             </h3>
             <p className="text-xs text-[#a8a29e] leading-relaxed">
-              El restaurante en Guadalajara de Buga se encuentra al día. Haz clic en el botón a continuación para abrir una nueva mesa o registrar un pedido de domicilio.
+              El restaurante en Restrepo (Valle) se encuentra al día. Haz clic en el botón a continuación para abrir una nueva mesa o registrar un pedido de domicilio.
             </p>
           </div>
           <button
@@ -717,15 +718,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
                             </div>
                           )}
                           {roundsMap[roundNum].map((it, idx) => {
-                            const modSummary = (it.selectedModifiers || [])
-                              .map((m) => {
-                                const cleanOpt =
-                                  m.groupName && m.optionName.startsWith(`${m.groupName}: `)
-                                    ? m.optionName.substring(m.groupName.length + 2)
-                                    : m.optionName;
-                                return m.groupName ? `${m.groupName}: ${cleanOpt}` : cleanOpt;
-                              })
-                              .join(' · ');
+                            const modSummary = formatModifiersDisplaySummary(it.selectedModifiers);
 
                             return (
                               <div key={idx} className="flex justify-between items-start text-[11px] text-[#d6d3d1] border-b border-[#2a2a2a]/60 pb-1 last:border-0">
@@ -876,7 +869,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
                     ) : (
                       <div className="text-[11px] text-[#a8a29e] flex items-center gap-1">
                         <UtensilsCrossed className="w-3 h-3 text-[#D6A21A]" />
-                        <span>Servicio en Sala Buga</span>
+                        <span>Servicio en Sala Restrepo</span>
                       </div>
                     )}
 
@@ -924,7 +917,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
         />
       )}
 
-      {/* MODAL 3: Tirilla / Recibo POS con Resolución DIAN Buga */}
+      {/* MODAL 3: Tirilla / Recibo POS con Resolución DIAN Restrepo */}
       {receiptPayment && (
         <ReceiptModal
           payment={receiptPayment}
