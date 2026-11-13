@@ -10,6 +10,10 @@ import {
   expandOrderItemsToSingleUnits,
   formatOrderItemModifiersSummary,
 } from '../../utils/checkoutCalculations';
+import {
+  getCatalogGroupByCategoryPreference,
+  sortOrderItemsByCatalogConfig,
+} from '../../utils/productUtils';
 import { ReceiptModal } from './ReceiptModal';
 import {
   X,
@@ -57,6 +61,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     currentBranch,
     products,
     menuItems,
+    categories,
     customers,
   } = useRestaurant();
   const { showToast } = useToast();
@@ -320,15 +325,30 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   // Autocompletar desde el catálogo al seleccionar un producto sugerido
   const catalogSuggestions = useMemo(() => {
-    const list = products && products.length > 0 
-      ? products.filter((p) => p.status === 'activo' && p.isAvailableForSale !== false) 
-      : (menuItems || []).filter((m) => m.isAvailable !== false);
+    const rawList: Array<{
+      id: string;
+      name: string;
+      price: number;
+      categoryId?: string;
+      isDailyMenu?: boolean;
+      displayOrder?: number;
+      globalOrder?: number;
+    }> =
+      products && products.length > 0
+        ? products.filter((p) => p.status === 'activo' && p.isAvailableForSale !== false)
+        : (menuItems || []).filter((m) => m.isAvailable !== false);
+    const list = sortOrderItemsByCatalogConfig(
+      rawList,
+      categories,
+      getCatalogGroupByCategoryPreference(),
+      'todos'
+    );
     if (!catalogSearch.trim()) return list.slice(0, 6);
     const q = catalogSearch.toLowerCase();
     return list
       .filter((p) => p.name.toLowerCase().includes(q))
       .slice(0, 6);
-  }, [products, menuItems, catalogSearch]);
+  }, [products, menuItems, categories, catalogSearch]);
 
   const handleSelectFromCatalog = (prod: any) => {
     setNewProductName(prod.name);

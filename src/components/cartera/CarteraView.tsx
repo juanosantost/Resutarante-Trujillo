@@ -29,6 +29,8 @@ import {
   User,
   Phone,
   X,
+  Trash2,
+  Ban,
 } from 'lucide-react';
 
 export const CarteraView: React.FC = () => {
@@ -40,12 +42,14 @@ export const CarteraView: React.FC = () => {
     registerCarteraAbono,
     editAbono,
     voidAbono,
+    cancelCarteraRecord,
+    deleteCarteraRecord,
     actionLoading,
   } = useRestaurant();
   const { showToast } = useToast();
 
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<'pendientes' | 'todas' | 'vencidas' | 'pagadas'>('pendientes');
+  const [statusFilter, setStatusFilter] = useState<'pendientes' | 'todas' | 'vencidas' | 'pagadas' | 'anuladas'>('pendientes');
 
   // Modal Nueva Cartera
   const [showNewModal, setShowNewModal] = useState<boolean>(false);
@@ -75,6 +79,11 @@ export const CarteraView: React.FC = () => {
   const [selectedAbonoForVoid, setSelectedAbonoForVoid] = useState<Abono | null>(null);
   const [voidReason, setVoidReason] = useState<string>('');
 
+  // Modal Anular / Eliminar Pedido en Cartera
+  const [selectedCarteraForAction, setSelectedCarteraForAction] = useState<CarteraRecord | null>(null);
+  const [carteraActionMode, setCarteraActionMode] = useState<'anular' | 'eliminar'>('anular');
+  const [carteraCancelReason, setCarteraCancelReason] = useState<string>('');
+
   // Modal Comprobante Térmico
   const [showReceiptModal, setShowReceiptModal] = useState<boolean>(false);
   const [receiptAbono, setReceiptAbono] = useState<Abono | null>(null);
@@ -87,7 +96,9 @@ export const CarteraView: React.FC = () => {
   const totalOverdue = pendingCartera
     .filter((c) => isCarteraOverdue(c.dueDate))
     .reduce((acc, c) => acc + (c.balanceDue || 0), 0);
-  const totalRecaudado = cartera.reduce((acc, c) => acc + (c.totalAbonado || 0), 0);
+  const totalRecaudado = cartera
+    .filter((c) => c.status !== 'anulada')
+    .reduce((acc, c) => acc + (c.totalAbonado || 0), 0);
   const fullyPaidCount = cartera.filter((c) => c.status === 'pagada').length;
 
   // Filtrado
@@ -102,8 +113,9 @@ export const CarteraView: React.FC = () => {
 
     if (!matchesSearch) return false;
     if (statusFilter === 'pendientes') return c.status !== 'pagada' && c.status !== 'anulada';
-    if (statusFilter === 'vencidas') return isCarteraOverdue(c.dueDate) && c.balanceDue > 0;
+    if (statusFilter === 'vencidas') return c.status !== 'anulada' && isCarteraOverdue(c.dueDate) && c.balanceDue > 0;
     if (statusFilter === 'pagadas') return c.status === 'pagada';
+    if (statusFilter === 'anuladas') return c.status === 'anulada';
     return true;
   });
 
@@ -209,6 +221,26 @@ export const CarteraView: React.FC = () => {
     }
   };
 
+  const handleCarteraActionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCarteraForAction) return;
+
+    try {
+      if (carteraActionMode === 'anular') {
+        const cleanReason = carteraCancelReason.trim() || 'Anulada por solicitud administrativa';
+        await cancelCarteraRecord(selectedCarteraForAction.id, cleanReason);
+        showToast(`Pedido en cartera #${selectedCarteraForAction.code} anulado correctamente`, 'success');
+      } else {
+        await deleteCarteraRecord(selectedCarteraForAction.id);
+        showToast(`Pedido en cartera #${selectedCarteraForAction.code} eliminado permanentemente`, 'success');
+      }
+      setSelectedCarteraForAction(null);
+      setCarteraCancelReason('');
+    } catch (err: any) {
+      showToast(err.message || 'Error al procesar la acción en cartera', 'error');
+    }
+  };
+
   const openWhatsApp = (phone: string, customerName: string, crdCode: string, balance: number, due: string) => {
     const clean = phone.replace(/[^0-9]/g, '');
     const msg = `Hola ${customerName} 👋 Te saludamos de Sistema Colmena Restaurante. Te recordamos tu cuenta de crédito #${crdCode} con saldo pendiente de ${formatCOP(balance)} con fecha límite ${due}. ¿Deseas realizar un abono o necesitas información de nuestras cuentas de transferencia?`;
@@ -265,7 +297,7 @@ export const CarteraView: React.FC = () => {
         
         {/* Filtros de Estado */}
         <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-2 sm:pb-0">
-          {(['pendientes', 'vencidas', 'todas', 'pagadas'] as const).map((key) => (
+          {(['pendientes', 'vencidas', 'todas', 'pagadas', 'anuladas'] as const).map((key) => (
             <button
               key={key}
               type="button"
@@ -276,7 +308,13 @@ export const CarteraView: React.FC = () => {
                   : 'bg-[#242424] text-[#d6d3d1] hover:bg-[#2d2d2d]'
               }`}
             >
-              {key === 'pendientes' ? 'Con Saldo Pendiente' : key === 'vencidas' ? 'Cartera Vencida' : key}
+              {key === 'pendientes'
+                ? 'Con Saldo Pendiente'
+                : key === 'vencidas'
+                ? 'Cartera Vencida'
+                : key === 'anuladas'
+                ? 'Anuladas'
+                : key}
             </button>
           ))}
         </div>
@@ -309,16 +347,21 @@ export const CarteraView: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredCartera.length > 0 ? (
           filteredCartera.map((crd) => {
-            const isPaid = crd.status === 'pagada' || crd.balanceDue <= 0;
-            const isOverdue = !isPaid && isCarteraOverdue(crd.dueDate);
-            const percentPaid = Math.min(100, Math.round((crd.totalAbonado / (crd.totalAmount || 1)) * 100));
+            const isCancelled = crd.status === 'anulada';
+            const isPaid = !isCancelled && (crd.status === 'pagada' || crd.balanceDue <= 0);
+            const isOverdue = !isCancelled && !isPaid && isCarteraOverdue(crd.dueDate);
+            const percentPaid = isCancelled
+              ? 0
+              : Math.min(100, Math.round((crd.totalAbonado / (crd.totalAmount || 1)) * 100));
             const crdAbonosList = abonos.filter((a) => a.parentId === crd.id);
 
             return (
               <div
                 key={crd.id}
                 className={`bg-[#181818] border rounded-3xl p-5 flex flex-col justify-between shadow-md transition-all ${
-                  isOverdue
+                  isCancelled
+                    ? 'border-neutral-800 opacity-75'
+                    : isOverdue
                     ? 'border-red-900/60 hover:border-red-500'
                     : isPaid
                     ? 'border-emerald-900/40 hover:border-emerald-600'
@@ -335,14 +378,16 @@ export const CarteraView: React.FC = () => {
                         </span>
                         <span
                           className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                            isPaid
+                            isCancelled
+                              ? 'bg-neutral-900 text-neutral-400 border border-neutral-700'
+                              : isPaid
                               ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
                               : isOverdue
                               ? 'bg-red-950 text-red-300 border border-red-800 animate-pulse'
                               : 'bg-amber-950 text-amber-300 border border-amber-800'
                           }`}
                         >
-                          {isPaid ? 'Pagada' : isOverdue ? 'Vencida' : 'Vigente'}
+                          {isCancelled ? 'Anulada' : isPaid ? 'Pagada' : isOverdue ? 'Vencida' : 'Vigente'}
                         </span>
                       </div>
                       <h4 className="font-black text-[#FFFDF5] text-sm mt-1 leading-snug">
@@ -410,34 +455,50 @@ export const CarteraView: React.FC = () => {
                 </div>
 
                 {/* Acciones */}
-                <div className="pt-3 border-t border-[#2d281e] grid grid-cols-2 gap-2">
-                  {!isPaid && (
+                <div className="pt-3 border-t border-[#2d281e] space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    {!isPaid && !isCancelled && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedCarteraForAbono(crd);
+                          setAbonoAmount(crd.balanceDue);
+                          setShowAbonoModal(true);
+                        }}
+                        className="px-3 py-2 rounded-xl bg-gradient-to-r from-[#B77900] to-[#D6A21A] text-[#181818] font-black text-xs inline-flex items-center justify-center gap-1 hover:brightness-110 shadow cursor-pointer"
+                      >
+                        <DollarSign className="w-3.5 h-3.5" />
+                        <span>Registrar Abono</span>
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={() => {
-                        setSelectedCarteraForAbono(crd);
-                        setAbonoAmount(crd.balanceDue);
-                        setShowAbonoModal(true);
+                        setSelectedCarteraForHistory(crd);
+                        setShowHistoryModal(true);
                       }}
-                      className="px-3 py-2 rounded-xl bg-gradient-to-r from-[#B77900] to-[#D6A21A] text-[#181818] font-black text-xs inline-flex items-center justify-center gap-1 hover:brightness-110 shadow cursor-pointer"
+                      className={`px-3 py-2 rounded-xl bg-[#242424] hover:bg-[#2d2d2d] text-[#FFFDF5] font-bold text-xs inline-flex items-center justify-center gap-1 border border-[#383838] cursor-pointer ${
+                        isPaid || isCancelled ? 'col-span-2' : ''
+                      }`}
                     >
-                      <DollarSign className="w-3.5 h-3.5" />
-                      <span>Registrar Abono</span>
+                      <Receipt className="w-3.5 h-3.5 text-[#D6A21A]" />
+                      <span>Abonos ({crdAbonosList.length})</span>
                     </button>
-                  )}
+                  </div>
 
                   <button
                     type="button"
                     onClick={() => {
-                      setSelectedCarteraForHistory(crd);
-                      setShowHistoryModal(true);
+                      setSelectedCarteraForAction(crd);
+                      setCarteraActionMode(isCancelled ? 'eliminar' : 'anular');
+                      setCarteraCancelReason('');
                     }}
-                    className={`px-3 py-2 rounded-xl bg-[#242424] hover:bg-[#2d2d2d] text-[#FFFDF5] font-bold text-xs inline-flex items-center justify-center gap-1 border border-[#383838] cursor-pointer ${
-                      isPaid ? 'col-span-2' : ''
-                    }`}
+                    className="w-full px-3 py-2 rounded-xl bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-800/60 font-bold text-xs inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    title="Anular o eliminar este pedido en cartera"
                   >
-                    <Receipt className="w-3.5 h-3.5 text-[#D6A21A]" />
-                    <span>Abonos ({crdAbonosList.length})</span>
+                    <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                    <span>{isCancelled ? 'Eliminar de Cartera' : 'Anular / Eliminar Pedido'}</span>
                   </button>
                 </div>
               </div>
@@ -902,7 +963,144 @@ export const CarteraView: React.FC = () => {
         </div>
       )}
 
-      {/* 8. MODAL: IMPRESIÓN COMPROBANTE TÉRMICO */}
+      {/* 8. MODAL: ANULAR O ELIMINAR PEDIDO EN CARTERA */}
+      {selectedCarteraForAction && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="relative bg-[#181818] border border-red-500/50 rounded-3xl max-w-md w-full shadow-2xl p-6 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-red-950 border border-red-700 flex items-center justify-center text-red-400 shrink-0">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-[#FFFDF5]">
+                    Anular o Eliminar Pedido en Cartera
+                  </h3>
+                  <p className="text-xs text-[#D6A21A] font-mono font-bold">
+                    {selectedCarteraForAction.code} · {selectedCarteraForAction.customerName}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedCarteraForAction(null)}
+                className="p-1.5 rounded-xl bg-[#242424] text-[#a8a29e] hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-[#121214] border border-[#2d281e] text-xs space-y-1.5">
+              <div className="flex justify-between">
+                <span className="text-[#a8a29e]">Pedido / Venta Origen:</span>
+                <span className="font-mono font-bold text-[#FFFDF5]">#{selectedCarteraForAction.orderNumber || selectedCarteraForAction.saleId}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#a8a29e]">Valor Total:</span>
+                <span className="font-mono font-bold text-[#FFFDF5]">{formatCOP(selectedCarteraForAction.totalAmount)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#a8a29e]">Saldo Pendiente:</span>
+                <span className="font-mono font-black text-amber-400">{formatCOP(selectedCarteraForAction.balanceDue)}</span>
+              </div>
+            </div>
+
+            {/* Selector de modo: Anular vs Eliminar */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={selectedCarteraForAction.status === 'anulada'}
+                onClick={() => setCarteraActionMode('anular')}
+                className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                  carteraActionMode === 'anular'
+                    ? 'bg-amber-950/50 border-amber-500 text-amber-200'
+                    : 'bg-[#121214] border-[#2d281e] text-[#a8a29e] hover:border-[#444]'
+                } ${selectedCarteraForAction.status === 'anulada' ? 'opacity-40 cursor-not-allowed' : ''}`}
+              >
+                <div className="flex items-center gap-1.5 font-black text-xs mb-1">
+                  <Ban className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Anular Cuenta</span>
+                </div>
+                <p className="text-[10px] leading-snug opacity-80">
+                  Cancela el saldo pendiente y conserva el registro en el historial de anuladas.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCarteraActionMode('eliminar')}
+                className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                  carteraActionMode === 'eliminar'
+                    ? 'bg-red-950/60 border-red-500 text-red-200'
+                    : 'bg-[#121214] border-[#2d281e] text-[#a8a29e] hover:border-[#444]'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 font-black text-xs mb-1">
+                  <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                  <span>Eliminar Registro</span>
+                </div>
+                <p className="text-[10px] leading-snug opacity-80">
+                  Borra definitivamente esta cuenta y sus abonos de la cartera.
+                </p>
+              </button>
+            </div>
+
+            <form onSubmit={handleCarteraActionSubmit} className="space-y-3">
+              {carteraActionMode === 'anular' ? (
+                <div>
+                  <label className="block text-xs font-bold text-[#d6d3d1] mb-1">
+                    Motivo de la Anulación (opcional)
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={carteraCancelReason}
+                    onChange={(e) => setCarteraCancelReason(e.target.value)}
+                    placeholder="Ej: Pedido cargado por error a cartera, cambio de medio de pago..."
+                    className="w-full bg-[#121214] border border-[#333333] rounded-xl p-3 text-xs text-[#FFFDF5] focus:outline-none focus:border-amber-500 resize-none"
+                  />
+                </div>
+              ) : (
+                <div className="p-3 rounded-xl bg-red-950/40 border border-red-800/60 text-[11px] text-red-200 leading-relaxed">
+                  <strong>Atención:</strong> Se eliminará permanentemente el pedido <strong>{selectedCarteraForAction.code}</strong> de la cartera junto con sus abonos asociados.
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedCarteraForAction(null)}
+                  className="px-4 py-2 rounded-xl border border-[#444444] text-[#d6d3d1] text-xs font-bold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className={`px-5 py-2 rounded-xl text-white font-black text-xs inline-flex items-center gap-1.5 shadow cursor-pointer ${
+                    carteraActionMode === 'eliminar'
+                      ? 'bg-red-600 hover:bg-red-500'
+                      : 'bg-amber-600 hover:bg-amber-500 text-[#181818]'
+                  }`}
+                >
+                  {carteraActionMode === 'eliminar' ? (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Confirmar Eliminación</span>
+                    </>
+                  ) : (
+                    <>
+                      <Ban className="w-3.5 h-3.5" />
+                      <span>Confirmar Anulación</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 9. MODAL: IMPRESIÓN COMPROBANTE TÉRMICO */}
       <AbonoReceiptModal
         isOpen={showReceiptModal}
         onClose={() => setShowReceiptModal(false)}

@@ -398,20 +398,144 @@ export function formatProductPrice(amount: number): string {
 }
 
 /**
- * Coloca el Menú del Día como el primer producto (arriba a la mano izquierda, índice 0).
+ * Coloca el Menú del Día como el primer producto si no se ha definido orden explícito,
+ * y respeta displayOrder / globalOrder definidos por el usuario.
  */
-export function sortProductsWithDailyFirst<T extends { id: string; isDailyMenu?: boolean }>(
-  items: T[]
-): T[] {
+export function sortProductsWithDailyFirst<
+  T extends { id: string; isDailyMenu?: boolean; displayOrder?: number; globalOrder?: number; name?: string }
+>(items: T[], mode: 'category' | 'global' = 'category'): T[] {
   const result = [...items];
-  const dailyIdx = result.findIndex(
-    (item) => item.id === 'prod-almuerzo-del-dia' || item.isDailyMenu
-  );
-  if (dailyIdx > 0) {
-    const [daily] = result.splice(dailyIdx, 1);
-    result.unshift(daily);
-  }
+  result.sort((a, b) => {
+    const orderA = mode === 'global' ? (a.globalOrder ?? a.displayOrder) : (a.displayOrder ?? a.globalOrder);
+    const orderB = mode === 'global' ? (b.globalOrder ?? b.displayOrder) : (b.displayOrder ?? b.globalOrder);
+
+    if (typeof orderA === 'number' && typeof orderB === 'number' && orderA !== orderB) {
+      return orderA - orderB;
+    }
+    if (typeof orderA === 'number' && typeof orderB !== 'number') return -1;
+    if (typeof orderA !== 'number' && typeof orderB === 'number') return 1;
+
+    const aDaily = a.id === 'prod-almuerzo-del-dia' || Boolean(a.isDailyMenu);
+    const bDaily = b.id === 'prod-almuerzo-del-dia' || Boolean(b.isDailyMenu);
+    if (aDaily && !bDaily) return -1;
+    if (!aDaily && bDaily) return 1;
+
+    return (a.name || '').localeCompare(b.name || '', 'es');
+  });
   return result;
+}
+
+export function getCatalogGroupByCategoryPreference(): boolean {
+  try {
+    const saved = localStorage.getItem('colmena_catalog_group_by_category');
+    return saved !== null ? saved === 'true' : true;
+  } catch {
+    return true;
+  }
+}
+
+export interface GenericCategoryGroup<T> {
+  categoryId: string;
+  categoryName: string;
+  categoryOrder: number;
+  isUncategorized: boolean;
+  products: T[];
+}
+
+export type ProductCategoryGroup = GenericCategoryGroup<Product>;
+
+/**
+ * Agrupa cualquier lista de productos o MenuItems por categoría respetando:
+ * 1. El orden de las categorías (1°, 2°, 3°...)
+ * 2. El orden de los productos dentro de cada categoría (displayOrder: 1°, 2°, 3°...)
+ * 3. Un bloque final para productos sin categoría asignada (también ordenados 1°, 2°, 3°...)
+ */
+export function groupProductsByCategories<
+  T extends {
+    id: string;
+    categoryId?: string;
+    isDailyMenu?: boolean;
+    displayOrder?: number;
+    globalOrder?: number;
+    name?: string;
+  },
+  C extends { id: string; name: string; order?: number }
+>(items: T[], categories: C[]): GenericCategoryGroup<T>[] {
+  const sortedCats = [...categories].sort((a, b) => (a.order || 0) - (b.order || 0));
+  const catMap = new Map<string, C>();
+  sortedCats.forEach((c) => catMap.set(c.id, c));
+
+  const groupedMap = new Map<string, T[]>();
+  const uncategorized: T[] = [];
+
+  for (const item of items) {
+    if (item.categoryId && catMap.has(item.categoryId)) {
+      const list = groupedMap.get(item.categoryId) || [];
+      list.push(item);
+      groupedMap.set(item.categoryId, list);
+    } else {
+      uncategorized.push(item);
+    }
+  }
+
+  const groups: GenericCategoryGroup<T>[] = [];
+
+  sortedCats.forEach((cat, idx) => {
+    const prods = groupedMap.get(cat.id) || [];
+    if (prods.length > 0) {
+      groups.push({
+        categoryId: cat.id,
+        categoryName: cat.name,
+        categoryOrder: cat.order || idx + 1,
+        isUncategorized: false,
+        products: sortProductsWithDailyFirst(prods, 'category'),
+      });
+    }
+  });
+
+  if (uncategorized.length > 0) {
+    groups.push({
+      categoryId: 'sin-categoria',
+      categoryName: 'Sin Categoría Asignada',
+      categoryOrder: sortedCats.length + 1,
+      isUncategorized: true,
+      products: sortProductsWithDailyFirst(uncategorized, 'category'),
+    });
+  }
+
+  return groups;
+}
+
+/**
+ * Ordena una lista de productos o MenuItems según la configuración activa del Catálogo:
+ * - Si se filtra por una categoría específica (selectedCategory !== 'todos'): usa displayOrder (1°, 2°, 3° dentro de la categoría).
+ * - Si está en 'todos' y la configuración del catálogo es Agrupar por Categoría: ordena primero por el orden de la categoría (1ª, 2ª, 3ª...) y dentro de cada categoría por displayOrder (1°, 2°, 3°...).
+ * - Si está en 'todos' y la configuración del catálogo es Sin Agrupar (Lista General): usa globalOrder (1°, 2°, 3°...).
+ */
+export function sortOrderItemsByCatalogConfig<
+  T extends {
+    id: string;
+    categoryId?: string;
+    isDailyMenu?: boolean;
+    displayOrder?: number;
+    globalOrder?: number;
+    name?: string;
+  },
+  C extends { id: string; name: string; order?: number }
+>(
+  items: T[],
+  categories: C[],
+  groupByCategory: boolean,
+  selectedCategory: string = 'todos'
+): T[] {
+  if (selectedCategory !== 'todos') {
+    return sortProductsWithDailyFirst(items, 'category');
+  }
+  if (!groupByCategory) {
+    return sortProductsWithDailyFirst(items, 'global');
+  }
+  const groups = groupProductsByCategories(items, categories);
+  return groups.flatMap((g) => g.products);
 }
 
 /**

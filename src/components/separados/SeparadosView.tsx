@@ -14,6 +14,10 @@ import { CustomerSelectInput } from '../common/CustomerSelectInput';
 import { AbonoReceiptModal } from '../modals/AbonoReceiptModal';
 import { NewOrderModal } from '../modals/NewOrderModal';
 import {
+  getCatalogGroupByCategoryPreference,
+  sortOrderItemsByCatalogConfig,
+} from '../../utils/productUtils';
+import {
   BookmarkCheck,
   Plus,
   Search,
@@ -43,6 +47,7 @@ export const SeparadosView: React.FC = () => {
     abonos,
     products,
     menuItems,
+    categories,
     currentBranch,
     createSeparado,
     registerSeparadoAbono,
@@ -132,18 +137,28 @@ export const SeparadosView: React.FC = () => {
   });
 
   const availableProducts = useMemo(() => {
+    const groupByCat = getCatalogGroupByCategoryPreference();
     if (products && products.length > 0) {
-      return products
-        .filter((p) => p.status === 'activo' && p.isAvailableForSale !== false)
-        .map((p) => ({
-          id: p.id,
-          name: p.name,
-          price: p.price,
-          recipe: (p.recipe as any) || [],
-        }));
+      const sorted = sortOrderItemsByCatalogConfig(
+        products.filter((p) => p.status === 'activo' && p.isAvailableForSale !== false),
+        categories,
+        groupByCat,
+        'todos'
+      );
+      return sorted.map((p) => ({
+        id: p.id,
+        name: p.name,
+        price: p.price,
+        recipe: (p.recipe as any) || [],
+      }));
     }
-    return (menuItems || []).filter((m) => m.isAvailable !== false);
-  }, [products, menuItems]);
+    return sortOrderItemsByCatalogConfig(
+      (menuItems || []).filter((m) => m.isAvailable !== false),
+      categories,
+      groupByCat,
+      'todos'
+    );
+  }, [products, menuItems, categories]);
 
   const handleAddItemToCart = () => {
     if (!selectedMenuItemId) return;

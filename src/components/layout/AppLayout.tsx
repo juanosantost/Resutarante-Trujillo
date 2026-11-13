@@ -74,15 +74,55 @@ export type AppView =
   | 'medios-pago'
   | 'auditoria';
 
+const VIEW_STEP_NAMES: Record<AppView, string> = {
+  home: 'Inicio',
+  manual: 'Manual',
+  mesas: 'Mesas y Salón',
+  catalogo: 'Catálogo',
+  pedidos: 'Pedidos',
+  domicilios: 'Domicilios',
+  cocina: 'Cocina (KDS)',
+  caja: 'Caja y Turnos',
+  ingresos: 'Ingresos',
+  'otros-ingresos': 'Otro Ingreso',
+  inventario: 'Inventario',
+  compras: 'Compras',
+  proveedores: 'Proveedores',
+  'cuentas-por-pagar': 'Cuentas por Pagar',
+  'anticipos-proveedores': 'Anticipos',
+  desembolsos: 'Desembolsos',
+  'registrar-gasto': 'Registrar Gasto',
+  'registrar-compra': 'Registrar Compra',
+  clientes: 'Clientes',
+  separados: 'Separados',
+  cartera: 'Cartera',
+  reportes: 'Reportes',
+  usuarios: 'Usuarios',
+  sucursales: 'Sucursales',
+  config: 'Config. Sucursal',
+  'config-mesas': 'Salones y Mesas',
+  'config-botones': 'Botones Menú',
+  'medios-pago': 'Medios de Pago',
+  auditoria: 'Auditoría',
+};
+
 interface AppLayoutProps {
   currentView: AppView;
   onNavigate: (view: AppView) => void;
+  viewHistory?: AppView[];
+  previousView?: AppView | null;
+  onGoBack?: () => void;
+  onJumpToStep?: (index: number) => void;
   children: React.ReactNode;
 }
 
 export const AppLayout: React.FC<AppLayoutProps> = ({
   currentView,
   onNavigate,
+  viewHistory = ['home'],
+  previousView = null,
+  onGoBack,
+  onJumpToStep,
   children,
 }) => {
   const {
@@ -308,8 +348,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 sm:h-20 gap-3">
             
-            {/* Lado Izquierdo: Botón Menú Móvil + Logo Colmena */}
-            <div className="flex items-center gap-3">
+            {/* Lado Izquierdo: Botón Menú Móvil + Botón Atrás por Pasos + Logo Colmena */}
+            <div className="flex items-center gap-2 sm:gap-3">
               <button
                 type="button"
                 onClick={() => setIsNavOpen(!isNavOpen)}
@@ -322,6 +362,33 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                   {isNavOpen ? 'Ocultar Menú' : 'Menú'}
                 </span>
               </button>
+
+              {onGoBack && (
+                <button
+                  type="button"
+                  onClick={onGoBack}
+                  className={`px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl border flex items-center gap-1.5 cursor-pointer shadow-sm transition-all focus:outline-none ${
+                    previousView
+                      ? 'bg-[#292212] hover:bg-[#382f1d] text-[#D6A21A] border-[#B77900]/60'
+                      : 'bg-[#242424] hover:bg-[#2d2d2d] text-[#a8a29e] border-[#383838]'
+                  }`}
+                  title={
+                    previousView
+                      ? `Volver al paso anterior: ${VIEW_STEP_NAMES[previousView] || previousView}`
+                      : 'Estás en el primer paso (preguntará antes de salir)'
+                  }
+                >
+                  <ChevronLeft className="w-4 h-4 shrink-0" />
+                  <span className="text-xs font-bold">
+                    Atrás
+                  </span>
+                  {previousView && (
+                    <span className="hidden lg:inline text-[11px] font-semibold opacity-90 max-w-[120px] truncate">
+                      ({VIEW_STEP_NAMES[previousView] || previousView})
+                    </span>
+                  )}
+                </button>
+              )}
 
               <div
                 onClick={() => onNavigate('home')}
@@ -724,6 +791,62 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             </div>
 
           </div>
+
+          {/* Barra de Ruta de Pasos Recientes (Permite regresar a cualquier paso previo dentro de la página) */}
+          {viewHistory.length > 1 && (
+            <div className="bg-[#181818] border border-[#2d2d2d] rounded-2xl px-3 py-2 flex items-center justify-between gap-2 overflow-x-auto scrollbar-none shadow-sm">
+              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+                <span className="text-[10px] font-black uppercase tracking-wider text-[#D6A21A] shrink-0 flex items-center gap-1 mr-1">
+                  <History className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Pasos:</span>
+                </span>
+                {viewHistory.slice(-6).map((stepView, idx, slicedArr) => {
+                  const realIndex = viewHistory.length - slicedArr.length + idx;
+                  const isCurrentStep = realIndex === viewHistory.length - 1;
+                  return (
+                    <React.Fragment key={`${stepView}-${realIndex}`}>
+                      {idx > 0 && (
+                        <ChevronRight className="w-3 h-3 text-[#78716c] shrink-0" />
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!isCurrentStep && onJumpToStep) {
+                            onJumpToStep(realIndex);
+                          }
+                        }}
+                        disabled={isCurrentStep}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all shrink-0 ${
+                          isCurrentStep
+                            ? 'bg-[#292212] text-[#D6A21A] border border-[#B77900]/50 cursor-default'
+                            : 'bg-[#242424] hover:bg-[#2e2e2e] text-[#d6d3d1] hover:text-[#FFFDF5] border border-[#383838] cursor-pointer'
+                        }`}
+                        title={
+                          isCurrentStep
+                            ? `Ubicación actual: ${VIEW_STEP_NAMES[stepView] || stepView}`
+                            : `Regresar a ${VIEW_STEP_NAMES[stepView] || stepView}`
+                        }
+                      >
+                        {VIEW_STEP_NAMES[stepView] || stepView}
+                      </button>
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+
+              {onGoBack && previousView && (
+                <button
+                  type="button"
+                  onClick={onGoBack}
+                  className="px-2.5 py-1 rounded-lg bg-[#242424] hover:bg-[#303030] border border-[#B77900]/40 text-[#D6A21A] text-[11px] font-bold inline-flex items-center gap-1 shrink-0 cursor-pointer"
+                  title={`Regresar al último lugar: ${VIEW_STEP_NAMES[previousView] || previousView}`}
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span>Volver a {VIEW_STEP_NAMES[previousView] || previousView}</span>
+                </button>
+              )}
+            </div>
+          )}
 
           {children}
         </main>

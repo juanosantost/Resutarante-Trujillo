@@ -3,7 +3,13 @@ import { useRestaurant } from '../../context/RestaurantContext';
 import { MenuItem, OrderType, Table, Product, CustomizedItemSelection, Separado } from '../../types';
 import { formatCOP, calculateOrderTotals, getEffectiveTaxRate } from '../../utils/calculations';
 import { ProductCustomizeModal } from '../catalog/ProductCustomizeModal';
-import { buildDefaultDailyMenuItem, sortProductsWithDailyFirst } from '../../utils/productUtils';
+import {
+  buildDefaultDailyMenuItem,
+  sortProductsWithDailyFirst,
+  getCatalogGroupByCategoryPreference,
+  groupProductsByCategories,
+  sortOrderItemsByCatalogConfig,
+} from '../../utils/productUtils';
 import { getVisibleOrderModifiers } from '../../utils/orderModifierUtils';
 import {
   X,
@@ -52,13 +58,15 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
   const {
     currentBranch,
     tables,
-    categories,
+    catalogCategories,
     menuItems,
     products,
     modifierGroups,
     createOrder,
     actionLoading,
   } = useRestaurant();
+
+  const catalogScrollRef = React.useRef<HTMLDivElement>(null);
 
   const [orderType, setOrderType] = useState<OrderType>(
     initialTable
@@ -107,6 +115,15 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
 
   const availableTables = tables.filter((t) => t.status === 'libre' || t.id === initialTable?.id);
 
+  const groupByCategory = useMemo(() => getCatalogGroupByCategoryPreference(), []);
+
+  // Categorías existentes del catálogo ordenadas (1°, 2°, 3°...)
+  const existingCategories = useMemo(() => {
+    return [...(catalogCategories || [])]
+      .filter((c) => c.isActive !== false && c.isVisibleInMenu !== false)
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+  }, [catalogCategories]);
+
   // Priorizar el catálogo de productos (Módulo 03) como fuente autoritativa
   const allActiveProducts: MenuItem[] = useMemo(() => {
     if (products && products.length > 0) {
@@ -133,20 +150,51 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
           sku: p.sku,
           isDailyMenu: p.isDailyMenu,
           featureGroups: p.featureGroups,
+          displayOrder: p.displayOrder,
+          globalOrder: p.globalOrder,
         }));
-      return sortProductsWithDailyFirst(activeProds);
+      return sortOrderItemsByCatalogConfig(activeProds, existingCategories, groupByCategory, 'todos');
     }
 
     // Fallback únicamente si la colección de productos estuviera vacía
     const fallbackList = menuItems.filter((m) => m.isAvailable !== false);
-    return sortProductsWithDailyFirst(fallbackList);
-  }, [menuItems, products]);
+    return sortOrderItemsByCatalogConfig(fallbackList, existingCategories, groupByCategory, 'todos');
+  }, [menuItems, products, existingCategories, groupByCategory]);
+
+  // Botones de categoría que coinciden exactamente con las categorías existentes en el catálogo
+  const navCategoryButtons = useMemo(() => {
+    const validIds = new Set(existingCategories.map((c) => c.id));
+    const list = existingCategories.map((c) => ({
+      id: c.id,
+      name: c.name,
+      count: allActiveProducts.filter((p) => p.categoryId === c.id).length,
+    }));
+
+    const uncategorizedCount = allActiveProducts.filter(
+      (p) => !p.categoryId || !validIds.has(p.categoryId)
+    ).length;
+
+    if (uncategorizedCount > 0) {
+      list.push({
+        id: 'sin-categoria',
+        name: 'Sin Categoría',
+        count: uncategorizedCount,
+      });
+    }
+
+    return list;
+  }, [existingCategories, allActiveProducts]);
 
   const filteredMenuItems = useMemo(() => {
+    const validCatIds = new Set(existingCategories.map((c) => c.id));
     const list = allActiveProducts.filter((item) => {
       if (item.isAvailable === false) return false;
-      if (selectedCategory !== 'todos' && item.categoryId !== selectedCategory) {
-        return false;
+      if (selectedCategory !== 'todos') {
+        if (selectedCategory === 'sin-categoria') {
+          if (item.categoryId && validCatIds.has(item.categoryId)) return false;
+        } else if (item.categoryId !== selectedCategory) {
+          return false;
+        }
       }
       if (searchFilter.trim()) {
         const query = searchFilter.toLowerCase().trim();
@@ -157,8 +205,20 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
       }
       return true;
     });
-    return sortProductsWithDailyFirst(list);
-  }, [allActiveProducts, selectedCategory, searchFilter]);
+    return sortOrderItemsByCatalogConfig(list, existingCategories, groupByCategory, selectedCategory);
+  }, [allActiveProducts, selectedCategory, searchFilter, existingCategories, groupByCategory]);
+
+  const groupedMenuSections = useMemo(() => {
+    return groupProductsByCategories(filteredMenuItems, existingCategories);
+  }, [filteredMenuItems, existingCategories]);
+
+  const handleCategoryNavClick = (catId: string) => {
+    const nextCat = selectedCategory === catId && catId !== 'todos' ? 'todos' : catId;
+    setSelectedCategory(nextCat);
+    if (catalogScrollRef.current) {
+      catalogScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
 
   // Handle clicking product in grid
   const handleSelectProduct = (item: MenuItem, forceCustomize: boolean = false) => {
@@ -480,26 +540,25 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
           </div>
         </div>
 
-        {/* Pestañas de Categorías Estilo Kiosco (Grandes y Táctiles) */}
-        <div className="px-4 sm:px-6 py-2.5 bg-[#14131a] border-b border-[#2d281e] flex items-center gap-2 overflow-x-auto scrollbar-none shrink-0">
+        {/* Pestañas de Categorías Estilo Kiosco Sticky (Fácil navegación en Compu y Celular) */}
+        <div className="sticky-category-bar sticky top-0 z-30 px-3 sm:px-6 py-2.5 bg-[#14131a]/95 backdrop-blur-md border-b border-[#2d281e] shadow-md flex items-center gap-2 overflow-x-auto scrollbar-none snap-x snap-mandatory shrink-0">
           <button
             type="button"
-            onClick={() => setSelectedCategory('todos')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-2 ${
+            onClick={() => handleCategoryNavClick('todos')}
+            className={`snap-start shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-2 ${
               selectedCategory === 'todos'
-                ? 'bg-[#d4af37] text-[#0e0e12] shadow-md shadow-[#d4af37]/20'
+                ? 'bg-[#d4af37] text-[#0e0e12] shadow-md shadow-[#d4af37]/20 ring-1 ring-[#fef3c7]/40'
                 : 'bg-[#18171f] text-[#a8a29e] border border-[#2d281e] hover:bg-[#201e28] hover:text-white'
             }`}
           >
-            <UtensilsCrossed className="w-3.5 h-3.5" />
+            <UtensilsCrossed className="w-3.5 h-3.5 shrink-0" />
             <span>Todos los Platos</span>
             <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${selectedCategory === 'todos' ? 'bg-[#0e0e12]/20 text-[#0e0e12]' : 'bg-black/40 text-[#d4af37]'}`}>
               {allActiveProducts.length}
             </span>
           </button>
 
-          {categories.map((c) => {
-            const count = allActiveProducts.filter((p) => p.categoryId === c.id).length;
+          {navCategoryButtons.map((c) => {
             const Icon = getCategoryIcon(c.name);
             const isSelected = selectedCategory === c.id;
 
@@ -507,17 +566,17 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
               <button
                 key={c.id}
                 type="button"
-                onClick={() => setSelectedCategory(c.id)}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-2 ${
+                onClick={() => handleCategoryNavClick(c.id)}
+                className={`snap-start shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-2 ${
                   isSelected
-                    ? 'bg-[#d4af37] text-[#0e0e12] shadow-md shadow-[#d4af37]/20'
+                    ? 'bg-[#d4af37] text-[#0e0e12] shadow-md shadow-[#d4af37]/20 ring-1 ring-[#fef3c7]/40'
                     : 'bg-[#18171f] text-[#a8a29e] border border-[#2d281e] hover:bg-[#201e28] hover:text-white'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5" />
+                <Icon className="w-3.5 h-3.5 shrink-0" />
                 <span>{c.name}</span>
                 <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${isSelected ? 'bg-[#0e0e12]/20 text-[#0e0e12]' : 'bg-black/40 text-[#d4af37]'}`}>
-                  {count}
+                  {c.count}
                 </span>
               </button>
             );
@@ -525,7 +584,7 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
         </div>
 
         {/* CATÁLOGO COMPLETO ESTILO KIOSCO ULTRA-COMPACTO */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-4 bg-[#0f0e13]">
+        <div ref={catalogScrollRef} className="flex-1 overflow-y-auto p-3 sm:p-4 bg-[#0f0e13] scroll-smooth">
           {filteredMenuItems.length === 0 ? (
             <div className="h-full min-h-[300px] flex flex-col items-center justify-center p-8 rounded-3xl bg-[#14131a] border border-dashed border-[#2d281e] text-center my-auto">
               <UtensilsCrossed className="w-12 h-12 text-[#a8a29e] mb-3 opacity-30" />
@@ -547,6 +606,136 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                   Ver todo el menú ({allActiveProducts.length} productos)
                 </button>
               )}
+            </div>
+          ) : groupByCategory && selectedCategory === 'todos' ? (
+            <div className="space-y-6 pb-6">
+              {groupedMenuSections.map((section, secIdx) => (
+                <div key={section.categoryId} id={`order-cat-${section.categoryId}`} className="space-y-2.5">
+                  <div className="sticky-category-header sticky top-0 z-20 flex items-center justify-between px-3 py-2 rounded-xl bg-[#18171f]/95 backdrop-blur-md border border-[#2d281e] shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-lg bg-[#d4af37] text-[#0e0e12] text-[11px] font-black flex items-center justify-center">
+                        {secIdx + 1}°
+                      </span>
+                      <span className="text-xs sm:text-sm font-black text-[#fef3c7]">
+                        {section.categoryName}
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-[#a8a29e] font-semibold">
+                      {section.products.length}{' '}
+                      {section.products.length === 1 ? 'producto' : 'productos'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
+                    {section.products.map((item) => {
+                      const inCartQty = cartItems
+                        .filter((c) => c.productId === item.id)
+                        .reduce((sum, c) => sum + c.quantity, 0);
+                      const isDaily = Boolean(item.isDailyMenu || item.id === 'prod-almuerzo-del-dia');
+
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => handleQuickAddProduct(item)}
+                          className={`rounded-2xl border transition-all flex flex-col justify-between overflow-hidden cursor-pointer group hover:scale-[1.01] hover:shadow-xl ${
+                            isDaily
+                              ? 'bg-[#1b1915] border-[#d4af37]/80 ring-1 ring-[#d4af37]/40 shadow-lg shadow-[#d4af37]/10'
+                              : inCartQty > 0
+                              ? 'bg-[#1b181e] border-[#d4af37] shadow-lg shadow-[#d4af37]/15 ring-1 ring-[#d4af37]'
+                              : 'bg-[#15141a] border-[#292520] hover:border-[#d4af37]/60 hover:bg-[#1a1820]'
+                          }`}
+                        >
+                          <div className="relative w-full h-16 sm:h-16 bg-[#1a1822] overflow-hidden">
+                            {item.image ? (
+                              <img
+                                src={item.image}
+                                alt={item.name}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                onError={(e) => {
+                                  (e.target as HTMLElement).style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-[#1e1b26] text-[#d4af37]/40">
+                                <UtensilsCrossed className="w-5 h-5" />
+                              </div>
+                            )}
+
+                            <span className="prep-time-badge absolute top-1 left-1 px-1.5 py-0.5 rounded-full text-[8.5px] font-bold bg-black/80 backdrop-blur-md text-[#fef3c7] border border-white/10 flex items-center gap-0.5 shadow">
+                              <Clock className="w-2 h-2 text-[#d4af37]" />
+                              {item.prepTimeMinutes || 15}m
+                            </span>
+
+                            {inCartQty > 0 && (
+                              <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded-full text-[9px] font-black bg-[#d4af37] text-[#0e0e12] shadow-lg flex items-center gap-0.5 animate-in zoom-in-95">
+                                ✓ {inCartQty}
+                              </span>
+                            )}
+
+                            {isDaily && (
+                              <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded-md text-[8.5px] font-black bg-gradient-to-r from-amber-500 to-[#d4af37] text-[#0e0e12] flex items-center gap-0.5 shadow-sm">
+                                <Sparkles className="w-2.5 h-2.5 fill-current" />
+                                Menú del Día
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="p-2 sm:p-2.5 flex-1 flex flex-col justify-between space-y-1.5">
+                            <div>
+                              <h3 className="font-black text-xs text-[#fef3c7] leading-tight group-hover:text-[#d4af37] transition-colors line-clamp-2">
+                                {item.name}
+                              </h3>
+                              <p className="text-[10px] text-[#a8a29e] mt-0.5 line-clamp-2 leading-snug">
+                                {isDaily
+                                  ? 'Sopa · Principio · Carne · 3 Acompañamientos · Bebida'
+                                  : item.description || 'Receta artesanal preparada en cocina.'}
+                              </p>
+                            </div>
+
+                            <div className="pt-1.5 border-t border-[#25221c] flex items-center justify-between gap-1">
+                              <div>
+                                <span className="text-xs sm:text-sm font-black text-[#d4af37] font-mono leading-none block">
+                                  {formatCOP(item.price)}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSelectProduct(item, true);
+                                  }}
+                                  className="p-1 rounded-lg bg-[#24222e] hover:bg-[#343042] text-[#d4af37] border border-[#d4af37]/40 cursor-pointer"
+                                  title="Configurar opciones del plato"
+                                >
+                                  <Sliders className="w-3 h-3" />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSelectProduct(item, true);
+                                  }}
+                                  className={`py-1 px-2.5 rounded-lg font-black text-[10px] sm:text-[11px] flex items-center justify-center shadow-sm transition-all cursor-pointer hover:brightness-110 active:scale-95 ${
+                                    isDaily
+                                      ? 'bg-gradient-to-r from-amber-500 to-[#d4af37] text-[#0e0e12] border border-[#d4af37]'
+                                      : 'bg-gradient-to-r from-[#292212] to-[#3a2f16] group-hover:from-[#d4af37] group-hover:to-[#b89728] text-[#fef3c7] group-hover:text-[#0e0e12] border border-[#d4af37]/60'
+                                  }`}
+                                  title="Configurar opciones del plato"
+                                >
+                                  <span>+ Agregar</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 pb-6">

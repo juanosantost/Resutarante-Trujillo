@@ -3,13 +3,20 @@ import { useRestaurant } from '../../context/RestaurantContext';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { Product, Category } from '../../types';
-import { filterProducts, sortCategories, formatProductPrice } from '../../utils/productUtils';
+import {
+  filterProducts,
+  sortCategories,
+  formatProductPrice,
+  sortProductsWithDailyFirst,
+  groupProductsByCategories,
+} from '../../utils/productUtils';
 import { ProductCard } from './ProductCard';
 import { ProductCustomizeModal } from './ProductCustomizeModal';
 import { ProductManagementModal } from './ProductManagementModal';
 import { CategoryManagementModal } from './CategoryManagementModal';
 import { ModifierGroupManagementModal } from './ModifierGroupManagementModal';
 import { ProductExcelImportPanel } from './ProductExcelImportPanel';
+import { CatalogOrganizerModal } from './CatalogOrganizerModal';
 import {
   UtensilsCrossed,
   Search,
@@ -31,6 +38,8 @@ import {
   Tag,
   HelpCircle,
   Lock,
+  ListOrdered,
+  FolderKanban,
 } from 'lucide-react';
 
 export const ProductCatalogView: React.FC = () => {
@@ -42,6 +51,8 @@ export const ProductCatalogView: React.FC = () => {
     currentBranch,
     toggleProductStatus,
     deleteProduct,
+    reorderCategories,
+    reorderProducts,
     actionLoading,
   } = useRestaurant();
   const { currentUser, branches } = useAuth();
@@ -55,6 +66,23 @@ export const ProductCatalogView: React.FC = () => {
   const [deliveryOnly, setDeliveryOnly] = useState<boolean>(false);
   const [combosOnly, setCombosOnly] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [groupByCategory, setGroupByCategory] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('colmena_catalog_group_by_category');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const handleToggleGroupByCategory = (grouped: boolean) => {
+    setGroupByCategory(grouped);
+    try {
+      localStorage.setItem('colmena_catalog_group_by_category', String(grouped));
+    } catch {
+      // ignore storage errors
+    }
+  };
 
   // Modals state
   const [customizingProduct, setCustomizingProduct] = useState<Product | null>(null);
@@ -63,35 +91,42 @@ export const ProductCatalogView: React.FC = () => {
   const [isCreatingProduct, setIsCreatingProduct] = useState<boolean>(false);
   const [showCategoryModal, setShowCategoryModal] = useState<boolean>(false);
   const [showModifierModal, setShowModifierModal] = useState<boolean>(false);
+  const [showOrganizerModal, setShowOrganizerModal] = useState<boolean>(false);
 
   const canManage = currentUser?.role === 'administrador';
 
   // Sorted active categories
   const sortedCategories = useMemo(() => {
-    return sortCategories(catalogCategories);
+    return sortCategories(catalogCategories).filter((c) => c.isActive !== false);
   }, [catalogCategories]);
+
+  const uncategorizedProductsCount = useMemo(() => {
+    const validIds = new Set(sortedCategories.map((c) => c.id));
+    return products.filter((p) => !p.categoryId || !validIds.has(p.categoryId)).length;
+  }, [products, sortedCategories]);
 
   // Filtered Products
   const filteredProducts = useMemo(() => {
+    const validCatIds = new Set(sortedCategories.map((c) => c.id));
     let list = filterProducts(products, {
       searchTerm,
-      categoryId: selectedCategoryId,
+      categoryId: selectedCategoryId === 'sin-categoria' ? 'todos' : selectedCategoryId,
       branchId: selectedBranchFilter,
       status: selectedStatus,
       availableForDeliveryOnly: deliveryOnly,
     });
 
+    if (selectedCategoryId === 'sin-categoria') {
+      list = list.filter((p) => !p.categoryId || !validCatIds.has(p.categoryId));
+    }
+
     if (combosOnly) {
       list = list.filter((p) => p.isCombo);
     }
 
-    const dailyIdx = list.findIndex((p) => p.id === 'prod-almuerzo-del-dia' || p.isDailyMenu);
-    if (dailyIdx > 0) {
-      const [daily] = list.splice(dailyIdx, 1);
-      list.unshift(daily);
-    }
-
-    return list;
+    const sortMode =
+      !groupByCategory && selectedCategoryId === 'todos' ? 'global' : 'category';
+    return sortProductsWithDailyFirst(list, sortMode);
   }, [
     products,
     searchTerm,
@@ -100,7 +135,14 @@ export const ProductCatalogView: React.FC = () => {
     selectedStatus,
     deliveryOnly,
     combosOnly,
+    groupByCategory,
+    sortedCategories,
   ]);
+
+  // Grouped Products when groupByCategory is active
+  const groupedCatalogSections = useMemo(() => {
+    return groupProductsByCategories(filteredProducts, sortedCategories);
+  }, [filteredProducts, sortedCategories]);
 
   // Stats Counters
   const totalActiveProducts = products.filter((p) => p.status === 'activo').length;
@@ -134,6 +176,15 @@ export const ProductCatalogView: React.FC = () => {
           {/* Action CTAs */}
           {canManage && (
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowOrganizerModal(true)}
+                className="px-3.5 py-2 rounded-xl bg-[#292212] hover:bg-[#382e18] border border-[#B77900] text-[#D6A21A] text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer shadow"
+              >
+                <ListOrdered className="w-3.5 h-3.5 text-[#D6A21A]" />
+                <span>Organizar Orden (1°, 2°, 3°)</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setShowCategoryModal(true)}
@@ -211,12 +262,68 @@ export const ProductCatalogView: React.FC = () => {
       {/* 2.5. Espacio de Carga Masiva por Excel */}
       {canManage && <ProductExcelImportPanel />}
 
-      {/* 3. Category Tabs Bar */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+      {/* 2.8. Espacio para Escoger Agrupación por Categoría y Organizar Posiciones (1°, 2°, 3°...) */}
+      <div className="p-4 rounded-2xl bg-[#181818] border border-[#B77900]/40 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-md">
+        <div className="flex items-start sm:items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[#292212] border border-[#B77900]/60 text-[#D6A21A] flex items-center justify-center shrink-0">
+            <FolderKanban className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-xs sm:text-sm font-black text-[#FFFDF5] flex items-center gap-2">
+              <span>Agrupación y Orden de Productos (1°, 2°, 3°...)</span>
+            </h3>
+            <p className="text-[11px] text-zinc-400">
+              Escoge si quieres ver el catálogo agrupado por categorías o en lista general, y organiza qué producto va primero, segundo o tercero.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Switch Agrupar por Categoría vs Sin Categorías */}
+          <div className="inline-flex items-center bg-[#121212] p-1 rounded-xl border border-[#2d2d2d]">
+            <button
+              type="button"
+              onClick={() => handleToggleGroupByCategory(true)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 transition-all cursor-pointer ${
+                groupByCategory
+                  ? 'bg-[#B77900] text-[#181818] shadow'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Agrupar por Categoría</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleToggleGroupByCategory(false)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 transition-all cursor-pointer ${
+                !groupByCategory
+                  ? 'bg-[#B77900] text-[#181818] shadow'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <ListOrdered className="w-3.5 h-3.5" />
+              <span>Sin Agrupar (Lista General)</span>
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowOrganizerModal(true)}
+            className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#B77900] to-[#D6A21A] text-[#181818] text-xs font-black hover:brightness-110 transition-all shadow inline-flex items-center gap-1.5 cursor-pointer"
+          >
+            <ListOrdered className="w-4 h-4" />
+            <span>Elegir Orden (1°, 2°, 3°...)</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 3. Category Tabs Bar Sticky (Fácil navegación en Compu y Celular) */}
+      <div className="sticky-category-bar sticky top-0 z-30 py-2.5 px-3 rounded-2xl bg-[#121212]/95 backdrop-blur-md border border-[#2d2d2d] shadow-lg flex items-center gap-2 overflow-x-auto scrollbar-none snap-x snap-mandatory">
         <button
           type="button"
           onClick={() => setSelectedCategoryId('todos')}
-          className={`px-4 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 border ${
+          className={`snap-start shrink-0 px-4 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 border ${
             selectedCategoryId === 'todos'
               ? 'bg-[#B77900] text-[#181818] border-[#B77900] shadow-md'
               : 'bg-[#1a1a1a] text-zinc-300 border-[#2d2d2d] hover:border-[#B77900]/50'
@@ -240,8 +347,8 @@ export const ProductCatalogView: React.FC = () => {
             <button
               key={cat.id}
               type="button"
-              onClick={() => setSelectedCategoryId(cat.id)}
-              className={`px-4 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 border ${
+              onClick={() => setSelectedCategoryId(isSelected ? 'todos' : cat.id)}
+              className={`snap-start shrink-0 px-4 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 border ${
                 isSelected
                   ? 'bg-[#B77900] text-[#181818] border-[#B77900] shadow-md'
                   : 'bg-[#1a1a1a] text-zinc-300 border-[#2d2d2d] hover:border-[#B77900]/50'
@@ -258,6 +365,33 @@ export const ProductCatalogView: React.FC = () => {
             </button>
           );
         })}
+
+        {uncategorizedProductsCount > 0 && (
+          <button
+            type="button"
+            onClick={() =>
+              setSelectedCategoryId(
+                selectedCategoryId === 'sin-categoria' ? 'todos' : 'sin-categoria'
+              )
+            }
+            className={`snap-start shrink-0 px-4 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 border ${
+              selectedCategoryId === 'sin-categoria'
+                ? 'bg-[#B77900] text-[#181818] border-[#B77900] shadow-md'
+                : 'bg-[#1a1a1a] text-zinc-300 border-[#2d2d2d] hover:border-[#B77900]/50'
+            }`}
+          >
+            <span>Sin Categoría</span>
+            <span
+              className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                selectedCategoryId === 'sin-categoria'
+                  ? 'bg-[#181818] text-[#D6A21A]'
+                  : 'bg-[#292929] text-zinc-400'
+              }`}
+            >
+              {uncategorizedProductsCount}
+            </span>
+          </button>
+        )}
       </div>
 
       {/* 4. Toolbar & Search Controls */}
@@ -380,25 +514,80 @@ export const ProductCatalogView: React.FC = () => {
           </button>
         </div>
       ) : viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredProducts.map((prod) => (
-            <ProductCard
-              key={prod.id}
-              product={prod}
-              prepStations={prepStations}
-              canManage={canManage}
-              onCustomize={(p) => setCustomizingProduct(p)}
-              onEdit={(p) => setEditingProduct(p)}
-              onDelete={(p) => setProductToDelete(p)}
-              onToggleStatus={(p) =>
-                toggleProductStatus(
-                  p.id,
-                  p.status === 'activo' ? 'agotado' : 'activo'
-                )
-              }
-            />
-          ))}
-        </div>
+        groupByCategory && selectedCategoryId === 'todos' ? (
+          <div className="space-y-8">
+            {groupedCatalogSections.map((section, secIdx) => (
+              <div key={section.categoryId} className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 rounded-2xl bg-[#181818] border border-[#B77900]/40 shadow-sm">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-7 h-7 rounded-lg bg-[#B77900] text-[#181818] text-xs font-black flex items-center justify-center">
+                      {secIdx + 1}°
+                    </span>
+                    <div>
+                      <h3 className="text-sm font-black text-[#FFFDF5] tracking-tight">
+                        {section.categoryName}
+                      </h3>
+                      <p className="text-[11px] text-zinc-400">
+                        {section.products.length}{' '}
+                        {section.products.length === 1
+                          ? 'producto ordenado'
+                          : 'productos ordenados (1°, 2°, 3°...)'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowOrganizerModal(true)}
+                    className="px-3 py-1.5 rounded-xl bg-[#252525] hover:bg-[#303030] border border-[#B77900]/40 text-[#D6A21A] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <ListOrdered className="w-3.5 h-3.5" />
+                    <span>Organizar {section.categoryName}</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {section.products.map((prod) => (
+                    <ProductCard
+                      key={prod.id}
+                      product={prod}
+                      prepStations={prepStations}
+                      canManage={canManage}
+                      onCustomize={(p) => setCustomizingProduct(p)}
+                      onEdit={(p) => setEditingProduct(p)}
+                      onDelete={(p) => setProductToDelete(p)}
+                      onToggleStatus={(p) =>
+                        toggleProductStatus(
+                          p.id,
+                          p.status === 'activo' ? 'agotado' : 'activo'
+                        )
+                      }
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {filteredProducts.map((prod) => (
+              <ProductCard
+                key={prod.id}
+                product={prod}
+                prepStations={prepStations}
+                canManage={canManage}
+                onCustomize={(p) => setCustomizingProduct(p)}
+                onEdit={(p) => setEditingProduct(p)}
+                onDelete={(p) => setProductToDelete(p)}
+                onToggleStatus={(p) =>
+                  toggleProductStatus(
+                    p.id,
+                    p.status === 'activo' ? 'agotado' : 'activo'
+                  )
+                }
+              />
+            ))}
+          </div>
+        )
       ) : (
         /* Table View */
         <div className="rounded-3xl bg-[#191919] border border-[#2b2b2b] overflow-hidden shadow-xl">
@@ -575,6 +764,17 @@ export const ProductCatalogView: React.FC = () => {
       {showModifierModal && (
         <ModifierGroupManagementModal onClose={() => setShowModifierModal(false)} />
       )}
+
+      <CatalogOrganizerModal
+        isOpen={showOrganizerModal}
+        onClose={() => setShowOrganizerModal(false)}
+        products={products}
+        categories={catalogCategories}
+        groupByCategory={groupByCategory}
+        onToggleGroupByCategory={handleToggleGroupByCategory}
+        onReorderCategories={reorderCategories}
+        onReorderProducts={reorderProducts}
+      />
 
       {/* Modal Confirmación de Eliminación de Producto */}
       {productToDelete && (

@@ -185,6 +185,7 @@ interface RestaurantContextType {
   toggleCategoryActive: (id: string, isActive: boolean) => Promise<void>;
   toggleCategoryVisibility: (id: string, isVisible: boolean) => Promise<void>;
   reorderCategories: (orderedIds: string[]) => Promise<void>;
+  reorderProducts: (updates: Array<{ id: string; displayOrder?: number; globalOrder?: number }>) => Promise<void>;
   deleteCategory: (id: string) => Promise<void>;
 
   createModifierGroup: (data: Omit<ModifierGroup, 'id'>) => Promise<string>;
@@ -449,6 +450,8 @@ interface RestaurantContextType {
 
   editAbono: (abonoId: string, updates: { notes?: string; paymentMethod?: PaymentMethod }) => Promise<void>;
   voidAbono: (abonoId: string, reason: string) => Promise<void>;
+  cancelCarteraRecord: (carteraId: string, reason: string) => Promise<void>;
+  deleteCarteraRecord: (carteraId: string) => Promise<void>;
 
   // Medios de Pago
   paymentMethods: PaymentMethodItem[];
@@ -992,7 +995,12 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const carteraQ = query(collection(db, 'cartera'), where('branchId', '==', currentBranchId));
     const unsubCartera = onSnapshot(carteraQ, (snap) => {
       const list: CarteraRecord[] = [];
-      snap.forEach((d) => list.push({ ...d.data(), id: d.id } as CarteraRecord));
+      snap.forEach((d) => {
+        const data = d.data() as CarteraRecord & { isDeleted?: boolean };
+        if (!data.isDeleted) {
+          list.push({ ...data, id: d.id });
+        }
+      });
       setCartera(list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
     }, (error) => handleFirestoreError(error, OperationType.GET, 'cartera'));
 
@@ -3640,6 +3648,62 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   };
 
+  const reorderProducts = async (
+    updates: Array<{ id: string; displayOrder?: number; globalOrder?: number }>
+  ): Promise<void> => {
+    try {
+      const now = new Date().toISOString();
+      const updateMap = new Map(updates.map((u) => [u.id, u]));
+
+      // Actualizar estado local inmediatamente para respuesta instantánea en la UI
+      setProducts((prev) =>
+        prev.map((p) => {
+          const upd = updateMap.get(p.id);
+          if (!upd) return p;
+          return {
+            ...p,
+            ...(upd.displayOrder !== undefined ? { displayOrder: upd.displayOrder } : {}),
+            ...(upd.globalOrder !== undefined ? { globalOrder: upd.globalOrder } : {}),
+            updatedAt: now,
+          };
+        })
+      );
+
+      setMenuItems((prev) =>
+        prev.map((m) => {
+          const upd = updateMap.get(m.id);
+          if (!upd) return m;
+          return {
+            ...m,
+            ...(upd.displayOrder !== undefined ? { displayOrder: upd.displayOrder } : {}),
+            ...(upd.globalOrder !== undefined ? { globalOrder: upd.globalOrder } : {}),
+          };
+        })
+      );
+
+      for (const item of updates) {
+        const payload: Record<string, any> = { updatedAt: now };
+        if (item.displayOrder !== undefined) payload.displayOrder = item.displayOrder;
+        if (item.globalOrder !== undefined) payload.globalOrder = item.globalOrder;
+
+        await setDoc(doc(db, 'products', item.id), payload, { merge: true });
+        await setDoc(doc(db, 'menuItems', item.id), payload, { merge: true }).catch(() => {});
+      }
+
+      await logAuditAction({
+        entityType: 'product',
+        entityId: 'all',
+        entityName: 'Catálogo de Productos',
+        action: 'update',
+        details: `Reordenamiento de posiciones de ${updates.length} productos en el catálogo`,
+      });
+    } catch (error) {
+      console.error('Error reordering products:', error);
+      handleFirestoreError(error, OperationType.UPDATE, 'products');
+      throw error;
+    }
+  };
+
   const deleteCategory = async (id: string): Promise<void> => {
     try {
       if (id === 'cat-menu-del-dia' || id.includes('menu-del-dia')) {
@@ -5511,6 +5575,148 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   };
 
+  const cancelCarteraRecord = async (carteraId: string, reason: string): Promise<void> => {
+    setActionLoading(true);
+    try {
+      const crd = cartera.find((c) => c.id === carteraId);
+      if (!crd) throw new Error('Cuenta de cartera no encontrada');
+
+      const cleanReason = reason.trim() || 'Anulada por solicitud del usuario';
+      const now = new Date().toISOString();
+
+      // Anular abonos activos asociados a esta cuenta de cartera
+      const activeAbonosForCartera = abonos.filter(
+        (a) => a.parentId === carteraId && a.parentType === 'cartera' && a.status === 'activo'
+      );
+
+      for (const ab of activeAbonosForCartera) {
+        const voided = voidAbonoRecord(ab, `Anulación de Cartera #${crd.code}: ${cleanReason}`, staffName);
+        await updateDoc(doc(db, 'abonos', ab.id), {
+          status: 'anulado',
+          voidReason: voided.voidReason,
+          voidedAt: voided.voidedAt,
+          voidedBy: voided.voidedBy,
+          updatedAt: now,
+        }).catch(() => {});
+
+        if (activeShift && ab.paymentMethod === 'efectivo') {
+          await addCashMovement(
+            'egreso',
+            ab.amount,
+            `Reverso por anulación de Cartera #${crd.code} (Abono #${ab.receiptNumber}): ${cleanReason}`
+          ).catch(() => {});
+        }
+      }
+
+      const updatedFields: Partial<CarteraRecord> = {
+        status: 'anulada',
+        balanceDue: 0,
+        cancellationReason: cleanReason,
+        cancelledAt: now,
+        cancelledBy: staffName,
+        notes: `${crd.notes ? `${crd.notes} | ` : ''}[ANULADA: ${cleanReason}]`,
+        updatedAt: now,
+      };
+
+      await updateDoc(doc(db, 'cartera', carteraId), sanitizeFirestoreData(updatedFields));
+
+      setCartera((prev) =>
+        prev.map((item) => (item.id === carteraId ? { ...item, ...updatedFields } : item))
+      );
+
+      if (activeAbonosForCartera.length > 0) {
+        const voidedIds = new Set(activeAbonosForCartera.map((a) => a.id));
+        setAbonos((prev) =>
+          prev.map((a) =>
+            voidedIds.has(a.id)
+              ? {
+                  ...a,
+                  status: 'anulado',
+                  voidReason: `Anulación de Cartera #${crd.code}: ${cleanReason}`,
+                  voidedAt: now,
+                  voidedBy: staffName,
+                }
+              : a
+          )
+        );
+      }
+
+      await logAuditAction({
+        entityType: 'branch',
+        entityId: carteraId,
+        entityName: `Cartera #${crd.code}`,
+        action: 'status_change',
+        details: `Cuenta de cartera #${crd.code} (${crd.customerName}) ANULADA. Motivo: ${cleanReason}`,
+      });
+    } catch (err) {
+      console.error('Error cancelling cartera record:', err);
+      handleFirestoreError(err, OperationType.UPDATE, 'cartera');
+      throw err;
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const deleteCarteraRecord = async (carteraId: string): Promise<void> => {
+    setActionLoading(true);
+    try {
+      const crd = cartera.find((c) => c.id === carteraId);
+      const code = crd?.code || carteraId;
+      const customerName = crd?.customerName || 'Cliente';
+
+      // Eliminar abonos asociados a esta cuenta de cartera
+      const relatedAbonos = abonos.filter(
+        (a) => a.parentId === carteraId && a.parentType === 'cartera'
+      );
+      for (const ab of relatedAbonos) {
+        await deleteDoc(doc(db, 'abonos', ab.id)).catch(async () => {
+          await updateDoc(doc(db, 'abonos', ab.id), {
+            status: 'anulado',
+            voidReason: `Cuenta de cartera #${code} eliminada`,
+            updatedAt: new Date().toISOString(),
+          }).catch(() => {});
+        });
+      }
+
+      // Eliminar documento de cartera en Firestore
+      try {
+        await deleteDoc(doc(db, 'cartera', carteraId));
+      } catch (delErr) {
+        console.warn('Fallback soft-delete en cartera:', delErr);
+        await setDoc(
+          doc(db, 'cartera', carteraId),
+          {
+            status: 'anulada',
+            balanceDue: 0,
+            isDeleted: true,
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+      }
+
+      setCartera((prev) => prev.filter((item) => item.id !== carteraId));
+      if (relatedAbonos.length > 0) {
+        const relatedIds = new Set(relatedAbonos.map((a) => a.id));
+        setAbonos((prev) => prev.filter((a) => !relatedIds.has(a.id)));
+      }
+
+      await logAuditAction({
+        entityType: 'branch',
+        entityId: carteraId,
+        entityName: `Cartera #${code}`,
+        action: 'delete',
+        details: `Cuenta de cartera #${code} de ${customerName} eliminada permanentemente del sistema`,
+      });
+    } catch (err) {
+      console.error('Error deleting cartera record:', err);
+      handleFirestoreError(err, OperationType.DELETE, 'cartera');
+      throw err;
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // CRUD de Medios de Pago
   const createPaymentMethod = async (data: Omit<PaymentMethodItem, 'id' | 'createdAt'>): Promise<string> => {
     setActionLoading(true);
@@ -5842,6 +6048,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         isDailyMenu: p.isDailyMenu,
         featureGroups: p.featureGroups,
         comboConfig: p.comboConfig,
+        displayOrder: p.displayOrder,
+        globalOrder: p.globalOrder,
       }));
 
     // Combinar con menuItems evitando duplicados por id
@@ -5850,31 +6058,40 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       (m) => !existingIds.has(m.id) && m.isAvailable !== false
     );
     const combined = [...mappedProducts, ...extraMenuItems];
-    const dailyIdx = combined.findIndex((m) => m.id === 'prod-almuerzo-del-dia' || m.isDailyMenu);
-    if (dailyIdx > 0) {
-      const [daily] = combined.splice(dailyIdx, 1);
-      combined.unshift(daily);
-    }
+    combined.sort((a, b) => {
+      const orderA = a.displayOrder ?? a.globalOrder;
+      const orderB = b.displayOrder ?? b.globalOrder;
+      if (typeof orderA === 'number' && typeof orderB === 'number' && orderA !== orderB) {
+        return orderA - orderB;
+      }
+      if (typeof orderA === 'number' && typeof orderB !== 'number') return -1;
+      if (typeof orderA !== 'number' && typeof orderB === 'number') return 1;
+      const aDaily = a.id === 'prod-almuerzo-del-dia' || Boolean(a.isDailyMenu);
+      const bDaily = b.id === 'prod-almuerzo-del-dia' || Boolean(b.isDailyMenu);
+      if (aDaily && !bDaily) return -1;
+      if (!aDaily && bDaily) return 1;
+      return (a.name || '').localeCompare(b.name || '', 'es');
+    });
     return combined;
   }, [products, menuItems]);
 
   const activeCombinedCategories: MenuCategory[] = React.useMemo(() => {
-    const mappedCatalog: MenuCategory[] = catalogCategories
-      .filter((c) => c.isActive !== false)
-      .map((c, idx) => ({
-        id: c.id,
-        name: c.name,
-        order: c.order || idx + 1,
-        icon: c.icon,
-        isActive: c.isActive,
-        isVisibleInMenu: c.isVisibleInMenu,
-        description: c.description,
-      }));
+    if (catalogCategories && catalogCategories.length > 0) {
+      return catalogCategories
+        .filter((c) => c.isActive !== false && c.isVisibleInMenu !== false)
+        .map((c, idx) => ({
+          id: c.id,
+          name: c.name,
+          order: c.order ?? idx + 1,
+          icon: c.icon,
+          isActive: c.isActive,
+          isVisibleInMenu: c.isVisibleInMenu,
+          description: c.description,
+        }))
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
+    }
 
-    const existingCatIds = new Set(mappedCatalog.map((c) => c.id));
-    const extraCats = categories.filter((c) => !existingCatIds.has(c.id));
-
-    return [...mappedCatalog, ...extraCats].sort((a, b) => a.order - b.order);
+    return [...categories].sort((a, b) => (a.order || 0) - (b.order || 0));
   }, [catalogCategories, categories]);
 
   return (
@@ -5923,6 +6140,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         toggleCategoryActive,
         toggleCategoryVisibility,
         reorderCategories,
+        reorderProducts,
         deleteCategory,
         createModifierGroup,
         updateModifierGroup,
@@ -6005,6 +6223,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         registerCarteraAbono,
         editAbono,
         voidAbono,
+        cancelCarteraRecord,
+        deleteCarteraRecord,
 
         // Medios de Pago
         paymentMethods,

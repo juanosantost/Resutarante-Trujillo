@@ -809,17 +809,36 @@ html.theme-light button[class*="hover:bg-[#292212]"]:hover {
   border-color: #b45309 !important;
 }
 
+/* Barras y encabezados de categorías sticky en Modo Claro */
+html.theme-light .sticky-category-bar,
+html.theme-light [class*="bg-[#14131a]"],
+html.theme-light [class*="bg-[#16151c]"],
+html.theme-light [class*="bg-[#121212]"] {
+  background-color: rgba(255, 255, 255, 0.96) !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+html.theme-light .sticky-category-header,
+html.theme-light div[class*="bg-[#18171f]"]:not(button) {
+  background-color: rgba(248, 250, 252, 0.96) !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
 /* Badges / Contadores dentro de botones (por ejemplo, cantidades en pestañas de categoría) */
 html.theme-light button span[class*="bg-[#292929]"],
 html.theme-light button span[class*="bg-[#181818]"],
 html.theme-light button span[class*="bg-[#242424]"],
-html.theme-light button span[class*="bg-[#1a1a1a]"] {
+html.theme-light button span[class*="bg-[#1a1a1a]"],
+html.theme-light button span[class*="bg-black/40"] {
   background-color: #e2e8f0 !important;
   color: #0f172a !important;
 }
 /* Insignia dentro de pestaña de categoría seleccionada */
 html.theme-light button[class*="bg-[#B77900]"] span[class*="bg-[#181818]"],
-html.theme-light button[class*="border-[#B77900]"] span[class*="bg-[#181818]"] {
+html.theme-light button[class*="border-[#B77900]"] span[class*="bg-[#181818]"],
+html.theme-light button[class*="bg-[#d4af37]"] span[class*="bg-[#0e0e12]/20"] {
   background-color: rgba(255, 255, 255, 0.85) !important;
   color: #78350f !important;
   font-weight: 800 !important;

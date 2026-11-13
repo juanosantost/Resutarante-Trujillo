@@ -333,6 +333,8 @@ export interface Product {
   isDailyMenu?: boolean;
   comboConfig?: ComboConfig;
   recipe?: RecipeIngredient[];
+  displayOrder?: number; // Posición del producto dentro de su categoría (1, 2, 3...)
+  globalOrder?: number; // Posición del producto cuando no está agrupado por categoría (1, 2, 3...)
   createdAt: string;
   updatedAt: string;
 }
@@ -401,6 +403,8 @@ export interface MenuItem {
   isDailyMenu?: boolean;
   featureGroups?: ModifierGroup[];
   comboConfig?: ComboConfig;
+  displayOrder?: number;
+  globalOrder?: number;
 }
 
 export interface MenuCategory {
@@ -1047,6 +1051,9 @@ export interface CarteraRecord {
   dueDate: string; // Fecha límite de pago
   status: CarteraStatus;
   notes?: string;
+  cancellationReason?: string;
+  cancelledAt?: string;
+  cancelledBy?: string;
   createdAt: string;
   updatedAt: string;
   createdBy: string;
