@@ -27,10 +27,11 @@ import {
   X,
   Printer,
   ChefHat,
+  RotateCcw,
 } from 'lucide-react';
 
 export const OrdersView: React.FC = () => {
-  const { orders, currentBranch, cancelOrder } = useRestaurant();
+  const { orders, currentBranch, cancelOrder, toggleOrderItemCancelled } = useRestaurant();
   const { showToast } = useToast();
 
   const [statusFilter, setStatusFilter] = useState<string>('todos');
@@ -234,19 +235,62 @@ export const OrdersView: React.FC = () => {
                           <div className="space-y-1.5 text-xs">
                             {items.map((it) => {
                               const modSummary = formatModifiersDisplaySummary(it.selectedModifiers);
+                              const isCancelled = Boolean(it.cancelled);
+                              const isPaid = Boolean(it.paid);
 
                               return (
-                                <div key={it.id} className="border-b border-[#24211a] pb-1 last:border-0">
-                                  <div className="flex justify-between text-[#d6d3d1]">
-                                    <span className="font-semibold">
-                                      {it.quantity}x {it.name}
-                                    </span>
-                                    <span className="font-semibold text-[#fef3c7] shrink-0">
-                                      {formatCOP(it.price * it.quantity)}
-                                    </span>
+                                <div
+                                  key={it.id}
+                                  className={`border-b border-[#24211a] pb-1.5 last:border-0 ${
+                                    isCancelled ? 'opacity-65' : ''
+                                  }`}
+                                >
+                                  <div className="flex justify-between items-center gap-2 text-[#d6d3d1]">
+                                    <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                      <span className={`font-semibold ${isCancelled ? 'line-through text-red-400/90' : ''}`}>
+                                        {it.quantity}x {it.name}
+                                      </span>
+                                      {isCancelled && (
+                                        <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-red-950 text-red-300 border border-red-700/60">
+                                          Anulado
+                                        </span>
+                                      )}
+                                      {isPaid && !isCancelled && (
+                                        <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-[#2b2416] text-[#d4af37]">
+                                          ✓ Pagado
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                      <span className={`font-semibold shrink-0 ${isCancelled ? 'line-through text-red-400/70' : 'text-[#fef3c7]'}`}>
+                                        {formatCOP(it.price * it.quantity)}
+                                      </span>
+                                      {isAbierto && !isPaid && (
+                                        isCancelled ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => toggleOrderItemCancelled(order.id, it.id, false)}
+                                            className="px-1.5 py-0.5 rounded bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/60 text-[10px] font-bold flex items-center gap-0.5 cursor-pointer"
+                                            title="Restaurar este producto al pedido"
+                                          >
+                                            <RotateCcw className="w-3 h-3" />
+                                            <span>Restaurar</span>
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={() => toggleOrderItemCancelled(order.id, it.id, true)}
+                                            className="p-1 rounded bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-800/50 cursor-pointer"
+                                            title="Anular producto (queda tachado sin borrarse)"
+                                          >
+                                            <Trash2 className="w-3 h-3" />
+                                          </button>
+                                        )
+                                      )}
+                                    </div>
                                   </div>
                                   {modSummary && (
-                                    <div className="text-[10px] text-[#a8a29e] leading-snug pl-3 mt-0.5 whitespace-normal break-words">
+                                    <div className={`text-[10px] leading-snug pl-3 mt-0.5 whitespace-normal break-words ${isCancelled ? 'line-through text-[#78716c]' : 'text-[#a8a29e]'}`}>
                                       • {modSummary}
                                     </div>
                                   )}
@@ -256,7 +300,7 @@ export const OrdersView: React.FC = () => {
                                     </div>
                                   )}
                                   {it.notes && (
-                                    <div className="text-[10px] text-[#d4af37] italic pl-3 whitespace-normal break-words">
+                                    <div className={`text-[10px] italic pl-3 whitespace-normal break-words ${isCancelled ? 'line-through text-[#78716c]' : 'text-[#d4af37]'}`}>
                                       ↳ Obs: {it.notes}
                                     </div>
                                   )}

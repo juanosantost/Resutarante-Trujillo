@@ -437,6 +437,9 @@ export interface OrderItem {
   paid?: boolean;
   paidAt?: string;
   paidPaymentId?: string;
+  cancelled?: boolean;
+  cancelledAt?: string;
+  cancelledBy?: string;
 }
 
 export type DeliveryStatus =

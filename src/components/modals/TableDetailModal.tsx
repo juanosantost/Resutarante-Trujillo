@@ -25,6 +25,7 @@ import {
   Trash2,
   Layers,
   Printer,
+  RotateCcw,
 } from 'lucide-react';
 
 interface TableDetailModalProps {
@@ -42,7 +43,7 @@ export const TableDetailModal: React.FC<TableDetailModalProps> = ({
   onAddRound,
   onCheckout,
 }) => {
-  const { setTableStatus, liberateTable, orders, staffName, userRole, cancelOrder } = useRestaurant();
+  const { setTableStatus, liberateTable, orders, staffName, userRole, cancelOrder, toggleOrderItemCancelled } = useRestaurant();
   const { allUsers } = useAuth();
   const { showToast } = useToast();
 
@@ -322,17 +323,62 @@ export const TableDetailModal: React.FC<TableDetailModalProps> = ({
               <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1 text-xs">
                 {activeOrder.items.map((item, idx) => {
                   const modSummary = formatModifiersDisplaySummary(item.selectedModifiers);
+                  const isCancelled = Boolean(item.cancelled);
+                  const isPaid = Boolean(item.paid);
 
                   return (
-                    <div key={idx} className="text-[11px] text-[#a8a29e] border-b border-[#24211a] pb-1 last:border-0">
-                      <div className="flex justify-between">
-                        <span className="font-semibold text-[#d6d3d1]">
-                          {item.quantity}x {item.name}
-                        </span>
-                        <span className="font-mono text-[#d6d3d1] shrink-0">{formatCOP(item.price * item.quantity)}</span>
+                    <div
+                      key={item.id || idx}
+                      className={`text-[11px] text-[#a8a29e] border-b border-[#24211a] pb-1.5 last:border-0 ${
+                        isCancelled ? 'opacity-65' : ''
+                      }`}
+                    >
+                      <div className="flex justify-between items-center gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                          <span className={`font-semibold ${isCancelled ? 'line-through text-red-400/90' : 'text-[#d6d3d1]'}`}>
+                            {item.quantity}x {item.name}
+                          </span>
+                          {isCancelled && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-red-950 text-red-300 border border-red-700/60">
+                              Anulado
+                            </span>
+                          )}
+                          {isPaid && !isCancelled && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-[#292212] text-[#D6A21A]">
+                              ✓ Pagado
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className={`font-mono shrink-0 ${isCancelled ? 'line-through text-red-400/70' : 'text-[#d6d3d1]'}`}>
+                            {formatCOP(item.price * item.quantity)}
+                          </span>
+                          {!isPaid && activeOrder.status === 'abierto' && (
+                            isCancelled ? (
+                              <button
+                                type="button"
+                                onClick={() => toggleOrderItemCancelled(activeOrder.id, item.id, false)}
+                                className="px-1.5 py-0.5 rounded bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/60 text-[10px] font-bold flex items-center gap-0.5 cursor-pointer"
+                                title="Restaurar este producto al pedido"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                                <span>Restaurar</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => toggleOrderItemCancelled(activeOrder.id, item.id, true)}
+                                className="p-1 rounded bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-800/50 cursor-pointer"
+                                title="Anular producto (queda tachado sin borrarse)"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            )
+                          )}
+                        </div>
                       </div>
                       {modSummary && (
-                        <div className="text-[10px] text-[#a8a29e] pl-3 leading-snug whitespace-normal break-words">
+                        <div className={`text-[10px] pl-3 leading-snug whitespace-normal break-words ${isCancelled ? 'line-through text-[#78716c]' : 'text-[#a8a29e]'}`}>
                           • {modSummary}
                         </div>
                       )}
@@ -342,7 +388,7 @@ export const TableDetailModal: React.FC<TableDetailModalProps> = ({
                         </div>
                       )}
                       {item.notes && (
-                        <div className="text-[10px] text-[#D6A21A] italic pl-3 whitespace-normal break-words">
+                        <div className={`text-[10px] italic pl-3 whitespace-normal break-words ${isCancelled ? 'line-through text-[#78716c]' : 'text-[#D6A21A]'}`}>
                           ↳ Obs: {item.notes}
                         </div>
                       )}

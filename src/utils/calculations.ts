@@ -52,12 +52,14 @@ export function getEffectiveTaxRate(
  * Si taxRate es 0 (por ejemplo cuando se desmarca el impoconsumo en la sucursal), el impuesto resultante es 0.
  */
 export function calculateOrderTotals(
-  items: Array<{ price: number; quantity: number }>,
+  items: Array<{ price: number; quantity: number; cancelled?: boolean }>,
   taxRate: number = 0.08,
   includeTip: boolean = true,
   tipRate: number = 0.10
 ) {
-  const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const subtotal = items
+    .filter((item) => !item.cancelled)
+    .reduce((sum, item) => sum + item.price * item.quantity, 0);
   const effectiveTaxRate = typeof taxRate === 'number' ? taxRate : 0.08;
   const tax = Math.round(subtotal * effectiveTaxRate);
   const tip = includeTip ? Math.round(subtotal * tipRate) : 0;

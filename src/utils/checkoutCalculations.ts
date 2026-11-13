@@ -27,7 +27,7 @@ export function calculateSelectedItemsTotals(
   taxRate: number = 0.08
 ): CheckoutTotalsResult {
   const selectedSet = new Set(selectedItemIds);
-  const selectedItems = items.filter((item) => selectedSet.has(item.id));
+  const selectedItems = items.filter((item) => !item.cancelled && selectedSet.has(item.id));
 
   const subtotal = selectedItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
   const effectiveTaxRate = typeof taxRate === 'number' ? taxRate : 0.08;
@@ -43,8 +43,8 @@ export function calculateSelectedItemsTotals(
   }
 
   const total = subtotal + tax + tip;
-  const unpaidItemsCount = items.filter((it) => !it.paid).length;
-  const paidItemsCount = items.filter((it) => it.paid).length;
+  const unpaidItemsCount = items.filter((it) => !it.paid && !it.cancelled).length;
+  const paidItemsCount = items.filter((it) => it.paid && !it.cancelled).length;
 
   return {
     selectedItems,
@@ -59,14 +59,14 @@ export function calculateSelectedItemsTotals(
 
 /**
  * Devuelve la lista inicial de IDs seleccionados:
- * Por defecto, todos los ítems NO pagados están seleccionados.
- * Si todos estuvieran pagados (caso de consulta posterior), devuelve todos los IDs.
+ * Por defecto, todos los ítems NO pagados y NO anulados están seleccionados.
  */
 export function getInitialSelectedItemIds(items: OrderItem[]): string[] {
   if (!items || items.length === 0) return [];
-  const unpaid = items.filter((it) => !it.paid).map((it) => it.id);
+  const activeItems = items.filter((it) => !it.cancelled);
+  const unpaid = activeItems.filter((it) => !it.paid).map((it) => it.id);
   if (unpaid.length > 0) return unpaid;
-  return items.map((it) => it.id);
+  return activeItems.map((it) => it.id);
 }
 
 /**
@@ -82,7 +82,7 @@ export function markItemsAsPaid(
   const timestamp = paidAt || new Date().toISOString();
 
   return items.map((item) => {
-    if (paidSet.has(item.id)) {
+    if (!item.cancelled && paidSet.has(item.id)) {
       return {
         ...item,
         paid: true,
@@ -95,11 +95,12 @@ export function markItemsAsPaid(
 }
 
 /**
- * Verifica si todos los productos de la orden ya fueron completamente pagados.
+ * Verifica si todos los productos activos (no anulados) de la orden ya fueron completamente pagados.
  */
 export function isOrderFullyPaid(items: OrderItem[]): boolean {
-  if (!items || items.length === 0) return true;
-  return items.every((item) => Boolean(item.paid));
+  const activeItems = (items || []).filter((it) => !it.cancelled);
+  if (activeItems.length === 0) return false;
+  return activeItems.every((item) => Boolean(item.paid));
 }
 
 /**
@@ -111,16 +112,16 @@ export function filterReceiptItems(
   order?: Partial<Order> | null
 ): OrderItem[] {
   if (payment.items && payment.items.length > 0) {
-    return payment.items;
+    return payment.items.filter((it) => !it.cancelled);
   }
 
   if (payment.selectedItemIds && payment.selectedItemIds.length > 0 && order?.items) {
     const selectedSet = new Set(payment.selectedItemIds);
-    const filtered = order.items.filter((it) => selectedSet.has(it.id));
+    const filtered = order.items.filter((it) => !it.cancelled && selectedSet.has(it.id));
     if (filtered.length > 0) return filtered;
   }
 
-  return order?.items || [];
+  return (order?.items || []).filter((it) => !it.cancelled);
 }
 
 /**

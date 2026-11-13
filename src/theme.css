@@ -1379,3 +1379,60 @@ html.theme-light #printable-pos-ticket-preview * {
   color: #000000 !important;
 }
 
+/* Botones de retroceder y estados de pedido/producto en Cocina (KDS) en Modo Claro */
+html.theme-light [class*="bg-[#0e0e12]"],
+html.theme-light [class*="bg-[#1f1c29]"] {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+html.theme-light button.kds-back-btn,
+html.theme-light .kds-back-btn {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+html.theme-light button.kds-back-btn:hover,
+html.theme-light .kds-back-btn:hover {
+  background-color: #e2e8f0 !important;
+  color: #000000 !important;
+  border-color: #94a3b8 !important;
+}
+
+html.theme-light button.kds-back-btn span,
+html.theme-light button.kds-back-btn svg {
+  color: #0f172a !important;
+}
+
+html.theme-light .kds-status-badge[class*="bg-[#14131a]"] {
+  background-color: #f1f5f9 !important;
+  color: #334155 !important;
+  border-color: #cbd5e1 !important;
+}
+
+html.theme-light .kds-status-badge[class*="bg-[#2b2416]"] {
+  background-color: #fef3c7 !important;
+  color: #92400e !important;
+  border-color: #f59e0b !important;
+}
+
+html.theme-light .kds-status-badge[class*="bg-[#1a2e22]"] {
+  background-color: #d1fae5 !important;
+  color: #065f46 !important;
+  border-color: #6ee7b7 !important;
+}
+
+html.theme-light .kds-item-card[class*="bg-[#261f13]"] {
+  background-color: #fffbeb !important;
+  border-color: #f59e0b !important;
+}
+
+html.theme-light .kds-item-card[class*="bg-[#111e16]"] {
+  background-color: #ecfdf5 !important;
+  border-color: #6ee7b7 !important;
+}
+
+

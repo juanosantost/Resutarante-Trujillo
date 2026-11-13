@@ -61,6 +61,7 @@ import {
   CreditCard,
   Printer,
   Soup,
+  RotateCcw,
 } from 'lucide-react';
 
 interface HomeDashboardProps {
@@ -77,6 +78,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
     currentBranch,
     clearAllTransactionalRecords,
     logAuditAction,
+    toggleOrderItemCancelled,
     staffName,
     actionLoading,
   } = useRestaurant();
@@ -613,23 +615,23 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
                 <div>
                   {/* Encabezado de la Tarjeta */}
                   <div className="flex items-start justify-between gap-2 pb-3 border-b border-[#2d2d2d]">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-black text-lg text-[#D6A21A]">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                        <span className="font-mono font-black text-lg text-[#D6A21A] shrink-0">
                           #{order.orderNumber}
                         </span>
                         
                         {/* Tipo de Pedido Badge */}
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#242424] border border-[#383838] text-[#FFFDF5] flex items-center gap-1">
-                          {isMesa && <LayoutGrid className="w-3 h-3 text-[#D6A21A]" />}
-                          {isDelivery && <Bike className="w-3 h-3 text-orange-400" />}
-                          {!isMesa && !isDelivery && <ShoppingBag className="w-3 h-3 text-blue-400" />}
-                          <span>{order.tableName || order.type}</span>
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#242424] border border-[#383838] text-[#FFFDF5] inline-flex items-center gap-1 whitespace-nowrap">
+                          {isMesa && <LayoutGrid className="w-3 h-3 text-[#D6A21A] shrink-0" />}
+                          {isDelivery && <Bike className="w-3 h-3 text-orange-400 shrink-0" />}
+                          {!isMesa && !isDelivery && <ShoppingBag className="w-3 h-3 text-blue-400 shrink-0" />}
+                          <span className="truncate max-w-[140px]">{order.tableName || order.type}</span>
                         </span>
                       </div>
 
                       <div className="flex items-center gap-1.5 text-[11px] text-[#a8a29e] mt-1">
-                        <Clock className="w-3 h-3 text-[#D6A21A]" />
+                        <Clock className="w-3 h-3 text-[#D6A21A] shrink-0" />
                         <span>{formatColombiaDateTime(order.createdAt).split(',')[1]}</span>
                         {order.currentRound > 1 && (
                           <span className="text-[#D6A21A] font-bold">· Ronda {order.currentRound}</span>
@@ -638,10 +640,10 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
                     </div>
 
                     {/* Estado de Preparación / Despacho */}
-                    <div className="text-right">
+                    <div className="text-right shrink-0">
                       {isDelivery ? (
                         <span
-                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold border inline-block ${
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold border inline-flex items-center whitespace-nowrap ${
                             deliveryStatus === 'en_camino'
                               ? 'bg-orange-950 text-orange-300 border-orange-700 animate-pulse'
                               : deliveryStatus === 'listo_despacho'
@@ -660,7 +662,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
                             : 'Recibido'}
                         </span>
                       ) : (
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold border bg-amber-950 text-amber-300 border-amber-700">
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold border bg-amber-950 text-amber-300 border-amber-700 inline-flex items-center whitespace-nowrap">
                           Cuenta Abierta
                         </span>
                       )}
@@ -719,20 +721,34 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
                           )}
                           {roundsMap[roundNum].map((it, idx) => {
                             const modSummary = formatModifiersDisplaySummary(it.selectedModifiers);
+                            const isCancelled = Boolean(it.cancelled);
+                            const isPaid = Boolean(it.paid);
 
                             return (
-                              <div key={idx} className="flex justify-between items-start text-[11px] text-[#d6d3d1] border-b border-[#2a2a2a]/60 pb-1 last:border-0">
-                                <div className="pr-2 space-y-0.5">
-                                  <div>
-                                    <span className="font-bold text-[#FFFDF5]">{it.quantity}x</span> {it.name}
-                                    {it.paid && (
-                                      <span className="ml-1.5 px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-[#292212] text-[#D6A21A] border border-[#B77900]/40">
+                              <div
+                                key={it.id || idx}
+                                className={`flex justify-between items-start gap-2 text-[11px] border-b border-[#2a2a2a]/60 pb-1.5 last:border-0 ${
+                                  isCancelled ? 'opacity-65 text-[#8c8270]' : 'text-[#d6d3d1]'
+                                }`}
+                              >
+                                <div className="pr-1 space-y-0.5 flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className={isCancelled ? 'line-through text-red-400/90' : ''}>
+                                      <span className={`font-bold ${isCancelled ? 'text-red-400' : 'text-[#FFFDF5]'}`}>{it.quantity}x</span> {it.name}
+                                    </span>
+                                    {isCancelled && (
+                                      <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-red-950 text-red-300 border border-red-700/60">
+                                        Anulado
+                                      </span>
+                                    )}
+                                    {isPaid && !isCancelled && (
+                                      <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-[#292212] text-[#D6A21A] border border-[#B77900]/40">
                                         ✓ Pagado
                                       </span>
                                     )}
                                   </div>
                                   {modSummary && (
-                                    <span className="text-[10px] text-[#a8a29e] block leading-snug pl-3 whitespace-normal break-words">
+                                    <span className={`text-[10px] block leading-snug pl-3 whitespace-normal break-words ${isCancelled ? 'line-through text-[#78716c]' : 'text-[#a8a29e]'}`}>
                                       • {modSummary}
                                     </span>
                                   )}
@@ -742,14 +758,38 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
                                     </span>
                                   )}
                                   {it.notes && (
-                                    <span className="text-[10px] text-[#D6A21A] block italic pl-3 whitespace-normal break-words">
+                                    <span className={`text-[10px] block italic pl-3 whitespace-normal break-words ${isCancelled ? 'line-through text-[#78716c]' : 'text-[#D6A21A]'}`}>
                                       ↳ Obs: {it.notes}
                                     </span>
                                   )}
                                 </div>
-                                <span className="font-mono font-semibold shrink-0">
-                                  {formatCOP(it.price * it.quantity)}
-                                </span>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <span className={`font-mono font-semibold ${isCancelled ? 'line-through text-red-400/70' : ''}`}>
+                                    {formatCOP(it.price * it.quantity)}
+                                  </span>
+                                  {!isPaid && order.status === 'abierto' && (
+                                    isCancelled ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleOrderItemCancelled(order.id, it.id, false)}
+                                        className="px-1.5 py-0.5 rounded bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/60 text-[10px] font-bold flex items-center gap-0.5 cursor-pointer transition-colors"
+                                        title="Restaurar este producto al pedido"
+                                      >
+                                        <RotateCcw className="w-3 h-3" />
+                                        <span>Restaurar</span>
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleOrderItemCancelled(order.id, it.id, true)}
+                                        className="p-1 rounded bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-800/50 cursor-pointer transition-colors"
+                                        title="Anular producto (queda tachado sin borrarse)"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    )
+                                  )}
+                                </div>
                               </div>
                             );
                           })}

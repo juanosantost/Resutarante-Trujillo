@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
+import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { Order, PaymentMethod, PaymentSplit, Payment, OrderItem } from '../../types';
 import { formatCOP, splitBillEqually, getEffectiveTaxRate } from '../../utils/calculations';
@@ -38,6 +39,8 @@ import {
   Phone,
   User,
   ShieldAlert,
+  RotateCcw,
+  Ban,
 } from 'lucide-react';
 
 interface CheckoutModalProps {
@@ -63,7 +66,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     menuItems,
     categories,
     customers,
+    staffName,
   } = useRestaurant();
+  const { currentUser } = useAuth();
   const { showToast } = useToast();
 
   // 1. Estado editable de los productos de la comanda (desagrupados en unidades de 1 para cobro individual)
@@ -139,9 +144,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const advanceApplied = Math.min(grossSelectedTotal, orderAdvanceAmount);
   const grandTotal = Math.max(0, grossSelectedTotal - advanceApplied);
 
-  // Saldo pendiente total de los ítems no pagados de la orden (para envío a Cartera)
+  // Saldo pendiente total de los ítems no pagados y no anulados de la orden (para envío a Cartera)
   const unpaidItemsTotals = useMemo(() => {
-    const unpaid = items.filter((it) => !it.paid);
+    const unpaid = items.filter((it) => !it.paid && !it.cancelled);
     const sub = unpaid.reduce((acc, it) => acc + it.price * it.quantity, 0);
     const tx = Math.round(sub * taxRate);
     const gross = sub + tx + (includeTip ? tipAmount : 0);
@@ -203,28 +208,36 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   // Helpers de selección
   const toggleSelectItem = (id: string) => {
+    const target = items.find((it) => it.id === id);
+    if (target?.cancelled) return;
     setSelectedItemIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
   };
 
   const handleSelectAll = () => {
-    setSelectedItemIds(items.map((it) => it.id));
+    setSelectedItemIds(items.filter((it) => !it.cancelled).map((it) => it.id));
   };
 
   const handleSelectUnpaidOnly = () => {
-    setSelectedItemIds(items.filter((it) => !it.paid).map((it) => it.id));
+    setSelectedItemIds(items.filter((it) => !it.paid && !it.cancelled).map((it) => it.id));
   };
 
   const handleDeselectAll = () => {
     setSelectedItemIds([]);
   };
 
-  // Modificación de cantidades (al incrementar, crea una unidad separada para mantener el cobro individual)
+  const persistUpdatedItems = (nextItems: OrderItem[]) => {
+    updateOrderItems(order.id, nextItems).catch((err) =>
+      console.error('Error syncing updated order items:', err)
+    );
+  };
+
+  // Modificación de cantidades (al incrementar, crea una unidad separada; al reducir a 0, anula/tacha en lugar de borrar)
   const handleQuantityChange = (itemId: string, delta: number) => {
     if (delta > 0) {
       const target = items.find((it) => it.id === itemId);
-      if (!target) return;
+      if (!target || target.cancelled) return;
       const newCloneId = `${target.id}-extra-${Date.now()}-${Math.random().toString(36).substr(2, 3)}`;
       const clonedItem: OrderItem = {
         ...target,
@@ -233,39 +246,77 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         paid: false,
         paidAt: undefined,
         paidPaymentId: undefined,
+        cancelled: false,
+        cancelledAt: undefined,
+        cancelledBy: undefined,
       };
-      setItems((prev) => {
-        const idx = prev.findIndex((it) => it.id === itemId);
-        if (idx === -1) return [...prev, clonedItem];
-        const next = [...prev];
-        next.splice(idx + 1, 0, clonedItem);
-        return next;
-      });
+      const idx = items.findIndex((it) => it.id === itemId);
+      const next = [...items];
+      if (idx === -1) next.push(clonedItem);
+      else next.splice(idx + 1, 0, clonedItem);
+      setItems(next);
       setSelectedItemIds((prev) => [...prev, newCloneId]);
+      persistUpdatedItems(next);
       return;
     }
 
-    // Si delta < 0 y la cantidad es 1, remover esa unidad individual
-    setItems((prev) => {
-      const updated = prev
-        .map((it) => {
-          if (it.id === itemId) {
-            const nextQty = it.quantity + delta;
-            return nextQty > 0 ? { ...it, quantity: nextQty } : null;
-          }
-          return it;
-        })
-        .filter(Boolean) as OrderItem[];
-      return updated;
+    // Si delta < 0 y la cantidad llega a 0, no se borra sino que queda anulado (tachado)
+    const now = new Date().toISOString();
+    const actor = currentUser?.fullName?.trim() || staffName || 'Usuario';
+    let becameCancelled = false;
+    const next = items.map((it) => {
+      if (it.id === itemId) {
+        const nextQty = it.quantity + delta;
+        if (nextQty > 0) {
+          return { ...it, quantity: nextQty };
+        }
+        becameCancelled = true;
+        return {
+          ...it,
+          cancelled: true,
+          cancelledAt: now,
+          cancelledBy: actor,
+        };
+      }
+      return it;
     });
-    setSelectedItemIds((prev) => prev.filter((id) => id !== itemId));
+    setItems(next);
+    if (becameCancelled) {
+      setSelectedItemIds((prev) => prev.filter((id) => id !== itemId));
+      showToast('Producto anulado (tachado). Puedes restaurarlo si lo necesitas.', 'info');
+    }
+    persistUpdatedItems(next);
   };
 
-  const handleDeleteItem = (itemId: string) => {
-    if (window.confirm('¿Deseas quitar este producto de la cuenta a cobrar?')) {
-      setItems((prev) => prev.filter((it) => it.id !== itemId));
+  // Anular (tachar) o Restaurar producto sin eliminarlo definitivamente
+  const handleToggleCancelItem = (itemId: string) => {
+    const target = items.find((it) => it.id === itemId);
+    if (!target || target.paid) return;
+
+    const nextCancel = !target.cancelled;
+    const now = new Date().toISOString();
+    const actor = currentUser?.fullName?.trim() || staffName || 'Usuario';
+
+    const nextItems = items.map((it) =>
+      it.id === itemId
+        ? {
+            ...it,
+            cancelled: nextCancel,
+            cancelledAt: nextCancel ? now : undefined,
+            cancelledBy: nextCancel ? actor : undefined,
+          }
+        : it
+    );
+
+    setItems(nextItems);
+    if (nextCancel) {
       setSelectedItemIds((prev) => prev.filter((id) => id !== itemId));
+      showToast(`"${target.name}" anulado (tachado). No se cobrará a menos que lo restaures.`, 'info');
+    } else {
+      setSelectedItemIds((prev) => (prev.includes(itemId) ? prev : [...prev, itemId]));
+      showToast(`"${target.name}" restaurado a la cuenta.`, 'success');
     }
+    persistUpdatedItems(nextItems);
   };
 
   const handleStartEditItem = (item: OrderItem) => {
@@ -372,8 +423,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       tipAmount,
       total: grandTotal,
       change,
-      cashierId: activeShift?.cashierId || 'usr-cajero',
-      cashierName: activeShift?.cashierName || 'Cajero Colmena',
+      cashierId: currentUser?.id || activeShift?.cashierId || 'usr-cajero',
+      cashierName: currentUser?.fullName?.trim() || staffName || activeShift?.cashierName || 'Usuario',
       customerName: customerName.trim() || order.customerName,
       customerNitOrCedula: customerNit.trim() || '222222222222',
       createdAt: now,
@@ -629,7 +680,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   </div>
                 ) : (
                   items.map((item) => {
-                    const isChecked = selectedItemIds.includes(item.id);
+                    const isCancelled = Boolean(item.cancelled);
+                    const isChecked = !isCancelled && selectedItemIds.includes(item.id);
                     const isPaid = Boolean(item.paid);
                     const modifiersSummary = formatOrderItemModifiersSummary(item);
                     const matchedCatalogProduct =
@@ -644,7 +696,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       <div
                         key={item.id}
                         className={`p-3 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-start justify-between gap-2.5 ${
-                          isPaid
+                          isCancelled
+                            ? 'bg-red-950/20 border-red-900/40 text-[#8c8270] opacity-75'
+                            : isPaid
                             ? 'bg-[#14121a]/60 border-[#332a1e] text-[#8c8270]'
                             : isChecked
                             ? 'bg-[#1e1b26] border-[#d4af37]/60 shadow-sm'
@@ -657,8 +711,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                             <input
                               type="checkbox"
                               checked={isChecked}
+                              disabled={isCancelled}
                               onChange={() => toggleSelectItem(item.id)}
-                              className="w-4 h-4 rounded accent-[#d4af37] cursor-pointer"
+                              className="w-4 h-4 rounded accent-[#d4af37] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                             />
                           </label>
 
@@ -666,33 +721,43 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                             <div className="flex items-center gap-2 flex-wrap">
                               <span
                                 className={`text-xs font-bold ${
-                                  isPaid ? 'line-through text-[#8c8270] decoration-[#d4af37]/80' : 'text-[#fef3c7]'
+                                  isCancelled
+                                    ? 'line-through text-red-400/90 decoration-red-500'
+                                    : isPaid
+                                    ? 'line-through text-[#8c8270] decoration-[#d4af37]/80'
+                                    : 'text-[#fef3c7]'
                                 }`}
                               >
                                 {item.name}
                               </span>
 
-                              {isPaid && (
+                              {isCancelled && (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-red-950 text-red-300 border border-red-700/60 tracking-wider">
+                                  ✕ Anulado{item.cancelledBy ? ` (${item.cancelledBy})` : ''}
+                                </span>
+                              )}
+
+                              {isPaid && !isCancelled && (
                                 <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-[#2b2416] text-[#d4af37] border border-[#d4af37]/40 tracking-wider">
                                   ✓ Ya Pagado
                                 </span>
                               )}
 
-                              <span className="text-[10px] font-mono text-[#a8a29e]">
+                              <span className={`text-[10px] font-mono ${isCancelled ? 'line-through text-[#78716c]' : 'text-[#a8a29e]'}`}>
                                 {formatCOP(item.price)} c/u
                               </span>
                             </div>
 
                             {/* Descripción completa de lo que pidió el cliente (Sopa, Principio, Carne, Acompañamientos, Bebida o descripción del plato) */}
                             {modifiersSummary && (
-                              <p className="text-[11px] text-[#d6d3d1] leading-snug whitespace-normal break-words bg-[#121117]/80 px-2 py-1 rounded-lg border border-[#2d281e]">
+                              <p className={`text-[11px] leading-snug whitespace-normal break-words bg-[#121117]/80 px-2 py-1 rounded-lg border border-[#2d281e] ${isCancelled ? 'line-through text-[#78716c]' : 'text-[#d6d3d1]'}`}>
                                 <span className="font-semibold text-[#d4af37]">Detalle pedido: </span>
                                 {modifiersSummary}
                               </p>
                             )}
 
                             {fallbackDescription && (
-                              <p className="text-[11px] text-[#a8a29e] leading-snug whitespace-normal break-words">
+                              <p className={`text-[11px] leading-snug whitespace-normal break-words ${isCancelled ? 'line-through text-[#78716c]' : 'text-[#a8a29e]'}`}>
                                 {fallbackDescription}
                               </p>
                             )}
@@ -719,7 +784,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
                             {/* Observaciones / Notas del cliente (completas sin recortar) */}
                             {item.notes && (
-                              <div className="text-[11px] text-[#fef3c7] bg-[#2b2416]/80 border border-[#d4af37]/50 px-2 py-1 rounded-lg whitespace-normal break-words">
+                              <div className={`text-[11px] bg-[#2b2416]/80 border border-[#d4af37]/50 px-2 py-1 rounded-lg whitespace-normal break-words ${isCancelled ? 'line-through text-[#a8a29e]' : 'text-[#fef3c7]'}`}>
                                 <strong className="text-[#d4af37]">Observación:</strong> {item.notes}
                               </div>
                             )}
@@ -734,19 +799,19 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                             <button
                               type="button"
                               onClick={() => handleQuantityChange(item.id, -1)}
-                              disabled={isPaid}
+                              disabled={isPaid || isCancelled}
                               className="w-5 h-5 flex items-center justify-center rounded text-xs font-bold text-[#a8a29e] hover:text-[#fef3c7] hover:bg-[#201e28] disabled:opacity-30 cursor-pointer"
                               title="Reducir cantidad"
                             >
                               -
                             </button>
-                            <span className="w-6 text-center text-xs font-mono font-bold text-[#fef3c7]">
+                            <span className={`w-6 text-center text-xs font-mono font-bold ${isCancelled ? 'line-through text-[#78716c]' : 'text-[#fef3c7]'}`}>
                               {item.quantity}
                             </span>
                             <button
                               type="button"
                               onClick={() => handleQuantityChange(item.id, 1)}
-                              disabled={isPaid}
+                              disabled={isPaid || isCancelled}
                               className="w-5 h-5 flex items-center justify-center rounded text-xs font-bold text-[#a8a29e] hover:text-[#fef3c7] hover:bg-[#201e28] disabled:opacity-30 cursor-pointer"
                               title="Aumentar cantidad"
                             >
@@ -757,7 +822,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                           {/* Subtotal del ítem */}
                           <span
                             className={`w-24 text-right font-mono text-xs font-bold ${
-                              isPaid
+                              isCancelled
+                                ? 'line-through text-red-400/70'
+                                : isPaid
                                 ? 'line-through text-[#8c8270] decoration-[#d4af37]/80'
                                 : isChecked
                                 ? 'text-[#d4af37]'
@@ -768,24 +835,41 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                           </span>
 
                           {/* Botón Editar Precio / Notas */}
-                          <button
-                            type="button"
-                            onClick={() => handleStartEditItem(item)}
-                            className="p-1 text-[#a8a29e] hover:text-[#d4af37] rounded hover:bg-[#201e28] cursor-pointer"
-                            title="Editar precio o detalles"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
+                          {!isCancelled && !isPaid && (
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditItem(item)}
+                              className="p-1 text-[#a8a29e] hover:text-[#d4af37] rounded hover:bg-[#201e28] cursor-pointer"
+                              title="Editar precio o detalles"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
 
-                          {/* Botón Borrar Ítem */}
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteItem(item.id)}
-                            className="p-1 text-[#a8a29e] hover:text-red-400 rounded hover:bg-[#201e28] cursor-pointer"
-                            title="Eliminar de la cuenta"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {/* Botón Anular (Tachar) o Restaurar Ítem */}
+                          {!isPaid && (
+                            isCancelled ? (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleCancelItem(item.id)}
+                                className="px-2 py-1 rounded-lg bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/60 text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                                title="Restaurar este producto a la cuenta"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                                <span>Restaurar</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleCancelItem(item.id)}
+                                className="px-2 py-1 rounded-lg bg-red-950/70 hover:bg-red-900 text-red-300 border border-red-800/60 text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                                title="Anular producto (queda tachado sin borrarse)"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>Anular</span>
+                              </button>
+                            )
+                          )}
                         </div>
                       </div>
                     );

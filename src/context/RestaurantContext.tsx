@@ -15,6 +15,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db, initializeAuthAndConnection, handleFirestoreError, OperationType, sanitizeFirestoreData } from '../services/firebase';
+import { useAuth } from './AuthContext';
 import { checkAndSeedInitialData, INITIAL_BRANCHES, INITIAL_MENU_ITEMS, INITIAL_CATEGORIES } from '../services/dbSeed';
 import {
   DEFAULT_DAILY_MENU_PRODUCT,
@@ -272,6 +273,7 @@ interface RestaurantContextType {
     updatedItems?: OrderItem[];
   }) => Promise<Payment>;
   updateOrderItems: (orderId: string, updatedItems: OrderItem[]) => Promise<void>;
+  toggleOrderItemCancelled: (orderId: string, itemId: string, cancel?: boolean) => Promise<void>;
 
   openCashShift: (initialCash: number, notes?: string) => Promise<void>;
   addCashBase: (amount: number, reason: string) => Promise<void>;
@@ -526,10 +528,11 @@ export const DEFAULT_PAYMENT_METHODS: Omit<PaymentMethodItem, 'id' | 'createdAt'
 const RestaurantContext = createContext<RestaurantContextType | null>(null);
 
 export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { currentUser } = useAuth();
   const [branches, setBranches] = useState<Branch[]>(INITIAL_BRANCHES);
   const [currentBranchId, setCurrentBranchId] = useState<string>('sede-buga');
-  const [userRole, setUserRole] = useState<UserRole>('administrador');
-  const [staffName, setStaffName] = useState<string>('Juan Administrador');
+  const [userRole, setUserRole] = useState<UserRole>(() => currentUser?.role || 'administrador');
+  const [staffName, setStaffName] = useState<string>(() => currentUser?.fullName?.trim() || 'Usuario');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [actionLoading, setActionLoading] = useState<boolean>(false);
 
@@ -572,28 +575,17 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loyaltyTransactions, setLoyaltyTransactions] = useState<LoyaltyTransaction[]>([]);
 
-  // Asignar nombre según rol elegido
+  // Sincronizar rol y nombre real del usuario autenticado (evitar usar cargos genéricos)
   useEffect(() => {
-    switch (userRole) {
-      case 'administrador':
-        setStaffName('Administrador Colmena');
-        break;
-      case 'asesor':
-      case 'cajero':
-      case 'mesero':
-      case 'domiciliario':
-      case 'supervisor':
-        setStaffName('Asesor de Operación');
-        break;
-      case 'cocinero':
-      case 'cocina':
-        setStaffName('Cocinero');
-        break;
-      default:
-        setStaffName('Personal Colmena');
-        break;
+    if (currentUser) {
+      if (currentUser.role) {
+        setUserRole(currentUser.role);
+      }
+      if (currentUser.fullName?.trim()) {
+        setStaffName(currentUser.fullName.trim());
+      }
     }
-  }, [userRole]);
+  }, [currentUser]);
 
   // Inicialización y Seed (no bloqueante para carga inmediata)
   useEffect(() => {
@@ -1051,7 +1043,24 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   // Listas derivadas
   const activeOrders = orders.filter((o) => o.status === 'abierto');
-  const activeComandas = comandas.filter((c) => c.status !== 'servida' && c.status !== 'cancelada');
+  const activeComandas = comandas.filter((c) => {
+    if (c.status === 'servida' || c.status === 'cancelada') return false;
+    const linkedOrder = orders.find((o) => o.id === c.orderId);
+    if (linkedOrder) {
+      if (linkedOrder.status === 'cancelado') return false;
+      if (linkedOrder.status === 'facturado') {
+        const hasPendingCartera = cartera.some(
+          (cr) =>
+            cr.saleId === linkedOrder.id &&
+            cr.status !== 'pagada' &&
+            cr.status !== 'anulada' &&
+            cr.balanceDue > 0
+        );
+        if (!hasPendingCartera) return false;
+      }
+    }
+    return true;
+  });
 
   // OPERACIÓN 1: Crear nuevo pedido comercial + generar 1era Comanda a Cocina + actualizar Mesa
   const createOrder = async ({
@@ -1456,14 +1465,38 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   };
 
-  // OPERACIÓN 3: Actualizar Estado de Comanda en Cocina (KDS)
+  // OPERACIÓN 3: Actualizar Estado de Comanda en Cocina (KDS) - Soporta avanzar y devolver
   const updateComandaStatus = async (comandaId: string, status: ComandaStatus) => {
     try {
       const now = new Date().toISOString();
-      await updateDoc(doc(db, 'comandas', comandaId), {
-        status,
-        updatedAt: now,
-      });
+      const targetComanda = comandas.find((c) => c.id === comandaId);
+      if (targetComanda) {
+        const mappedItemStatus: ComandaItemStatus | null =
+          status === 'nueva'
+            ? 'pendiente'
+            : status === 'en_preparacion'
+            ? 'en_preparacion'
+            : status === 'lista'
+            ? 'listo'
+            : status === 'servida'
+            ? 'servido'
+            : null;
+
+        const updatedItems = mappedItemStatus
+          ? targetComanda.items.map((it) => ({ ...it, status: mappedItemStatus }))
+          : targetComanda.items;
+
+        await updateDoc(doc(db, 'comandas', comandaId), {
+          status,
+          items: updatedItems,
+          updatedAt: now,
+        });
+      } else {
+        await updateDoc(doc(db, 'comandas', comandaId), {
+          status,
+          updatedAt: now,
+        });
+      }
     } catch (error) {
       console.error('Error in updateComandaStatus:', error);
       handleFirestoreError(error, OperationType.UPDATE, 'comandas');
@@ -1479,13 +1512,15 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         it.orderItemId === orderItemId ? { ...it, status } : it
       );
 
-      // Si todos están listos, cambiar la comanda a 'lista'
-      const allReady = updatedItems.every((it) => it.status === 'listo' || it.status === 'servido');
+      // Calcular el estado de la comanda según el estado de todos sus ítems (avanzar o devolver)
       const allServed = updatedItems.every((it) => it.status === 'servido');
+      const allReady = updatedItems.every((it) => it.status === 'listo' || it.status === 'servido');
+      const allPending = updatedItems.every((it) => it.status === 'pendiente');
 
-      let comandaStatus = targetComanda.status;
+      let comandaStatus: ComandaStatus = 'en_preparacion';
       if (allServed) comandaStatus = 'servida';
       else if (allReady) comandaStatus = 'lista';
+      else if (allPending) comandaStatus = 'nueva';
       else comandaStatus = 'en_preparacion';
 
       await updateDoc(doc(db, 'comandas', comandaId), {
@@ -1508,15 +1543,18 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
       const now = new Date().toISOString();
       const taxRate = getEffectiveTaxRate(currentBranch);
-      const subtotal = updatedItems.reduce((acc, it) => acc + it.price * it.quantity, 0);
+      const subtotal = updatedItems
+        .filter((it) => !it.cancelled)
+        .reduce((acc, it) => acc + it.price * it.quantity, 0);
       const tax = Math.round(subtotal * taxRate);
-      const tip = order.tip > 0 ? order.tip : 0;
+      const tip = order.tip > 0 ? Math.round(subtotal * 0.10) : 0;
       const total = subtotal + tax + tip;
 
       await updateDoc(doc(db, 'orders', orderId), sanitizeFirestoreData({
         items: updatedItems,
         subtotal,
         tax,
+        tip,
         total,
         updatedAt: now,
       }));
@@ -1529,6 +1567,77 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       }
     } catch (error) {
       console.error('Error updating order items:', error);
+      handleFirestoreError(error, OperationType.UPDATE, 'orders');
+      throw error;
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // OPERACIÓN: Anular (tachar) o Restaurar un producto individual dentro de un pedido sin borrarlo
+  const toggleOrderItemCancelled = async (orderId: string, itemId: string, cancel?: boolean) => {
+    if (actionLoading) throw new Error('Operación en proceso');
+    setActionLoading(true);
+    try {
+      const order = orders.find((o) => o.id === orderId);
+      if (!order) throw new Error('Pedido no encontrado');
+
+      const now = new Date().toISOString();
+      let toggledItemName = '';
+      let finalCancelState = false;
+
+      const updatedItems: OrderItem[] = (order.items || []).map((it) => {
+        if (it.id === itemId) {
+          if (it.paid) return it; // No anular ítems ya pagados
+          const nextCancelled = cancel !== undefined ? cancel : !it.cancelled;
+          toggledItemName = it.name;
+          finalCancelState = nextCancelled;
+          return {
+            ...it,
+            cancelled: nextCancelled,
+            cancelledAt: nextCancelled ? now : undefined,
+            cancelledBy: nextCancelled ? staffName : undefined,
+          };
+        }
+        return it;
+      });
+
+      const taxRate = getEffectiveTaxRate(currentBranch);
+      const hasTip = order.tip > 0;
+      const { subtotal, tax, tip, total } = calculateOrderTotals(updatedItems, taxRate, hasTip, 0.10);
+
+      await updateDoc(
+        doc(db, 'orders', orderId),
+        sanitizeFirestoreData({
+          items: updatedItems,
+          subtotal,
+          tax,
+          tip,
+          total,
+          updatedAt: now,
+        })
+      );
+
+      if (order.tableId) {
+        await updateDoc(doc(db, 'tables', order.tableId), {
+          currentBillAmount: total,
+          updatedAt: now,
+        });
+      }
+
+      if (toggledItemName) {
+        await logAuditAction({
+          entityType: 'pedidos',
+          entityId: orderId,
+          entityName: `Pedido #${order.orderNumber}`,
+          action: 'update',
+          details: finalCancelState
+            ? `Producto "${toggledItemName}" anulado (tachado) en Pedido #${order.orderNumber} por ${staffName}`
+            : `Producto "${toggledItemName}" restaurado en Pedido #${order.orderNumber} por ${staffName}`,
+        });
+      }
+    } catch (error) {
+      console.error('Error toggling order item cancelled:', error);
       handleFirestoreError(error, OperationType.UPDATE, 'orders');
       throw error;
     } finally {
@@ -1638,8 +1747,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         total: paymentTotal,
         advanceApplied: advanceApplied > 0 ? advanceApplied : undefined,
         change,
-        cashierId: userRole === 'cajero' ? 'usr-cajero' : 'usr-staff',
-        cashierName: staffName,
+        cashierId: currentUser?.id || (userRole === 'cajero' ? 'usr-cajero' : 'usr-staff'),
+        cashierName: currentUser?.fullName?.trim() || staffName,
         customerName: customerName || order.customerName,
         customerNitOrCedula: customerNitOrCedula || order.customerDocument || '222222222222',
         createdAt: now,
@@ -1654,8 +1763,10 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const updatedOrderItems = markItemsAsPaid(currentItems, effectiveSelectedIds, paymentId, now);
       const allItemsPaid = isOrderFullyPaid(updatedOrderItems);
 
-      // Recalcular el total global del pedido
-      const newOrderSubtotal = updatedOrderItems.reduce((acc, it) => acc + it.price * it.quantity, 0);
+      // Recalcular el total global del pedido (excluyendo ítems anulados)
+      const newOrderSubtotal = updatedOrderItems
+        .filter((it) => !it.cancelled)
+        .reduce((acc, it) => acc + it.price * it.quantity, 0);
       const newOrderTax = Math.round(newOrderSubtotal * taxRate);
       const newOrderTotal = newOrderSubtotal + newOrderTax + (order.tip || 0);
 
@@ -1670,6 +1781,20 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         updatedAt: now,
         branchSnapshot,
       }));
+
+      // 3.1 Si la cuenta quedó saldada en su totalidad, retirar sus comandas de cocina (KDS)
+      if (allItemsPaid) {
+        const orderComandas = comandas.filter(
+          (c) => c.orderId === order.id && c.status !== 'servida' && c.status !== 'cancelada'
+        );
+        for (const com of orderComandas) {
+          await updateDoc(doc(db, 'comandas', com.id), {
+            status: 'servida',
+            items: com.items.map((it) => ({ ...it, status: 'servido' as ComandaItemStatus })),
+            updatedAt: now,
+          });
+        }
+      }
 
       // Otorgar puntos de fidelización si el cliente está registrado
       const finalCustomerName = customerName || order.customerName;
@@ -1722,7 +1847,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           });
         } else {
           // Si quedan ítems pendientes, calcular saldo restante de la mesa
-          const remainingItems = updatedOrderItems.filter((it) => !it.paid);
+          const remainingItems = updatedOrderItems.filter((it) => !it.paid && !it.cancelled);
           const remainingSubtotal = remainingItems.reduce((acc, it) => acc + it.price * it.quantity, 0);
           const remainingTotal = remainingSubtotal + Math.round(remainingSubtotal * taxRate);
           await updateDoc(doc(db, 'tables', order.tableId), {
@@ -5230,7 +5355,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
       const now = new Date().toISOString();
       const currentItems: OrderItem[] = params.updatedItems || order.items || [];
-      const unpaidItems = currentItems.filter((it) => !it.paid);
+      const unpaidItems = currentItems.filter((it) => !it.paid && !it.cancelled);
       const taxRate = getEffectiveTaxRate(currentBranch);
 
       const unpaidSubtotal = unpaidItems.reduce((acc, it) => acc + it.price * it.quantity, 0);
@@ -5313,7 +5438,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       await setDoc(ref, sanitizeFirestoreData(newCartera));
 
       // Sacar el pedido de los pedidos activos (pasa a 'facturado')
-      const totalOrderSubtotal = currentItems.reduce((acc, it) => acc + it.price * it.quantity, 0);
+      const totalOrderSubtotal = currentItems
+        .filter((it) => !it.cancelled)
+        .reduce((acc, it) => acc + it.price * it.quantity, 0);
       const totalOrderTax = Math.round(totalOrderSubtotal * taxRate);
       const totalOrderAmount = totalOrderSubtotal + totalOrderTax + tip;
 
@@ -5450,6 +5577,20 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         status,
         updatedAt: now,
       });
+
+      // Si la cuenta de cartera quedó saldada en su totalidad, retirar comandas activas asociadas de cocina
+      if (isFullyPaid && crd.saleId) {
+        const orderComandas = comandas.filter(
+          (c) => c.orderId === crd.saleId && c.status !== 'servida' && c.status !== 'cancelada'
+        );
+        for (const com of orderComandas) {
+          await updateDoc(doc(db, 'comandas', com.id), {
+            status: 'servida',
+            items: com.items.map((it) => ({ ...it, status: 'servido' as ComandaItemStatus })),
+            updatedAt: now,
+          });
+        }
+      }
 
       await logAuditAction({
         entityType: 'branch',
@@ -6167,6 +6308,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         updateComandaItemStatus,
         closeAndPayOrder,
         updateOrderItems,
+        toggleOrderItemCancelled,
         openCashShift,
         addCashBase,
         updateCashBase,

@@ -52,6 +52,7 @@ import {
   Navigation,
   RefreshCw,
   Trash2,
+  RotateCcw,
 } from 'lucide-react';
 
 export interface DeliveryDriver {
@@ -77,6 +78,7 @@ export const DeliveryAndPickupView: React.FC = () => {
     logAuditAction,
     createCustomer,
     cancelOrder,
+    toggleOrderItemCancelled,
   } = useRestaurant();
   const { currentUser, branches } = useAuth();
   const { showToast } = useToast();
@@ -803,16 +805,56 @@ export const DeliveryAndPickupView: React.FC = () => {
                           {order.deliveryFee ? <span>Envío: {formatCOP(order.deliveryFee)}</span> : null}
                         </div>
                         <div className="space-y-1 max-h-28 overflow-y-auto pr-1 no-scrollbar">
-                          {order.items.map((it, idx) => (
-                            <div key={idx} className="flex justify-between items-center text-[11px] text-[#d6d3d1]">
-                              <span className="truncate">
-                                <strong className="text-[#D6A21A]">{it.quantity}x</strong> {it.name}
-                              </span>
-                              <span className="font-mono font-semibold shrink-0">
-                                {formatCOP(it.price * it.quantity)}
-                              </span>
-                            </div>
-                          ))}
+                          {order.items.map((it, idx) => {
+                            const isCancelled = Boolean(it.cancelled);
+                            const isPaid = Boolean(it.paid);
+                            return (
+                              <div
+                                key={it.id || idx}
+                                className={`flex justify-between items-center gap-2 text-[11px] ${
+                                  isCancelled ? 'opacity-65 text-[#8c8270]' : 'text-[#d6d3d1]'
+                                }`}
+                              >
+                                <div className="flex items-center gap-1.5 min-w-0 truncate">
+                                  <span className={`truncate ${isCancelled ? 'line-through text-red-400/90' : ''}`}>
+                                    <strong className={isCancelled ? 'text-red-400' : 'text-[#D6A21A]'}>{it.quantity}x</strong> {it.name}
+                                  </span>
+                                  {isCancelled && (
+                                    <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-red-950 text-red-300 border border-red-700/60 shrink-0">
+                                      Anulado
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <span className={`font-mono font-semibold shrink-0 ${isCancelled ? 'line-through text-red-400/70' : ''}`}>
+                                    {formatCOP(it.price * it.quantity)}
+                                  </span>
+                                  {!isPaid && order.status === 'abierto' && order.deliveryStatus !== 'entregado' && order.deliveryStatus !== 'cancelado' && (
+                                    isCancelled ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleOrderItemCancelled(order.id, it.id, false)}
+                                        className="px-1.5 py-0.5 rounded bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/60 text-[10px] font-bold flex items-center gap-0.5 cursor-pointer"
+                                        title="Restaurar este producto al pedido"
+                                      >
+                                        <RotateCcw className="w-3 h-3" />
+                                        <span>Restaurar</span>
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleOrderItemCancelled(order.id, it.id, true)}
+                                        className="p-1 rounded bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-800/50 cursor-pointer"
+                                        title="Anular producto (queda tachado sin borrarse)"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    )
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
 
                         {order.deliveryStatus !== 'entregado' && order.deliveryStatus !== 'cancelado' && (

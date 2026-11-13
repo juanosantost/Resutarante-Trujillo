@@ -31,6 +31,7 @@ import {
   Tag,
   Edit,
   Sliders,
+  RotateCcw,
 } from 'lucide-react';
 
 interface AddRoundModalProps {
@@ -45,21 +46,28 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
   onSuccess,
 }) => {
   const {
+    orders,
     currentBranch,
     catalogCategories,
     menuItems,
     products,
     modifierGroups,
     addRoundToOrder,
+    toggleOrderItemCancelled,
     actionLoading,
   } = useRestaurant();
 
+  const liveOrder = useMemo(
+    () => orders.find((o) => o.id === order.id) || order,
+    [orders, order]
+  );
+
   const catalogScrollRef = React.useRef<HTMLDivElement>(null);
 
-  const nextRoundNumber = (order.currentRound || 1) + 1;
+  const nextRoundNumber = (liveOrder.currentRound || 1) + 1;
   const [selectedCategory, setSelectedCategory] = useState<string>('todos');
   const [searchFilter, setSearchFilter] = useState<string>('');
-  const [showHistory, setShowHistory] = useState<boolean>(false);
+  const [showHistory, setShowHistory] = useState<boolean>(true);
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
 
   // Line items en la ronda nueva
@@ -428,10 +436,14 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
             <button
               type="button"
               onClick={() => setShowHistory(!showHistory)}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#383124] text-xs font-bold text-[#d4af37] hover:bg-[#1f1d28] cursor-pointer transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#383124] text-xs font-bold text-[#d4af37] hover:bg-[#1f1d28] cursor-pointer transition-colors"
             >
               <History className="w-3.5 h-3.5" />
-              <span>{showHistory ? 'Ocultar Consumo Previo' : 'Ver Consumo Previo'}</span>
+              <span>
+                {showHistory
+                  ? 'Ocultar Productos del Pedido'
+                  : `Productos del Pedido (${liveOrder.items.length})`}
+              </span>
             </button>
 
             <button
@@ -446,21 +458,66 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
           </div>
         </div>
 
-        {/* Sub-barra: Consumo Previo Desplegable si está activo */}
+        {/* Sub-barra: Productos ya registrados en el pedido con opción de Anular (tachar) o Restaurar */}
         {showHistory && (
-          <div className="px-4 sm:px-6 py-2.5 bg-[#18171f] border-b border-[#2d281e] max-h-32 overflow-y-auto shrink-0">
-            <div className="text-[11px] font-bold text-[#a8a29e] mb-1 uppercase tracking-wider">
-              Productos ya pedidos en esta mesa (Rondas anteriores):
+          <div className="px-4 sm:px-6 py-2.5 bg-[#18171f] border-b border-[#2d281e] max-h-40 overflow-y-auto shrink-0">
+            <div className="text-[11px] font-bold text-[#a8a29e] mb-1.5 uppercase tracking-wider flex items-center justify-between">
+              <span>Productos en este pedido (Puedes anular/tachar o restaurar):</span>
+              <span className="font-mono text-[#d4af37]">Total actual: {formatCOP(liveOrder.total)}</span>
             </div>
             <div className="flex flex-wrap gap-2 text-xs">
-              {order.items.map((it, idx) => (
-                <span
-                  key={idx}
-                  className="px-2.5 py-1 rounded-lg bg-[#121117] border border-[#2d281e] text-[#d6d3d1]"
-                >
-                  <strong className="text-[#d4af37]">{it.quantity}x</strong> {it.name} ({formatCOP(it.price * it.quantity)})
-                </span>
-              ))}
+              {liveOrder.items.map((it) => {
+                const isCancelled = Boolean(it.cancelled);
+                const isPaid = Boolean(it.paid);
+                return (
+                  <div
+                    key={it.id}
+                    className={`px-2.5 py-1.5 rounded-xl border flex items-center gap-2 transition-all ${
+                      isCancelled
+                        ? 'bg-red-950/20 border-red-900/50 text-[#8c8270] opacity-75'
+                        : 'bg-[#121117] border-[#2d281e] text-[#d6d3d1]'
+                    }`}
+                  >
+                    <span className={isCancelled ? 'line-through text-red-400/90' : ''}>
+                      <strong className={isCancelled ? 'text-red-400' : 'text-[#d4af37]'}>{it.quantity}x</strong> {it.name}{' '}
+                      <span className="font-mono text-[11px]">({formatCOP(it.price * it.quantity)})</span>
+                    </span>
+                    {isCancelled && (
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-red-950 text-red-300 border border-red-700/60">
+                        Anulado
+                      </span>
+                    )}
+                    {isPaid && !isCancelled && (
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-[#2b2416] text-[#d4af37]">
+                        ✓ Pagado
+                      </span>
+                    )}
+                    {!isPaid && (
+                      isCancelled ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleOrderItemCancelled(liveOrder.id, it.id, false)}
+                          className="px-1.5 py-0.5 rounded-md bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/50 text-[10px] font-bold flex items-center gap-0.5 cursor-pointer"
+                          title="Restaurar este producto al pedido"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          <span>Restaurar</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => toggleOrderItemCancelled(liveOrder.id, it.id, true)}
+                          className="px-1.5 py-0.5 rounded-md bg-red-950/70 hover:bg-red-900 text-red-300 border border-red-800/60 text-[10px] font-bold flex items-center gap-0.5 cursor-pointer"
+                          title="Anular este producto (queda tachado sin borrarse)"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Anular</span>
+                        </button>
+                      )
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

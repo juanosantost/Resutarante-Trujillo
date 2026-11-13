@@ -28,8 +28,8 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
   onClose,
   initialRound = 'all',
 }) => {
-  const { currentBranch } = useRestaurant();
-  const { branches } = useAuth();
+  const { currentBranch, staffName } = useRestaurant();
+  const { branches, currentUser } = useAuth();
 
   useEffect(() => {
     document.body.classList.add('printing-pos-ticket');
@@ -52,11 +52,24 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
   const selectedRound: number | 'all' = initialRound;
   const includePrices: boolean = branchPrintConfig?.includeKitchenPrices ?? false;
 
-  // Normalizar ítems a imprimir
+  // Normalizar ítems a imprimir y garantizar que aparezca el nombre real del usuario en lugar del cargo
   const orderNumber = order?.orderNumber ?? comanda?.orderNumber ?? 0;
   const tableName = order?.tableName ?? comanda?.tableName ?? (order?.type === 'mesa' ? 'Mesa' : 'Mostrador');
   const orderType = order?.type ?? comanda?.orderType ?? 'mesa';
-  const waiterName = order?.waiterName ?? comanda?.waiterName ?? 'Staff';
+  const rawWaiterName = (order?.waiterName ?? comanda?.waiterName ?? '').trim();
+  const isGenericRoleLabel = [
+    'administrador colmena',
+    'asesor de operación',
+    'asesor de operacion',
+    'cajero colmena',
+    'cocinero',
+    'personal colmena',
+    'staff',
+  ].includes(rawWaiterName.toLowerCase());
+  const waiterName =
+    !rawWaiterName || isGenericRoleLabel
+      ? currentUser?.fullName?.trim() || staffName || rawWaiterName || 'Usuario'
+      : rawWaiterName;
   const createdAt = order?.createdAt ?? comanda?.createdAt ?? new Date().toISOString();
   const generalNotes = order?.notes;
 

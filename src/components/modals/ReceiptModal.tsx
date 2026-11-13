@@ -20,12 +20,28 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
   order,
   onClose,
 }) => {
-  const { currentBranch: currentContextBranch } = useRestaurant();
-  const { branches } = useAuth();
+  const { currentBranch: currentContextBranch, staffName } = useRestaurant();
+  const { branches, currentUser } = useAuth();
 
   // Solo mostrar el valor de lo pagado (TOTAL PAGADO, Medio de Pago, Efectivo Recibido, Cambio)
   // cuando realmente se ha registrado el cobro (no en la tirilla previa al pago)
   const isPaid = !payment.id?.startsWith('preview-');
+
+  const rawCashierName = (payment.cashierName || '').trim();
+  const isGenericRoleLabel = [
+    'administrador colmena',
+    'asesor de operación',
+    'asesor de operacion',
+    'cajero colmena',
+    'cocinero',
+    'personal colmena',
+    'staff',
+  ].includes(rawCashierName.toLowerCase());
+
+  const resolvedCashierName =
+    !isPaid || !rawCashierName || isGenericRoleLabel
+      ? currentUser?.fullName?.trim() || staffName || rawCashierName || 'Usuario'
+      : rawCashierName;
 
   useEffect(() => {
     document.body.classList.add('printing-pos-ticket');
@@ -118,8 +134,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                 <span className="font-bold">{formatColombiaDateTime(payment.createdAt)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="font-bold">Cajero:</span>
-                <span className="font-bold">{payment.cashierName}</span>
+                <span className="font-bold">Cajero / Atendido por:</span>
+                <span className="font-bold">{resolvedCashierName}</span>
               </div>
               <div className="flex justify-between">
                 <span className="font-bold">Cliente:</span>
