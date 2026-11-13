@@ -16,6 +16,8 @@ export interface BranchReceiptHeaderProps {
   paperWidth?: PaperWidth;
   className?: string;
   showDianResolution?: boolean;
+  titleFontSize?: number;
+  bodyFontSize?: number;
 }
 
 /**
@@ -38,6 +40,8 @@ export const BranchReceiptHeader: React.FC<BranchReceiptHeaderProps> = ({
   paperWidth,
   className = '',
   showDianResolution = false,
+  titleFontSize,
+  bodyFontSize,
 }) => {
   // 1. Extraer configuración de impresión con prioridad: override -> snapshot -> branch -> default
   const printConfig: BranchPrintConfig =
@@ -139,8 +143,9 @@ export const BranchReceiptHeader: React.FC<BranchReceiptHeaderProps> = ({
       {printConfig.showTradeName && name.trim() && (
         <div
           className={`font-black tracking-tight text-black uppercase leading-tight break-words max-w-full ${
-            is58mm ? 'text-sm' : 'text-base sm:text-lg'
+            titleFontSize ? '' : is58mm ? 'text-sm' : 'text-base sm:text-lg'
           }`}
+          style={titleFontSize ? { fontSize: `${titleFontSize}px`, lineHeight: 1.2 } : undefined}
         >
           {name.trim()}
         </div>
@@ -148,28 +153,40 @@ export const BranchReceiptHeader: React.FC<BranchReceiptHeaderProps> = ({
 
       {/* 3. NIT */}
       {printConfig.showNit && nit.trim() && (
-        <div className="font-black text-black break-words max-w-full">
+        <div
+          className="font-black text-black break-words max-w-full"
+          style={bodyFontSize ? { fontSize: `${bodyFontSize}px`, lineHeight: 1.25 } : undefined}
+        >
           NIT: {nit.trim()}
         </div>
       )}
 
       {/* 4. Dirección */}
       {printConfig.showAddress && address.trim() && (
-        <div className="font-bold text-black leading-tight break-words max-w-full">
+        <div
+          className="font-bold text-black leading-tight break-words max-w-full"
+          style={bodyFontSize ? { fontSize: `${bodyFontSize}px`, lineHeight: 1.25 } : undefined}
+        >
           {address.trim()}
         </div>
       )}
 
       {/* 5. Celular / Teléfono */}
       {printConfig.showPhone && phone.trim() && (
-        <div className="font-bold text-black leading-tight break-words max-w-full">
+        <div
+          className="font-bold text-black leading-tight break-words max-w-full"
+          style={bodyFontSize ? { fontSize: `${bodyFontSize}px`, lineHeight: 1.25 } : undefined}
+        >
           Tel: {phone.trim()}
         </div>
       )}
 
       {/* Resolución DIAN Opcional en el encabezado */}
       {showDianResolution && resolutionDian && (
-        <div className="text-[10px] font-bold text-black pt-0.5 border-t border-dotted border-gray-300 print:border-gray-300 mt-1 max-w-full break-words">
+        <div
+          className="text-[10px] font-bold text-black pt-0.5 border-t border-dotted border-gray-300 print:border-gray-300 mt-1 max-w-full break-words"
+          style={bodyFontSize ? { fontSize: `${Math.max(9, bodyFontSize - 1)}px`, lineHeight: 1.25 } : undefined}
+        >
           {resolutionDian}
         </div>
       )}

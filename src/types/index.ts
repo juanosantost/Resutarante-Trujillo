@@ -62,6 +62,11 @@ export interface BranchPrintConfig {
   paperWidth: PaperWidth;
   kitchenFontSize?: KitchenFontSize;
   includeKitchenPrices?: boolean;
+  receiptTitleFontSize?: number;
+  receiptBodyFontSize?: number;
+  kitchenTitleFontSize?: number;
+  kitchenBodyFontSize?: number;
+  kitchenShowHeader?: boolean;
 }
 
 export const DEFAULT_BRANCH_PRINT_CONFIG: BranchPrintConfig = {
@@ -72,8 +77,13 @@ export const DEFAULT_BRANCH_PRINT_CONFIG: BranchPrintConfig = {
   showAddress: true,
   showPhone: true,
   paperWidth: '80mm',
-  kitchenFontSize: 'grande',
+  kitchenFontSize: 'extragrande',
   includeKitchenPrices: false,
+  receiptTitleFontSize: 16,
+  receiptBodyFontSize: 12,
+  kitchenTitleFontSize: 22,
+  kitchenBodyFontSize: 22,
+  kitchenShowHeader: true,
 };
 
 export interface BranchReceiptSnapshot {

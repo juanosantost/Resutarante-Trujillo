@@ -3,8 +3,14 @@ import { useAuth, DEFAULT_RECEIPT_CONFIG } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { Branch, ReceiptConfig, BranchPrintConfig, DEFAULT_BRANCH_PRINT_CONFIG, PaperWidth, KitchenFontSize, LogoSize } from '../../types';
 import { BranchReceiptHeader } from '../common/BranchReceiptHeader';
-import { BranchReceiptPreviewModal } from '../modals/BranchReceiptPreviewModal';
+import { BranchReceiptPreviewModal, PreviewPosMode } from '../modals/BranchReceiptPreviewModal';
 import { formatColombiaDateTime } from '../../utils/calculations';
+import {
+  clampPosFontSize,
+  resolveBranchPrintConfig,
+  MIN_POS_FONT_SIZE,
+  MAX_POS_FONT_SIZE,
+} from '../../utils/printConfigUtils';
 import {
   validateLogoFile,
   compressLogoImage,
@@ -37,6 +43,8 @@ import {
   AlertCircle,
   Hash,
   ChefHat,
+  Type,
+  Minus,
 } from 'lucide-react';
 
 export const BranchesManagementView: React.FC = () => {
@@ -68,7 +76,8 @@ export const BranchesManagementView: React.FC = () => {
   const [logoError, setLogoError] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Form state: Configuración de impresión de comprobantes (5 controles independientes)
+  // Form state: Configuración de impresión de comprobantes (POS Cobro & POS Cocina)
+  const [posConfigTab, setPosConfigTab] = useState<PreviewPosMode>('cobro');
   const [showLogo, setShowLogo] = useState<boolean>(true);
   const [logoSize, setLogoSize] = useState<LogoSize>('mediano');
   const [showTradeName, setShowTradeName] = useState<boolean>(true);
@@ -76,8 +85,13 @@ export const BranchesManagementView: React.FC = () => {
   const [showAddress, setShowAddress] = useState<boolean>(true);
   const [showPhone, setShowPhone] = useState<boolean>(true);
   const [paperWidth, setPaperWidth] = useState<PaperWidth>('80mm');
-  const [kitchenFontSize, setKitchenFontSize] = useState<KitchenFontSize>('grande');
+  const [kitchenFontSize, setKitchenFontSize] = useState<KitchenFontSize>('extragrande');
   const [includeKitchenPrices, setIncludeKitchenPrices] = useState<boolean>(false);
+  const [receiptTitleFontSize, setReceiptTitleFontSize] = useState<number>(16);
+  const [receiptBodyFontSize, setReceiptBodyFontSize] = useState<number>(12);
+  const [kitchenTitleFontSize, setKitchenTitleFontSize] = useState<number>(22);
+  const [kitchenBodyFontSize, setKitchenBodyFontSize] = useState<number>(22);
+  const [kitchenShowHeader, setKitchenShowHeader] = useState<boolean>(true);
 
   // Form state: Configuración DIAN
   const [headerText, setHeaderText] = useState<string>('SISTEMA COLMENA RESTAURANTE');
@@ -94,6 +108,7 @@ export const BranchesManagementView: React.FC = () => {
   const [previewBranch, setPreviewBranch] = useState<Branch | null>(null);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState<boolean>(false);
   const [previewOverrideData, setPreviewOverrideData] = useState<any>(null);
+  const [previewInitialMode, setPreviewInitialMode] = useState<PreviewPosMode>('cobro');
 
   const openCreateModal = () => {
     setEditingBranch(null);
@@ -111,6 +126,7 @@ export const BranchesManagementView: React.FC = () => {
     setLogoError('');
 
     // Reset controles de impresión
+    setPosConfigTab('cobro');
     setShowLogo(true);
     setLogoSize('mediano');
     setShowTradeName(true);
@@ -118,6 +134,13 @@ export const BranchesManagementView: React.FC = () => {
     setShowAddress(true);
     setShowPhone(true);
     setPaperWidth('80mm');
+    setKitchenFontSize('extragrande');
+    setIncludeKitchenPrices(false);
+    setReceiptTitleFontSize(16);
+    setReceiptBodyFontSize(12);
+    setKitchenTitleFontSize(22);
+    setKitchenBodyFontSize(22);
+    setKitchenShowHeader(true);
 
     // Reset DIAN
     setHeaderText('SISTEMA COLMENA RESTAURANTE');
@@ -148,17 +171,23 @@ export const BranchesManagementView: React.FC = () => {
     setLogoUrl(b.logoUrl || '');
     setLogoError('');
 
-    // Impresión y Preferencias de Cocina
-    const printConfig = b.printConfig || DEFAULT_BRANCH_PRINT_CONFIG;
-    setShowLogo(printConfig.showLogo ?? true);
-    setLogoSize(printConfig.logoSize || 'mediano');
-    setShowTradeName(printConfig.showTradeName ?? true);
-    setShowNit(printConfig.showNit ?? true);
-    setShowAddress(printConfig.showAddress ?? true);
-    setShowPhone(printConfig.showPhone ?? true);
-    setPaperWidth(printConfig.paperWidth || '80mm');
-    setKitchenFontSize(printConfig.kitchenFontSize || 'grande');
-    setIncludeKitchenPrices(printConfig.includeKitchenPrices ?? false);
+    // Impresión y Preferencias POS (Cobro y Cocina)
+    const resolvedPrint = resolveBranchPrintConfig(b.printConfig);
+    setPosConfigTab('cobro');
+    setShowLogo(resolvedPrint.showLogo);
+    setLogoSize(resolvedPrint.logoSize);
+    setShowTradeName(resolvedPrint.showTradeName);
+    setShowNit(resolvedPrint.showNit);
+    setShowAddress(resolvedPrint.showAddress);
+    setShowPhone(resolvedPrint.showPhone);
+    setPaperWidth(resolvedPrint.paperWidth);
+    setKitchenFontSize(resolvedPrint.kitchenFontSize);
+    setIncludeKitchenPrices(resolvedPrint.includeKitchenPrices);
+    setReceiptTitleFontSize(resolvedPrint.receiptTitleFontSize);
+    setReceiptBodyFontSize(resolvedPrint.receiptBodyFontSize);
+    setKitchenTitleFontSize(resolvedPrint.kitchenTitleFontSize);
+    setKitchenBodyFontSize(resolvedPrint.kitchenBodyFontSize);
+    setKitchenShowHeader(resolvedPrint.kitchenShowHeader);
 
     // DIAN
     setHeaderText(b.receiptConfig?.headerText || 'SISTEMA COLMENA RESTAURANTE');
@@ -249,6 +278,9 @@ export const BranchesManagementView: React.FC = () => {
 
     setIsSubmitting(true);
     try {
+      const derivedKitchenPreset: KitchenFontSize =
+        kitchenTitleFontSize >= 21 ? 'extragrande' : kitchenTitleFontSize >= 17 ? 'grande' : 'compacto';
+
       const printConfig: BranchPrintConfig = {
         showLogo,
         logoSize,
@@ -257,8 +289,13 @@ export const BranchesManagementView: React.FC = () => {
         showAddress,
         showPhone,
         paperWidth,
-        kitchenFontSize,
+        kitchenFontSize: derivedKitchenPreset,
         includeKitchenPrices,
+        receiptTitleFontSize: clampPosFontSize(receiptTitleFontSize, 16),
+        receiptBodyFontSize: clampPosFontSize(receiptBodyFontSize, 12),
+        kitchenTitleFontSize: clampPosFontSize(kitchenTitleFontSize, 22),
+        kitchenBodyFontSize: clampPosFontSize(kitchenBodyFontSize, 22),
+        kitchenShowHeader,
       };
 
       const receiptConfig: ReceiptConfig = {
@@ -333,15 +370,17 @@ export const BranchesManagementView: React.FC = () => {
   };
 
   // Abrir vista previa desde una sucursal existente
-  const handleOpenBranchPreview = (b: Branch) => {
+  const handleOpenBranchPreview = (b: Branch, mode: PreviewPosMode = 'cobro') => {
     setPreviewBranch(b);
     setPreviewOverrideData(null);
+    setPreviewInitialMode(mode);
     setIsPreviewModalOpen(true);
   };
 
   // Abrir vista previa desde los datos en vivo del formulario
-  const handleOpenLiveFormPreview = () => {
+  const handleOpenLiveFormPreview = (mode?: PreviewPosMode) => {
     setPreviewBranch(editingBranch);
+    setPreviewInitialMode(mode || posConfigTab);
     setPreviewOverrideData({
       name: name.trim() || 'Nombre de la Sucursal',
       nit: nit.trim() || '901.458.920-4',
@@ -356,6 +395,13 @@ export const BranchesManagementView: React.FC = () => {
         showAddress,
         showPhone,
         paperWidth,
+        kitchenFontSize,
+        includeKitchenPrices,
+        receiptTitleFontSize,
+        receiptBodyFontSize,
+        kitchenTitleFontSize,
+        kitchenBodyFontSize,
+        kitchenShowHeader,
       },
       resolutionDian,
       footerText,
@@ -408,7 +454,7 @@ export const BranchesManagementView: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {branches.map((b) => {
           const isSelected = currentBranch?.id === b.id;
-          const config = b.printConfig || DEFAULT_BRANCH_PRINT_CONFIG;
+          const config = resolveBranchPrintConfig(b.printConfig);
           return (
             <div
               key={b.id}
@@ -561,17 +607,19 @@ export const BranchesManagementView: React.FC = () => {
                     </span>
 
                     <span
-                      className={`text-[9.5px] px-2 py-0.5 rounded-md font-medium border flex items-center gap-1 ${
-                        config.kitchenFontSize === 'extragrande'
-                          ? 'bg-[#292212] text-[#D6A21A] border-[#B77900]/40'
-                          : config.kitchenFontSize === 'compacto'
-                          ? 'bg-[#181824] text-blue-300 border-blue-800/40'
-                          : 'bg-[#18231c] text-emerald-300 border-emerald-700/50'
-                      }`}
-                      title="Tamaño de letra para el ticket de cocina"
+                      className="text-[9.5px] px-2 py-0.5 rounded-md font-medium border flex items-center gap-1 bg-[#18231c] text-emerald-300 border-emerald-700/50"
+                      title="Tamaños de letra para POS de Cobro (Títulos / Textos)"
+                    >
+                      <Receipt className="w-2.5 h-2.5" />
+                      <span>Cobro: {config.receiptTitleFontSize}/{config.receiptBodyFontSize} pts</span>
+                    </span>
+
+                    <span
+                      className="text-[9.5px] px-2 py-0.5 rounded-md font-medium border flex items-center gap-1 bg-[#292212] text-[#D6A21A] border-[#B77900]/40"
+                      title="Tamaños de letra para POS de Cocina (Títulos / Textos)"
                     >
                       <ChefHat className="w-2.5 h-2.5" />
-                      <span>Cocina: {config.kitchenFontSize === 'extragrande' ? 'Extra Grande' : config.kitchenFontSize === 'compacto' ? 'Compacto' : 'Grande'}</span>
+                      <span>Cocina: {config.kitchenTitleFontSize}/{config.kitchenBodyFontSize} pts</span>
                     </span>
 
                     <span
@@ -680,7 +728,7 @@ export const BranchesManagementView: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={handleOpenLiveFormPreview}
+                  onClick={() => handleOpenLiveFormPreview(posConfigTab)}
                   className="px-3 py-1.5 rounded-xl bg-[#242424] hover:bg-[#303030] text-[#D6A21A] border border-[#B77900]/40 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all"
                   title="Abrir vista previa del comprobante en tiempo real"
                 >
@@ -983,27 +1031,57 @@ export const BranchesManagementView: React.FC = () => {
                 </div>
               </div>
 
-              {/* SECCIÓN 3: CONFIGURACIÓN DE IMPRESIÓN POR SUCURSAL */}
-              <div className="space-y-3.5 pt-4 border-t border-[#333333]">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs uppercase font-extrabold text-[#D6A21A] tracking-wider flex items-center gap-1.5">
-                    <Sliders className="w-4 h-4" />
-                    <span>3. Configuración de Impresión de Comprobantes</span>
-                  </h4>
+              {/* SECCIÓN 3: CONFIGURACIÓN POS POR SUCURSAL (COBRO Y COCINA) */}
+              <div className="space-y-4 pt-4 border-t border-[#333333]">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-xs uppercase font-extrabold text-[#D6A21A] tracking-wider flex items-center gap-1.5">
+                      <Sliders className="w-4 h-4" />
+                      <span>3. Configuración POS (Cobro y Cocina)</span>
+                    </h4>
+                    <p className="text-xs text-[#a8a29e] mt-0.5">
+                      Configura por separado el formato y los puntos de letra para POS de Cobro y POS de Cocina.
+                    </p>
+                  </div>
                   <button
                     type="button"
-                    onClick={handleOpenLiveFormPreview}
-                    className="text-xs text-[#D6A21A] font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                    onClick={() => handleOpenLiveFormPreview(posConfigTab)}
+                    className="px-3 py-1.5 rounded-xl bg-[#242424] hover:bg-[#303030] border border-[#B77900]/50 text-xs text-[#D6A21A] font-bold flex items-center gap-1.5 cursor-pointer"
                   >
                     <Eye className="w-3.5 h-3.5" />
-                    <span>Vista previa en vivo</span>
+                    <span>Abrir Vista Previa y Ajustar</span>
                   </button>
                 </div>
-                <p className="text-xs text-[#a8a29e]">
-                  Determina con precisión qué elementos aparecen en las tirillas y comprobantes térmicos impresos para esta sucursal.
-                </p>
 
-                {/* Selección de Ancho de Papel */}
+                {/* Selector de Sub-módulo POS: Cobro vs Cocina */}
+                <div className="grid grid-cols-2 gap-2 p-1.5 rounded-2xl bg-[#121214] border border-[#2d2d2d]">
+                  <button
+                    type="button"
+                    onClick={() => setPosConfigTab('cobro')}
+                    className={`py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                      posConfigTab === 'cobro'
+                        ? 'bg-[#B77900] text-[#181818] font-black shadow-md'
+                        : 'text-[#a8a29e] hover:text-[#FFFDF5]'
+                    }`}
+                  >
+                    <Receipt className="w-4 h-4" />
+                    <span>POS de Cobro ({receiptTitleFontSize}/{receiptBodyFontSize} pts)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPosConfigTab('cocina')}
+                    className={`py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                      posConfigTab === 'cocina'
+                        ? 'bg-[#B77900] text-[#181818] font-black shadow-md'
+                        : 'text-[#a8a29e] hover:text-[#FFFDF5]'
+                    }`}
+                  >
+                    <ChefHat className="w-4 h-4" />
+                    <span>POS de Cocina ({kitchenTitleFontSize}/{kitchenBodyFontSize} pts)</span>
+                  </button>
+                </div>
+
+                {/* Selección de Ancho de Papel Térmico */}
                 <div className="p-3.5 rounded-2xl bg-[#222222] border border-[#333333] space-y-2">
                   <label className="block text-xs font-bold text-[#FFFDF5]">
                     Ancho Predeterminado de Papel Térmico para Comprobantes:
@@ -1047,204 +1125,525 @@ export const BranchesManagementView: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Los 5 Controles Independientes (Interruptores / Checkboxes) */}
-                <div className="space-y-2">
-                  <span className="text-xs font-bold text-[#FFFDF5] block">
-                    Elementos Visibles en el Encabezado:
-                  </span>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {/* Control 1: Mostrar logotipo con selector de tamaño */}
-                    <div className="p-3 rounded-xl bg-[#222222] border border-[#333333] space-y-2">
-                      <label className="flex items-center justify-between cursor-pointer">
-                        <div className="flex items-center gap-2.5">
-                          <ImageIcon className="w-4 h-4 text-[#D6A21A]" />
-                          <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar logotipo</span>
-                        </div>
-                        <input
-                          type="checkbox"
-                          checked={showLogo}
-                          onChange={(e) => setShowLogo(e.target.checked)}
-                          className="w-4 h-4 accent-[#B77900] cursor-pointer"
-                        />
-                      </label>
-                      {showLogo && (
-                        <div className="pt-2 border-t border-[#333333] space-y-1">
-                          <div className="flex justify-between items-center text-[10px] text-[#a8a29e]">
-                            <span className="text-[#D6A21A] font-bold">Tamaño de Impresión:</span>
-                            <span className="capitalize text-[#FFFDF5] font-semibold">{logoSize}</span>
-                          </div>
-                          <div className="grid grid-cols-3 gap-1">
-                            {[
-                              { id: 'pequeno', label: 'Pequeño' },
-                              { id: 'mediano', label: 'Mediano' },
-                              { id: 'grande', label: 'Grande' },
-                            ].map((sz) => (
+                {posConfigTab === 'cobro' ? (
+                  <div className="space-y-4">
+                    {/* Tipografía POS de Cobro */}
+                    <div className="p-3.5 rounded-2xl bg-[#222222] border border-[#333333] space-y-3">
+                      <span className="text-xs font-bold text-[#FFFDF5] flex items-center gap-1.5">
+                        <Type className="w-4 h-4 text-[#D6A21A]" />
+                        <span>Tamaños de Letra en Puntos — POS de Cobro (Factura)</span>
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="p-3 rounded-xl bg-[#181818] border border-[#333333] space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-[#FFFDF5]">Títulos (Cobro)</span>
+                            <div className="flex items-center gap-1">
                               <button
-                                key={sz.id}
                                 type="button"
-                                onClick={() => setLogoSize(sz.id as LogoSize)}
-                                className={`py-1 px-1.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
-                                  logoSize === sz.id
-                                    ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] font-black shadow-sm'
-                                    : 'bg-[#181818] text-[#a8a29e] border-[#383838] hover:border-[#B77900]'
+                                onClick={() => setReceiptTitleFontSize((v) => clampPosFontSize(v - 1, v))}
+                                className="w-6 h-6 rounded bg-[#242424] border border-[#3a3a3a] flex items-center justify-center cursor-pointer"
+                                aria-label="Disminuir títulos cobro"
+                              >
+                                <Minus className="w-3 h-3" />
+                              </button>
+                              <input
+                                type="number"
+                                min={MIN_POS_FONT_SIZE}
+                                max={MAX_POS_FONT_SIZE}
+                                value={receiptTitleFontSize}
+                                onChange={(e) =>
+                                  setReceiptTitleFontSize(clampPosFontSize(Number(e.target.value), receiptTitleFontSize))
+                                }
+                                className="w-11 bg-[#242424] border border-[#3a3a3a] rounded text-center text-xs font-mono font-black text-[#D6A21A] py-0.5"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setReceiptTitleFontSize((v) => clampPosFontSize(v + 1, v))}
+                                className="w-6 h-6 rounded bg-[#242424] border border-[#3a3a3a] flex items-center justify-center cursor-pointer"
+                                aria-label="Aumentar títulos cobro"
+                              >
+                                <Plus className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {[14, 16, 18, 20, 22].map((pt) => (
+                              <button
+                                key={pt}
+                                type="button"
+                                onClick={() => setReceiptTitleFontSize(pt)}
+                                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border cursor-pointer ${
+                                  receiptTitleFontSize === pt
+                                    ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] font-black'
+                                    : 'bg-[#222222] text-[#a8a29e] border-[#383838]'
                                 }`}
                               >
-                                {sz.label}
+                                {pt} pts
                               </button>
                             ))}
                           </div>
                         </div>
-                      )}
+
+                        <div className="p-3 rounded-xl bg-[#181818] border border-[#333333] space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-[#FFFDF5]">Textos Normales (Cobro)</span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => setReceiptBodyFontSize((v) => clampPosFontSize(v - 1, v))}
+                                className="w-6 h-6 rounded bg-[#242424] border border-[#3a3a3a] flex items-center justify-center cursor-pointer"
+                                aria-label="Disminuir textos cobro"
+                              >
+                                <Minus className="w-3 h-3" />
+                              </button>
+                              <input
+                                type="number"
+                                min={MIN_POS_FONT_SIZE}
+                                max={MAX_POS_FONT_SIZE}
+                                value={receiptBodyFontSize}
+                                onChange={(e) =>
+                                  setReceiptBodyFontSize(clampPosFontSize(Number(e.target.value), receiptBodyFontSize))
+                                }
+                                className="w-11 bg-[#242424] border border-[#3a3a3a] rounded text-center text-xs font-mono font-black text-[#D6A21A] py-0.5"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setReceiptBodyFontSize((v) => clampPosFontSize(v + 1, v))}
+                                className="w-6 h-6 rounded bg-[#242424] border border-[#3a3a3a] flex items-center justify-center cursor-pointer"
+                                aria-label="Aumentar textos cobro"
+                              >
+                                <Plus className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {[10, 12, 13, 14, 16].map((pt) => (
+                              <button
+                                key={pt}
+                                type="button"
+                                onClick={() => setReceiptBodyFontSize(pt)}
+                                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border cursor-pointer ${
+                                  receiptBodyFontSize === pt
+                                    ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] font-black'
+                                    : 'bg-[#222222] text-[#a8a29e] border-[#383838]'
+                                }`}
+                              >
+                                {pt} pts
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
-                    {/* Control 2: Mostrar nombre comercial */}
-                    <label className="flex items-center justify-between p-3 rounded-xl bg-[#222222] border border-[#333333] hover:border-[#B77900]/60 cursor-pointer transition-all">
+                    {/* Los 5 Controles Independientes del Encabezado */}
+                    <div className="space-y-2">
+                      <span className="text-xs font-bold text-[#FFFDF5] block">
+                        Elementos Visibles en el Encabezado:
+                      </span>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        {/* Control 1: Mostrar logotipo con selector de tamaño */}
+                        <div className="p-3 rounded-xl bg-[#222222] border border-[#333333] space-y-2">
+                          <label className="flex items-center justify-between cursor-pointer">
+                            <div className="flex items-center gap-2.5">
+                              <ImageIcon className="w-4 h-4 text-[#D6A21A]" />
+                              <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar logotipo</span>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={showLogo}
+                              onChange={(e) => setShowLogo(e.target.checked)}
+                              className="w-4 h-4 accent-[#B77900] cursor-pointer"
+                            />
+                          </label>
+                          {showLogo && (
+                            <div className="pt-2 border-t border-[#333333] space-y-1">
+                              <div className="flex justify-between items-center text-[10px] text-[#a8a29e]">
+                                <span className="text-[#D6A21A] font-bold">Tamaño de Impresión:</span>
+                                <span className="capitalize text-[#FFFDF5] font-semibold">{logoSize}</span>
+                              </div>
+                              <div className="grid grid-cols-3 gap-1">
+                                {[
+                                  { id: 'pequeno', label: 'Pequeño' },
+                                  { id: 'mediano', label: 'Mediano' },
+                                  { id: 'grande', label: 'Grande' },
+                                ].map((sz) => (
+                                  <button
+                                    key={sz.id}
+                                    type="button"
+                                    onClick={() => setLogoSize(sz.id as LogoSize)}
+                                    className={`py-1 px-1.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
+                                      logoSize === sz.id
+                                        ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] font-black shadow-sm'
+                                        : 'bg-[#181818] text-[#a8a29e] border-[#383838] hover:border-[#B77900]'
+                                    }`}
+                                  >
+                                    {sz.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Control 2: Mostrar nombre comercial */}
+                        <label className="flex items-center justify-between p-3 rounded-xl bg-[#222222] border border-[#333333] hover:border-[#B77900]/60 cursor-pointer transition-all">
+                          <div className="flex items-center gap-2.5">
+                            <Building2 className="w-4 h-4 text-[#D6A21A]" />
+                            <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar nombre comercial</span>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={showTradeName}
+                            onChange={(e) => setShowTradeName(e.target.checked)}
+                            className="w-4 h-4 accent-[#B77900] cursor-pointer"
+                          />
+                        </label>
+
+                        {/* Control 3: Mostrar NIT */}
+                        <label className="flex items-center justify-between p-3 rounded-xl bg-[#222222] border border-[#333333] hover:border-[#B77900]/60 cursor-pointer transition-all">
+                          <div className="flex items-center gap-2.5">
+                            <FileText className="w-4 h-4 text-[#D6A21A]" />
+                            <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar NIT</span>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={showNit}
+                            onChange={(e) => setShowNit(e.target.checked)}
+                            className="w-4 h-4 accent-[#B77900] cursor-pointer"
+                          />
+                        </label>
+
+                        {/* Control 4: Mostrar dirección */}
+                        <label className="flex items-center justify-between p-3 rounded-xl bg-[#222222] border border-[#333333] hover:border-[#B77900]/60 cursor-pointer transition-all">
+                          <div className="flex items-center gap-2.5">
+                            <MapPin className="w-4 h-4 text-[#D6A21A]" />
+                            <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar dirección</span>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={showAddress}
+                            onChange={(e) => setShowAddress(e.target.checked)}
+                            className="w-4 h-4 accent-[#B77900] cursor-pointer"
+                          />
+                        </label>
+
+                        {/* Control 5: Mostrar celular */}
+                        <label className="flex items-center justify-between p-3 rounded-xl bg-[#222222] border border-[#333333] hover:border-[#B77900]/60 cursor-pointer transition-all sm:col-span-2">
+                          <div className="flex items-center gap-2.5">
+                            <Smartphone className="w-4 h-4 text-[#D6A21A]" />
+                            <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar celular o teléfono</span>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={showPhone}
+                            onChange={(e) => setShowPhone(e.target.checked)}
+                            className="w-4 h-4 accent-[#B77900] cursor-pointer"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* CONFIGURACIÓN INDEPENDIENTE: POS DE COCINA */
+                  <div className="p-3.5 rounded-2xl bg-[#222222] border border-[#333333] space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <label className="text-xs font-bold text-[#FFFDF5] flex items-center gap-1.5">
+                        <ChefHat className="w-4 h-4 text-[#D6A21A]" />
+                        <span>Configuración de Impresión — POS de Cocina</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setKitchenBodyFontSize(kitchenTitleFontSize)}
+                        className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-[#181818] border border-[#B77900]/50 text-[#D6A21A] hover:bg-[#2a2a2a] cursor-pointer"
+                      >
+                        Igualar textos a {kitchenTitleFontSize} pts
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-[#a8a29e]">
+                      Ajusta en puntos el tamaño de títulos (platos, mesa, orden) y textos normales (acompañamientos, notas, mesero y pie) en el ticket de cocina.
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="p-3 rounded-xl bg-[#181818] border border-[#333333] space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-[#FFFDF5]">Títulos (Cocina)</span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setKitchenTitleFontSize((v) => clampPosFontSize(v - 1, v))}
+                              className="w-6 h-6 rounded bg-[#242424] border border-[#3a3a3a] flex items-center justify-center cursor-pointer"
+                              aria-label="Disminuir títulos cocina"
+                            >
+                              <Minus className="w-3 h-3" />
+                            </button>
+                            <input
+                              type="number"
+                              min={MIN_POS_FONT_SIZE}
+                              max={MAX_POS_FONT_SIZE}
+                              value={kitchenTitleFontSize}
+                              onChange={(e) =>
+                                setKitchenTitleFontSize(clampPosFontSize(Number(e.target.value), kitchenTitleFontSize))
+                              }
+                              className="w-11 bg-[#242424] border border-[#3a3a3a] rounded text-center text-xs font-mono font-black text-[#D6A21A] py-0.5"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setKitchenTitleFontSize((v) => clampPosFontSize(v + 1, v))}
+                              className="w-6 h-6 rounded bg-[#242424] border border-[#3a3a3a] flex items-center justify-center cursor-pointer"
+                              aria-label="Aumentar títulos cocina"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {[16, 18, 20, 22, 24, 26].map((pt) => (
+                            <button
+                              key={pt}
+                              type="button"
+                              onClick={() => setKitchenTitleFontSize(pt)}
+                              className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border cursor-pointer ${
+                                kitchenTitleFontSize === pt
+                                  ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] font-black'
+                                  : 'bg-[#222222] text-[#a8a29e] border-[#383838]'
+                              }`}
+                            >
+                              {pt} pts
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-[#181818] border border-[#333333] space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-[#FFFDF5]">Textos Normales (Cocina)</span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setKitchenBodyFontSize((v) => clampPosFontSize(v - 1, v))}
+                              className="w-6 h-6 rounded bg-[#242424] border border-[#3a3a3a] flex items-center justify-center cursor-pointer"
+                              aria-label="Disminuir textos cocina"
+                            >
+                              <Minus className="w-3 h-3" />
+                            </button>
+                            <input
+                              type="number"
+                              min={MIN_POS_FONT_SIZE}
+                              max={MAX_POS_FONT_SIZE}
+                              value={kitchenBodyFontSize}
+                              onChange={(e) =>
+                                setKitchenBodyFontSize(clampPosFontSize(Number(e.target.value), kitchenBodyFontSize))
+                              }
+                              className="w-11 bg-[#242424] border border-[#3a3a3a] rounded text-center text-xs font-mono font-black text-[#D6A21A] py-0.5"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setKitchenBodyFontSize((v) => clampPosFontSize(v + 1, v))}
+                              className="w-6 h-6 rounded bg-[#242424] border border-[#3a3a3a] flex items-center justify-center cursor-pointer"
+                              aria-label="Aumentar textos cocina"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {[16, 18, 20, 22, 24, 26].map((pt) => (
+                            <button
+                              key={pt}
+                              type="button"
+                              onClick={() => setKitchenBodyFontSize(pt)}
+                              className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border cursor-pointer ${
+                                kitchenBodyFontSize === pt
+                                  ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] font-black'
+                                  : 'bg-[#222222] text-[#a8a29e] border-[#383838]'
+                              }`}
+                            >
+                              {pt} pts
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <label className="flex items-center justify-between p-3 rounded-xl bg-[#181818] border border-[#333333] hover:border-[#B77900]/60 cursor-pointer transition-all">
                       <div className="flex items-center gap-2.5">
                         <Building2 className="w-4 h-4 text-[#D6A21A]" />
-                        <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar nombre comercial</span>
+                        <div>
+                          <span className="text-xs font-semibold text-[#FFFDF5] block">
+                            Mostrar encabezado del negocio en el ticket de cocina
+                          </span>
+                          <span className="text-[10px] text-[#a8a29e]">
+                            Incluye logotipo y datos de la sucursal en la parte superior de la comanda
+                          </span>
+                        </div>
                       </div>
                       <input
                         type="checkbox"
-                        checked={showTradeName}
-                        onChange={(e) => setShowTradeName(e.target.checked)}
+                        checked={kitchenShowHeader}
+                        onChange={(e) => setKitchenShowHeader(e.target.checked)}
                         className="w-4 h-4 accent-[#B77900] cursor-pointer"
                       />
                     </label>
 
-                    {/* Control 3: Mostrar NIT */}
-                    <label className="flex items-center justify-between p-3 rounded-xl bg-[#222222] border border-[#333333] hover:border-[#B77900]/60 cursor-pointer transition-all">
+                    <label className="flex items-center justify-between p-3 rounded-xl bg-[#181818] border border-[#333333] hover:border-[#B77900]/60 cursor-pointer transition-all">
                       <div className="flex items-center gap-2.5">
-                        <FileText className="w-4 h-4 text-[#D6A21A]" />
-                        <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar NIT</span>
+                        <Receipt className="w-4 h-4 text-[#D6A21A]" />
+                        <div>
+                          <span className="text-xs font-semibold text-[#FFFDF5] block">
+                            Incluir precios de venta en el ticket de cocina
+                          </span>
+                          <span className="text-[10px] text-[#a8a29e]">
+                            Desactivado por defecto para que cocina solo vea insumos y cantidades
+                          </span>
+                        </div>
                       </div>
                       <input
                         type="checkbox"
-                        checked={showNit}
-                        onChange={(e) => setShowNit(e.target.checked)}
-                        className="w-4 h-4 accent-[#B77900] cursor-pointer"
-                      />
-                    </label>
-
-                    {/* Control 4: Mostrar dirección */}
-                    <label className="flex items-center justify-between p-3 rounded-xl bg-[#222222] border border-[#333333] hover:border-[#B77900]/60 cursor-pointer transition-all">
-                      <div className="flex items-center gap-2.5">
-                        <MapPin className="w-4 h-4 text-[#D6A21A]" />
-                        <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar dirección</span>
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={showAddress}
-                        onChange={(e) => setShowAddress(e.target.checked)}
-                        className="w-4 h-4 accent-[#B77900] cursor-pointer"
-                      />
-                    </label>
-
-                    {/* Control 5: Mostrar celular */}
-                    <label className="flex items-center justify-between p-3 rounded-xl bg-[#222222] border border-[#333333] hover:border-[#B77900]/60 cursor-pointer transition-all sm:col-span-2">
-                      <div className="flex items-center gap-2.5">
-                        <Smartphone className="w-4 h-4 text-[#D6A21A]" />
-                        <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar celular o teléfono</span>
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={showPhone}
-                        onChange={(e) => setShowPhone(e.target.checked)}
+                        checked={includeKitchenPrices}
+                        onChange={(e) => setIncludeKitchenPrices(e.target.checked)}
                         className="w-4 h-4 accent-[#B77900] cursor-pointer"
                       />
                     </label>
                   </div>
-                </div>
+                )}
 
-                {/* Preferencias de Cocina (Tamaño de letra por defecto y precios) */}
-                <div className="p-3.5 rounded-2xl bg-[#222222] border border-[#333333] space-y-3">
-                  <label className="block text-xs font-bold text-[#FFFDF5] flex items-center gap-1.5">
-                    <ChefHat className="w-4 h-4 text-[#D6A21A]" />
-                    <span>Preferencias de Impresión para Cocina (POS Cocina)</span>
-                  </label>
-                  <p className="text-[11px] text-[#a8a29e]">
-                    Configura el tamaño de letra predeterminado para el personal de cocina y si se deben incluir los precios unitarios en el ticket de cocina.
-                  </p>
-
-                  <div className="space-y-2">
-                    <span className="block text-[11px] font-bold text-[#d6d3d1]">
-                      Tamaño de Letra Predeterminado:
-                    </span>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[
-                        { id: 'compacto', label: 'Normal (14px)' },
-                        { id: 'grande', label: 'Grande (18px)' },
-                        { id: 'extragrande', label: 'Extra Grande (22px)' },
-                      ].map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => setKitchenFontSize(item.id as KitchenFontSize)}
-                          className={`p-2 rounded-xl border text-xs font-bold text-center transition-all cursor-pointer ${
-                            kitchenFontSize === item.id
-                              ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] font-black shadow-sm'
-                              : 'bg-[#181818] text-[#a8a29e] border-[#383838] hover:border-[#B77900]'
-                          }`}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <label className="flex items-center justify-between p-3 rounded-xl bg-[#181818] border border-[#333333] hover:border-[#B77900]/60 cursor-pointer transition-all mt-2">
-                    <div className="flex items-center gap-2.5">
-                      <Receipt className="w-4 h-4 text-[#D6A21A]" />
-                      <div>
-                        <span className="text-xs font-semibold text-[#FFFDF5] block">Incluir precios de venta en el ticket de cocina</span>
-                        <span className="text-[10px] text-[#a8a29e]">Desactivado por defecto para que cocina solo vea insumos y cantidades</span>
-                      </div>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={includeKitchenPrices}
-                      onChange={(e) => setIncludeKitchenPrices(e.target.checked)}
-                      className="w-4 h-4 accent-[#B77900] cursor-pointer"
-                    />
-                  </label>
-                </div>
-
-                {/* Previsualización en vivo integrada del encabezado en el formulario */}
+                {/* Previsualización en vivo integrada del modelo de ejemplo seleccionado */}
                 <div className="p-4 rounded-2xl bg-[#0e0e10] border border-[#2d281e] space-y-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-[10px] uppercase font-bold text-[#D6A21A] flex items-center gap-1.5">
                       <Eye className="w-3.5 h-3.5" />
-                      <span>Encabezado en Vivo ({paperWidth}):</span>
+                      <span>
+                        {posConfigTab === 'cobro'
+                          ? `Modelo POS de Cobro (${paperWidth} · ${receiptTitleFontSize}/${receiptBodyFontSize} pts):`
+                          : `Modelo POS de Cocina (${paperWidth} · ${kitchenTitleFontSize}/${kitchenBodyFontSize} pts):`}
+                      </span>
                     </span>
                     <button
                       type="button"
-                      onClick={handleOpenLiveFormPreview}
+                      onClick={() => handleOpenLiveFormPreview(posConfigTab)}
                       className="text-[10px] text-[#FFFDF5] bg-[#242424] hover:bg-[#333] px-2.5 py-1 rounded-lg border border-[#444] cursor-pointer"
                     >
-                      Ver Comprobante Completo
+                      Expandir Vista Previa y Probar Impresión
                     </button>
                   </div>
 
-                  <div className="bg-[#fffdfa] rounded-xl p-3 shadow-inner max-w-sm mx-auto">
-                    <BranchReceiptHeader
-                      overrideData={{
-                        name,
-                        nit,
-                        address,
-                        phone,
-                        logoUrl,
-                        printConfig: {
-                          showLogo,
-                          showTradeName,
-                          showNit,
-                          showAddress,
-                          showPhone,
-                          paperWidth,
-                        },
-                      }}
-                      paperWidth={paperWidth}
-                    />
-                  </div>
+                  {posConfigTab === 'cobro' ? (
+                    <div
+                      className="bg-[#fffdfa] text-black font-mono rounded-xl p-3.5 shadow-inner max-w-sm mx-auto space-y-2"
+                      style={{ fontSize: `${receiptBodyFontSize}px`, lineHeight: 1.3 }}
+                    >
+                      <BranchReceiptHeader
+                        overrideData={{
+                          name,
+                          nit,
+                          address,
+                          phone,
+                          logoUrl,
+                          printConfig: {
+                            showLogo,
+                            logoSize,
+                            showTradeName,
+                            showNit,
+                            showAddress,
+                            showPhone,
+                            paperWidth,
+                          },
+                        }}
+                        paperWidth={paperWidth}
+                        titleFontSize={receiptTitleFontSize}
+                        bodyFontSize={receiptBodyFontSize}
+                      />
+                      <div className="border-t border-dotted border-gray-300 pt-2 space-y-1">
+                        <div className="flex justify-between font-bold">
+                          <span>1x Hamburguesa Colmena</span>
+                          <span>$ 32.000 COP</span>
+                        </div>
+                        <div
+                          className="flex justify-between font-black border-t border-dotted border-gray-300 pt-1"
+                          style={{ fontSize: `${receiptTitleFontSize}px` }}
+                        >
+                          <span>TOTAL:</span>
+                          <span>$ 32.000 COP</span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      className="bg-[#fffdfa] text-black font-mono rounded-xl p-3.5 shadow-inner max-w-sm mx-auto space-y-2"
+                      style={{ fontSize: `${kitchenBodyFontSize}px`, lineHeight: 1.25 }}
+                    >
+                      {kitchenShowHeader && (
+                        <div className="border-b border-dotted border-gray-300 pb-2">
+                          <BranchReceiptHeader
+                            overrideData={{
+                              name,
+                              nit,
+                              address,
+                              phone,
+                              logoUrl,
+                              printConfig: {
+                                showLogo,
+                                logoSize,
+                                showTradeName,
+                                showNit,
+                                showAddress,
+                                showPhone,
+                                paperWidth,
+                              },
+                            }}
+                            paperWidth={paperWidth}
+                            titleFontSize={kitchenTitleFontSize}
+                            bodyFontSize={kitchenBodyFontSize}
+                          />
+                        </div>
+                      )}
+                      <div
+                        className="text-center font-black uppercase"
+                        style={{ fontSize: `${kitchenTitleFontSize}px`, lineHeight: 1.2 }}
+                      >
+                        *** COMANDA DE COCINA ***
+                      </div>
+                      <div
+                        className="text-center font-black uppercase"
+                        style={{ fontSize: `${kitchenTitleFontSize}px`, lineHeight: 1.2 }}
+                      >
+                        MESA 4
+                      </div>
+                      <div className="border-y border-dotted border-gray-300 py-1 space-y-0.5">
+                        <div className="flex flex-wrap justify-between gap-x-2">
+                          <span className="font-bold">ORDEN:</span>
+                          <span className="font-black" style={{ fontSize: `${kitchenTitleFontSize}px` }}>
+                            #120
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap justify-between gap-x-2">
+                          <span className="font-bold">MESERO:</span>
+                          <span className="font-bold">Carlos Mendoza</span>
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <div
+                          className="font-black uppercase"
+                          style={{ fontSize: `${kitchenTitleFontSize}px`, lineHeight: 1.2 }}
+                        >
+                          1X MENÚ DEL DÍA
+                        </div>
+                        <div className="pl-3 font-bold">› Sopa de Pastas Casera</div>
+                        <div className="pl-3 font-bold">› Pechuga a la Plancha</div>
+                        <div className="p-1.5 border border-dotted border-gray-300 font-bold">
+                          <span
+                            className="block font-black"
+                            style={{ fontSize: `${kitchenTitleFontSize}px`, lineHeight: 1.2 }}
+                          >
+                            ¡OJO COCINA!:
+                          </span>
+                          <span>SIN CEBOLLA</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1360,7 +1759,7 @@ export const BranchesManagementView: React.FC = () => {
               <div className="pt-4 border-t border-[#333333] flex flex-wrap items-center justify-between gap-3">
                 <button
                   type="button"
-                  onClick={handleOpenLiveFormPreview}
+                  onClick={() => handleOpenLiveFormPreview(posConfigTab)}
                   className="px-4 py-2 rounded-xl bg-[#242424] hover:bg-[#303030] border border-[#444] text-xs font-bold text-[#D6A21A] flex items-center gap-1.5 cursor-pointer"
                 >
                   <Eye className="w-3.5 h-3.5" />
@@ -1399,9 +1798,10 @@ export const BranchesManagementView: React.FC = () => {
         <BranchReceiptPreviewModal
           branch={previewBranch}
           overrideData={previewOverrideData}
+          initialMode={previewInitialMode}
           onClose={() => setIsPreviewModalOpen(false)}
           onUpdatePrintConfig={(cfg) => {
-            // Si la vista previa se abrió desde el formulario, sincronizar los controles
+            // Si la vista previa se abrió desde el formulario, sincronizar todos los controles
             if (isModalOpen) {
               setShowLogo(cfg.showLogo);
               if (cfg.logoSize) setLogoSize(cfg.logoSize);
@@ -1410,8 +1810,38 @@ export const BranchesManagementView: React.FC = () => {
               setShowAddress(cfg.showAddress);
               setShowPhone(cfg.showPhone);
               setPaperWidth(cfg.paperWidth);
+              if (typeof cfg.includeKitchenPrices === 'boolean') {
+                setIncludeKitchenPrices(cfg.includeKitchenPrices);
+              }
+              if (typeof cfg.kitchenShowHeader === 'boolean') {
+                setKitchenShowHeader(cfg.kitchenShowHeader);
+              }
+              if (typeof cfg.receiptTitleFontSize === 'number') {
+                setReceiptTitleFontSize(cfg.receiptTitleFontSize);
+              }
+              if (typeof cfg.receiptBodyFontSize === 'number') {
+                setReceiptBodyFontSize(cfg.receiptBodyFontSize);
+              }
+              if (typeof cfg.kitchenTitleFontSize === 'number') {
+                setKitchenTitleFontSize(cfg.kitchenTitleFontSize);
+              }
+              if (typeof cfg.kitchenBodyFontSize === 'number') {
+                setKitchenBodyFontSize(cfg.kitchenBodyFontSize);
+              }
             }
           }}
+          onSavePrintConfig={
+            !isModalOpen && previewBranch
+              ? async (cfg) => {
+                  const normalized = resolveBranchPrintConfig(cfg);
+                  await updateBranchData(previewBranch.id, { printConfig: normalized });
+                  showToast(
+                    `Configuración POS de "${previewBranch.name}" guardada correctamente`,
+                    'success'
+                  );
+                }
+              : undefined
+          }
         />
       )}
     </div>

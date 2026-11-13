@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { BranchReceiptHeader } from '../common/BranchReceiptHeader';
 import { filterReceiptItems } from '../../utils/checkoutCalculations';
 import { formatModifiersDisplaySummary } from '../../utils/orderModifierUtils';
+import { resolveBranchPrintConfig } from '../../utils/printConfigUtils';
 import { Printer, X, CheckCircle } from 'lucide-react';
 
 interface ReceiptModalProps {
@@ -62,8 +63,18 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
     branches.find((b) => b.id === originBranchId) ||
     currentContextBranch;
 
-  const paperWidth = snapshot?.printConfig?.paperWidth || originatingBranch?.printConfig?.paperWidth || '80mm';
+  const resolvedPrintConfig = resolveBranchPrintConfig(
+    originatingBranch?.printConfig,
+    snapshot?.printConfig
+  );
+  const paperWidth = resolvedPrintConfig.paperWidth || '80mm';
   const is58mm = paperWidth === '58mm';
+  const titleFontSize =
+    originatingBranch?.printConfig?.receiptTitleFontSize ?? resolvedPrintConfig.receiptTitleFontSize;
+  const bodyFontSize =
+    originatingBranch?.printConfig?.receiptBodyFontSize ?? resolvedPrintConfig.receiptBodyFontSize;
+  const titleStyle: React.CSSProperties = { fontSize: `${titleFontSize}px`, lineHeight: 1.25 };
+  const bodyStyle: React.CSSProperties = { fontSize: `${bodyFontSize}px`, lineHeight: 1.3 };
 
   const prefix = snapshot?.prefix || originatingBranch?.receiptConfig?.prefix || 'FAC-';
   const resolutionDian = snapshot?.resolutionDian || originatingBranch?.receiptConfig?.resolutionDian;
@@ -110,8 +121,9 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             id="colmena-printable-receipt"
             data-testid="colmena-printable-receipt"
             data-paper-width={paperWidth}
+            style={bodyStyle}
             className={`colmena-printable-ticket bg-white text-black font-mono select-all transition-all print:shadow-none print:p-0 print:m-0 ${
-              is58mm ? 'w-full max-w-[270px] text-xs' : 'w-full max-w-[360px] text-[13px]'
+              is58mm ? 'w-full max-w-[270px]' : 'w-full max-w-[360px]'
             }`}
           >
             {/* Encabezado dinámico con datos de la sucursal de origen */}
@@ -121,28 +133,30 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                 snapshot={snapshot}
                 paperWidth={paperWidth}
                 showDianResolution={false}
+                titleFontSize={titleFontSize}
+                bodyFontSize={bodyFontSize}
               />
             </div>
 
             {/* Datos del Comprobante */}
-            <div className={`py-2 border-b border-dotted border-gray-300 print:border-gray-300 space-y-1 text-black ${is58mm ? 'text-[11px]' : 'text-xs'}`}>
-              <div className="flex justify-between">
+            <div className="py-2 border-b border-dotted border-gray-300 print:border-gray-300 space-y-1 text-black" style={bodyStyle}>
+              <div className="flex flex-wrap justify-between gap-x-2">
                 <span className="font-bold">Factura POS:</span>
-                <span className="font-black">{prefix}{payment.orderNumber}</span>
+                <span className="font-black" style={titleStyle}>{prefix}{payment.orderNumber}</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex flex-wrap justify-between gap-x-2">
                 <span className="font-bold">Fecha / Hora:</span>
                 <span className="font-bold">{formatColombiaDateTime(payment.createdAt)}</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex flex-wrap justify-between gap-x-2">
                 <span className="font-bold">Cajero / Atendido por:</span>
                 <span className="font-bold">{resolvedCashierName}</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex flex-wrap justify-between gap-x-2">
                 <span className="font-bold">Cliente:</span>
                 <span className="font-bold">{payment.customerName || 'Consumidor Final'}</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex flex-wrap justify-between gap-x-2">
                 <span className="font-bold">NIT / CC:</span>
                 <span className="font-bold">{payment.customerNitOrCedula || '222222222222'}</span>
               </div>
@@ -150,11 +164,11 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
 
             {/* Listado de Productos */}
             <div className="py-2 border-b border-dotted border-gray-300 print:border-gray-300">
-              <div className={`flex justify-between font-black text-black mb-1.5 pb-1 border-b border-dotted border-gray-300 print:border-gray-300 ${is58mm ? 'text-[11px]' : 'text-xs'}`}>
+              <div className="flex justify-between font-black text-black mb-1.5 pb-1 border-b border-dotted border-gray-300 print:border-gray-300" style={bodyStyle}>
                 <span>CANT / DESCRIPCIÓN</span>
                 <span>TOTAL</span>
               </div>
-              <div className={`space-y-1.5 text-black font-bold ${is58mm ? 'text-xs' : 'text-[13px]'}`}>
+              <div className="space-y-1.5 text-black font-bold" style={bodyStyle}>
                 {filterReceiptItems(payment, order).length > 0 ? (
                   filterReceiptItems(payment, order).map((it) => {
                     const modSummary = formatModifiersDisplaySummary(it.selectedModifiers);
@@ -168,17 +182,17 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                           <span className="font-black shrink-0">{formatCOP(it.price * it.quantity)}</span>
                         </div>
                         {modSummary && (
-                          <div className="text-[10px] font-bold leading-tight pl-2 text-black">
+                          <div className="font-bold leading-tight pl-2 text-black" style={{ fontSize: `${Math.max(9, bodyFontSize - 1)}px` }}>
                             {modSummary}
                           </div>
                         )}
                         {it.adjustments && it.adjustments.length > 0 && (
-                          <div className="text-[10px] font-bold leading-tight pl-2 text-black">
+                          <div className="font-bold leading-tight pl-2 text-black" style={{ fontSize: `${Math.max(9, bodyFontSize - 1)}px` }}>
                             {it.adjustments.map((a) => a.concept).join(' · ')}
                           </div>
                         )}
                         {it.notes && (
-                          <div className="text-[10px] italic font-bold leading-tight pl-2 text-black">
+                          <div className="italic font-bold leading-tight pl-2 text-black" style={{ fontSize: `${Math.max(9, bodyFontSize - 1)}px` }}>
                             Obs: {it.notes}
                           </div>
                         )}
@@ -195,7 +209,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             </div>
 
             {/* Liquidación de Totales */}
-            <div className={`py-2 border-b border-dotted border-gray-300 print:border-gray-300 space-y-1 text-black ${is58mm ? 'text-xs' : 'text-[13px]'}`}>
+            <div className="py-2 border-b border-dotted border-gray-300 print:border-gray-300 space-y-1 text-black" style={bodyStyle}>
               <div className="flex justify-between font-bold">
                 <span>Subtotal:</span>
                 <span className="font-black">{formatCOP(payment.subtotal)}</span>
@@ -218,7 +232,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                   <span className="font-black">-{formatCOP(payment.advanceApplied || 0)}</span>
                 </div>
               )}
-              <div className={`flex justify-between font-black pt-1.5 border-t border-dotted border-gray-300 print:border-gray-300 text-black ${is58mm ? 'text-sm' : 'text-base'}`}>
+              <div className="flex justify-between font-black pt-1.5 border-t border-dotted border-gray-300 print:border-gray-300 text-black" style={titleStyle}>
                 <span>{isPaid ? 'TOTAL PAGADO:' : 'TOTAL:'}</span>
                 <span>{formatCOP(payment.total)}</span>
               </div>
@@ -226,7 +240,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
 
             {/* Medios de Pago y Valores Pagados */}
             {isPaid && (
-              <div className={`py-2 border-b border-dotted border-gray-300 print:border-gray-300 space-y-1 text-black ${is58mm ? 'text-[11px]' : 'text-xs'}`}>
+              <div className="py-2 border-b border-dotted border-gray-300 print:border-gray-300 space-y-1 text-black" style={bodyStyle}>
                 <div className="flex justify-between capitalize">
                   <span className="font-bold">Medio de Pago:</span>
                   <span className="font-black">{payment.method?.replace(/_/g, ' ')}</span>
@@ -257,10 +271,10 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             )}
 
             {/* Mensaje de Despedida y DIAN */}
-            <div className={`pt-3 text-center space-y-1 text-black ${is58mm ? 'text-[10px]' : 'text-[11px]'}`}>
+            <div className="pt-3 text-center space-y-1 text-black" style={{ fontSize: `${Math.max(9, bodyFontSize - 1)}px`, lineHeight: 1.25 }}>
               <p className="font-bold text-black">{footerText}</p>
               {resolutionDian && <p className="font-semibold text-black">{resolutionDian}</p>}
-              <p className="text-[10px] font-bold text-black pt-1 tracking-widest uppercase">
+              <p className="font-bold text-black pt-1 tracking-widest uppercase">
                 *** FIN DE LA FACTURA ***
               </p>
             </div>
