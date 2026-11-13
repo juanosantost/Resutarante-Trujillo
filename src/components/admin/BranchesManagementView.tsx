@@ -624,6 +624,22 @@ export const BranchesManagementView: React.FC = () => {
 
                     <span
                       className={`text-[9.5px] px-2 py-0.5 rounded-md font-medium border flex items-center gap-1 ${
+                        config.kitchenShowHeader
+                          ? 'bg-[#292212] text-[#D6A21A] border-[#B77900]/40'
+                          : 'bg-[#18231c] text-emerald-300 border-emerald-700/50'
+                      }`}
+                      title="Incluir datos y logotipo del local en el ticket de cocina"
+                    >
+                      <Building2 className="w-2.5 h-2.5" />
+                      <span>
+                        {config.kitchenShowHeader
+                          ? 'Con info local cocina'
+                          : 'Sin info local cocina (ahorro papel)'}
+                      </span>
+                    </span>
+
+                    <span
+                      className={`text-[9.5px] px-2 py-0.5 rounded-md font-medium border flex items-center gap-1 ${
                         config.includeKitchenPrices
                           ? 'bg-[#292212] text-[#D6A21A] border-[#B77900]/40'
                           : 'bg-[#201818] text-neutral-400 border-neutral-700/40'
@@ -1365,6 +1381,37 @@ export const BranchesManagementView: React.FC = () => {
                       Ajusta en puntos el tamaño de títulos (platos, mesa, orden) y textos normales (acompañamientos, notas, mesero y pie) en el ticket de cocina.
                     </p>
 
+                    <label className="flex items-start justify-between gap-3 p-3 rounded-xl bg-[#181818] border border-[#B77900]/40 hover:border-[#D6A21A] cursor-pointer transition-all">
+                      <div className="flex items-start gap-2.5">
+                        <Building2 className="w-4 h-4 text-[#D6A21A] shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-xs font-bold text-[#FFFDF5] block">
+                            Incluir información del local en el ticket de cocina
+                          </span>
+                          <span className="text-[10px] text-[#a8a29e] block mt-0.5">
+                            Muestra logotipo, nombre comercial, NIT, dirección y celular. Desactívalo para ahorrar papel en cada comanda.
+                          </span>
+                          <span
+                            className={`inline-block mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                              kitchenShowHeader
+                                ? 'bg-[#292212] text-[#D6A21A] border-[#B77900]/40'
+                                : 'bg-emerald-950/60 text-emerald-300 border-emerald-700/50'
+                            }`}
+                          >
+                            {kitchenShowHeader
+                              ? 'Imprime datos del local'
+                              : 'Ahorro de papel activo (sin datos del local)'}
+                          </span>
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={kitchenShowHeader}
+                        onChange={(e) => setKitchenShowHeader(e.target.checked)}
+                        className="w-4 h-4 accent-[#B77900] cursor-pointer mt-0.5 shrink-0"
+                      />
+                    </label>
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="p-3 rounded-xl bg-[#181818] border border-[#333333] space-y-2">
                         <div className="flex items-center justify-between">
@@ -1469,26 +1516,6 @@ export const BranchesManagementView: React.FC = () => {
 
                     <label className="flex items-center justify-between p-3 rounded-xl bg-[#181818] border border-[#333333] hover:border-[#B77900]/60 cursor-pointer transition-all">
                       <div className="flex items-center gap-2.5">
-                        <Building2 className="w-4 h-4 text-[#D6A21A]" />
-                        <div>
-                          <span className="text-xs font-semibold text-[#FFFDF5] block">
-                            Mostrar encabezado del negocio en el ticket de cocina
-                          </span>
-                          <span className="text-[10px] text-[#a8a29e]">
-                            Incluye logotipo y datos de la sucursal en la parte superior de la comanda
-                          </span>
-                        </div>
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={kitchenShowHeader}
-                        onChange={(e) => setKitchenShowHeader(e.target.checked)}
-                        className="w-4 h-4 accent-[#B77900] cursor-pointer"
-                      />
-                    </label>
-
-                    <label className="flex items-center justify-between p-3 rounded-xl bg-[#181818] border border-[#333333] hover:border-[#B77900]/60 cursor-pointer transition-all">
-                      <div className="flex items-center gap-2.5">
                         <Receipt className="w-4 h-4 text-[#D6A21A]" />
                         <div>
                           <span className="text-xs font-semibold text-[#FFFDF5] block">
@@ -1517,7 +1544,9 @@ export const BranchesManagementView: React.FC = () => {
                       <span>
                         {posConfigTab === 'cobro'
                           ? `Modelo POS de Cobro (${paperWidth} · ${receiptTitleFontSize}/${receiptBodyFontSize} pts):`
-                          : `Modelo POS de Cocina (${paperWidth} · ${kitchenTitleFontSize}/${kitchenBodyFontSize} pts):`}
+                          : `Modelo POS de Cocina (${paperWidth} · ${kitchenTitleFontSize}/${kitchenBodyFontSize} pts · ${
+                              kitchenShowHeader ? 'Con info local' : 'Sin info local / ahorro papel'
+                            }):`}
                       </span>
                     </span>
                     <button

@@ -404,6 +404,58 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
                 </div>
               </div>
 
+              {/* Controles específicos de Cocina (prominente para ahorro de papel) */}
+              {previewMode === 'cocina' && (
+                <div className="space-y-2">
+                  <label className="flex items-start justify-between gap-3 p-3 rounded-xl bg-[#181818] border border-[#B77900]/40 hover:border-[#D6A21A] cursor-pointer transition-all">
+                    <div className="flex items-start gap-2.5">
+                      <Building2 className="w-4 h-4 text-[#D6A21A] shrink-0 mt-0.5" />
+                      <div>
+                        <span className="text-xs font-bold text-[#FFFDF5] block">
+                          Incluir información del local en cocina
+                        </span>
+                        <span className="text-[10px] text-[#a8a29e] block mt-0.5 leading-snug">
+                          Logo, nombre, NIT, dirección y teléfono. Desactívalo para ahorrar papel térmico.
+                        </span>
+                        <span
+                          className={`inline-block mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                            kitchenShowHeader
+                              ? 'bg-[#292212] text-[#D6A21A] border-[#B77900]/40'
+                              : 'bg-emerald-950/60 text-emerald-300 border-emerald-700/50'
+                          }`}
+                        >
+                          {kitchenShowHeader
+                            ? 'Imprime datos del local'
+                            : 'Ahorro de papel activo (sin datos del local)'}
+                        </span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      aria-label="Incluir información del local en cocina"
+                      checked={kitchenShowHeader}
+                      onChange={() => handleToggle('kitchenShowHeader')}
+                      className="w-4 h-4 accent-[#B77900] cursor-pointer mt-0.5 shrink-0"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-2.5 rounded-xl bg-[#181818] border border-[#333333] hover:border-[#B77900]/50 cursor-pointer transition-all">
+                    <div className="flex items-center gap-2.5">
+                      <Receipt className="w-4 h-4 text-[#D6A21A]" />
+                      <span className="text-xs font-semibold text-[#FFFDF5]">
+                        Incluir precios en ticket de cocina
+                      </span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={includeKitchenPrices}
+                      onChange={() => handleToggle('includeKitchenPrices')}
+                      className="w-4 h-4 accent-[#B77900] cursor-pointer"
+                    />
+                  </label>
+                </div>
+              )}
+
               {/* Controles de Tamaño de Letra en Puntos según pestaña activa */}
               {previewMode === 'cobro' ? (
                 <div className="space-y-3">
@@ -448,46 +500,12 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
                 </div>
               )}
 
-              {/* Controles específicos de Cocina */}
-              {previewMode === 'cocina' && (
-                <div className="space-y-2 pt-1">
-                  <label className="flex items-center justify-between p-2.5 rounded-xl bg-[#181818] border border-[#333333] hover:border-[#B77900]/50 cursor-pointer transition-all">
-                    <div className="flex items-center gap-2.5">
-                      <Building2 className="w-4 h-4 text-[#D6A21A]" />
-                      <span className="text-xs font-semibold text-[#FFFDF5]">
-                        Mostrar encabezado del negocio en cocina
-                      </span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={kitchenShowHeader}
-                      onChange={() => handleToggle('kitchenShowHeader')}
-                      className="w-4 h-4 accent-[#B77900] cursor-pointer"
-                    />
-                  </label>
-
-                  <label className="flex items-center justify-between p-2.5 rounded-xl bg-[#181818] border border-[#333333] hover:border-[#B77900]/50 cursor-pointer transition-all">
-                    <div className="flex items-center gap-2.5">
-                      <Receipt className="w-4 h-4 text-[#D6A21A]" />
-                      <span className="text-xs font-semibold text-[#FFFDF5]">
-                        Incluir precios en ticket de cocina
-                      </span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={includeKitchenPrices}
-                      onChange={() => handleToggle('includeKitchenPrices')}
-                      className="w-4 h-4 accent-[#B77900] cursor-pointer"
-                    />
-                  </label>
-                </div>
-              )}
-
               {/* Controles del Encabezado Comercial */}
-              <div className="space-y-2 pt-2 border-t border-[#333333]">
-                <span className="text-[11px] font-bold text-[#FFFDF5] block">
-                  Elementos del Encabezado Comercial:
-                </span>
+              {(previewMode === 'cobro' || kitchenShowHeader) && (
+                <div className="space-y-2 pt-2 border-t border-[#333333]">
+                  <span className="text-[11px] font-bold text-[#FFFDF5] block">
+                    Elementos del Encabezado Comercial:
+                  </span>
 
                 {/* 1. Logotipo */}
                 <div className="space-y-1.5">
@@ -588,6 +606,7 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
                   />
                 </label>
               </div>
+              )}
 
               <div className="p-3 rounded-xl bg-[#181818] border border-[#2e2e2e] text-[11px] text-[#a8a29e] space-y-1">
                 <span className="text-[#D6A21A] font-bold flex items-center gap-1">
@@ -612,7 +631,9 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
               <span className="text-[10px] text-[#D6A21A] font-mono font-bold">
                 {previewMode === 'cobro'
                   ? `Títulos: ${receiptTitlePts} pts · Textos: ${receiptBodyPts} pts`
-                  : `Títulos: ${kitchenTitlePts} pts · Textos: ${kitchenBodyPts} pts`}
+                  : `Títulos: ${kitchenTitlePts} pts · Textos: ${kitchenBodyPts} pts · ${
+                      kitchenShowHeader ? 'Con info local' : 'Sin info local (ahorro papel)'
+                    }`}
               </span>
             </div>
 
@@ -960,7 +981,8 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
           <span className="text-xs text-[#a8a29e]">
             Configuración activa:{' '}
             <strong className="text-[#D6A21A]">
-              {selectedWidth} · Cobro ({receiptTitlePts}/{receiptBodyPts} pts) · Cocina ({kitchenTitlePts}/{kitchenBodyPts} pts)
+              {selectedWidth} · Cobro ({receiptTitlePts}/{receiptBodyPts} pts) · Cocina ({kitchenTitlePts}/{kitchenBodyPts} pts ·{' '}
+              {kitchenShowHeader ? 'Con local' : 'Sin local'})
             </strong>
           </span>
           <div className="flex items-center gap-2">
