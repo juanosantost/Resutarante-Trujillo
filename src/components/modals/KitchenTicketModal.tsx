@@ -197,6 +197,7 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
           <div
             id="printable-kitchen-pos-ticket"
             data-testid="kitchen-pos-ticket"
+            data-paper-width={selectedWidth}
             className={`colmena-printable-ticket bg-white text-black font-mono select-all transition-all print:shadow-none print:border-none print:m-0 print:p-0 print:text-black print:bg-white ${
               is58mm ? 'w-full max-w-[270px]' : 'w-full max-w-[360px]'
             }`}

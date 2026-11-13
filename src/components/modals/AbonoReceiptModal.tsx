@@ -82,6 +82,7 @@ export const AbonoReceiptModal: React.FC<AbonoReceiptModalProps> = ({
         <div className="p-6 overflow-y-auto max-h-[75vh] flex justify-center bg-[#121214] print:block print:p-0 print:bg-white print:max-h-none print:overflow-visible">
           <div
             id="thermal-abono-ticket"
+            data-paper-width={paperWidth}
             className={`colmena-printable-ticket bg-[#FFFDF5] text-[#181818] p-5 rounded-2xl shadow-md border border-neutral-200 font-mono text-xs print:p-2 print:border-none print:shadow-none print:rounded-none ${
               is58mm ? 'w-[260px] text-[10px]' : 'w-[320px] text-[11px]'
             }`}

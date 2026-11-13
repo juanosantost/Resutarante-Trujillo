@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { formatCOP, formatColombiaDateTime } from '../../utils/calculations';
-import { PaperWidth, DEFAULT_BRANCH_PRINT_CONFIG } from '../../types';
+import { PaperWidth } from '../../types';
+import { BranchReceiptHeader } from '../common/BranchReceiptHeader';
 import { Printer, X, Receipt } from 'lucide-react';
 
 export interface IncomeReceiptData {
@@ -46,8 +47,6 @@ export const IncomeReceiptModal: React.FC<IncomeReceiptModalProps> = ({
   }, [isOpen, data]);
 
   if (!isOpen || !data) return null;
-
-  const branchConfig = currentBranch?.printConfig || DEFAULT_BRANCH_PRINT_CONFIG;
 
   const handlePrint = () => {
     window.print();
@@ -123,26 +122,18 @@ export const IncomeReceiptModal: React.FC<IncomeReceiptModalProps> = ({
         {/* Vista previa del Comprobante Térmico */}
         <div className="p-4 sm:p-6 overflow-y-auto flex-1 bg-[#121214] flex justify-center print:block print:p-0 print:bg-white print:overflow-visible">
           <div
+            data-paper-width={paperWidth}
             className={`colmena-printable-ticket bg-[#FFFDF5] text-[#181818] p-5 rounded-2xl shadow-xl font-mono text-xs border border-amber-900/30 transition-all print:shadow-none print:border-none print:p-0 ${
               paperWidth === '58mm' ? 'w-[280px]' : 'w-[360px]'
             }`}
           >
             {/* Membrete de la Sucursal */}
-            <div className="text-center pb-3 border-b border-dashed border-[#888] space-y-1">
-              {branchConfig.showTradeName && (
-                <h4 className="font-black text-sm uppercase tracking-wider text-[#181818]">
-                  {currentBranch?.name || 'SISTEMA COLMENA'}
-                </h4>
-              )}
-              {branchConfig.showNit && currentBranch?.nit && (
-                <p className="text-[11px] text-[#444]">NIT: {currentBranch.nit}</p>
-              )}
-              {branchConfig.showAddress && currentBranch?.address && (
-                <p className="text-[11px] text-[#444]">{currentBranch.address}</p>
-              )}
-              {branchConfig.showPhone && currentBranch?.phone && (
-                <p className="text-[11px] text-[#444]">Tel / Cel: {currentBranch.phone}</p>
-              )}
+            <div className="text-center pb-3 border-b border-dashed border-[#888] space-y-2">
+              <BranchReceiptHeader
+                branch={currentBranch}
+                paperWidth={paperWidth}
+                showDianResolution={false}
+              />
               <div className="pt-1">
                 <span className="inline-block bg-[#181818] text-[#FFFDF5] font-black text-[10px] px-2 py-0.5 rounded">
                   {getTypeLabel(data.type)}

@@ -115,7 +115,10 @@ export const SupplierVoucherModal: React.FC<SupplierVoucherModalProps> = ({
         </div>
 
         {/* Contenido Imprimible (Tirilla Térmica POS) */}
-        <div className={`colmena-printable-ticket p-6 bg-white text-black font-mono text-xs shadow-inner mx-auto ${is58mm ? 'max-w-[240px]' : 'max-w-[320px]'} relative`}>
+        <div
+          data-paper-width={paperWidth}
+          className={`colmena-printable-ticket p-6 bg-white text-black font-mono text-xs shadow-inner mx-auto ${is58mm ? 'max-w-[240px]' : 'max-w-[320px]'} relative`}
+        >
           
           {/* Marca de Agua de Anulado */}
           {isAnulado && (

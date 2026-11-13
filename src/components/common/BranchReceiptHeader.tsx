@@ -46,39 +46,39 @@ export const BranchReceiptHeader: React.FC<BranchReceiptHeaderProps> = ({
     branch?.printConfig ||
     DEFAULT_BRANCH_PRINT_CONFIG;
 
-  // 2. Extraer datos comerciales
+  // 2. Extraer datos comerciales (si el snapshot tiene campo vacío, respaldar con la sucursal actual)
   const name =
     overrideData?.name !== undefined
       ? overrideData.name
-      : snapshot?.name !== undefined
+      : snapshot?.name?.trim()
       ? snapshot.name
       : branch?.name || '';
 
   const nit =
     overrideData?.nit !== undefined
       ? overrideData.nit
-      : snapshot?.nit !== undefined
+      : snapshot?.nit?.trim()
       ? snapshot.nit
       : branch?.nit || '';
 
   const address =
     overrideData?.address !== undefined
       ? overrideData.address
-      : snapshot?.address !== undefined
+      : snapshot?.address?.trim()
       ? snapshot.address
       : branch?.address || '';
 
   const phone =
     overrideData?.phone !== undefined
       ? overrideData.phone
-      : snapshot?.phone !== undefined
+      : snapshot?.phone?.trim()
       ? snapshot.phone
       : branch?.phone || '';
 
   const logoUrl =
     overrideData?.logoUrl !== undefined
       ? overrideData.logoUrl
-      : snapshot?.logoUrl !== undefined
+      : snapshot?.logoUrl
       ? snapshot.logoUrl
       : branch?.logoUrl;
 
@@ -115,17 +115,17 @@ export const BranchReceiptHeader: React.FC<BranchReceiptHeaderProps> = ({
   return (
     <header
       data-testid="branch-receipt-header"
-      className={`branch-receipt-header text-center flex flex-col items-center justify-center font-mono text-black ${
+      className={`branch-receipt-header text-center flex flex-col items-center justify-center font-mono text-black print:flex print:flex-col print:items-center print:visible print:opacity-100 ${
         is58mm ? 'text-[11px] space-y-0.5' : 'text-xs space-y-1'
       } ${className}`}
     >
       {/* 1. Logotipo de la Sucursal */}
       {printConfig.showLogo && logoUrl && (
-        <div className="flex justify-center items-center w-full my-1 receipt-logo-container">
+        <div className="flex justify-center items-center w-full my-1 receipt-logo-container print:flex">
           <img
             src={logoUrl}
             alt={name || 'Logotipo Sucursal'}
-            className={`object-contain max-w-full ${logoDimensions} filter contrast-150 transition-all`}
+            className={`object-contain max-w-full ${logoDimensions} filter contrast-150 transition-all print:transition-none print:block`}
             style={{ imageRendering: 'crisp-edges' }}
             onError={(e) => {
               // Ocultar suavemente si falla carga de imagen

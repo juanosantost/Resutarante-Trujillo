@@ -109,6 +109,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
           <div
             id="colmena-printable-receipt"
             data-testid="colmena-printable-receipt"
+            data-paper-width={paperWidth}
             className={`colmena-printable-ticket bg-white text-black font-mono select-all transition-all print:shadow-none print:p-0 print:m-0 ${
               is58mm ? 'w-full max-w-[270px] text-xs' : 'w-full max-w-[360px] text-[13px]'
             }`}

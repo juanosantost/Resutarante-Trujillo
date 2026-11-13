@@ -98,7 +98,8 @@ export function markItemsAsPaid(
  * Verifica si todos los productos activos (no anulados) de la orden ya fueron completamente pagados.
  */
 export function isOrderFullyPaid(items: OrderItem[]): boolean {
-  const activeItems = (items || []).filter((it) => !it.cancelled);
+  if (!items || items.length === 0) return true;
+  const activeItems = items.filter((it) => !it.cancelled);
   if (activeItems.length === 0) return false;
   return activeItems.every((item) => Boolean(item.paid));
 }

@@ -76,19 +76,44 @@
     backdrop-filter: none !important;
   }
 
-  aside,
-  nav,
-  header,
-  footer,
+  aside:not(.colmena-printable-ticket *),
+  nav:not(.colmena-printable-ticket *),
+  header:not(.branch-receipt-header):not(.colmena-printable-ticket *),
+  footer:not(.colmena-printable-ticket *),
   .no-print,
   .print\:hidden {
     display: none !important;
   }
 
+  .branch-receipt-header {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    width: 100% !important;
+    color: #000000 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .receipt-logo-container {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    width: 100% !important;
+  }
+
   .receipt-logo-container img {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
     max-width: 100% !important;
     height: auto !important;
+    object-fit: contain !important;
     filter: contrast(150%) !important;
+    transition: none !important;
   }
 
   #colmena-printable-receipt,
@@ -106,16 +131,17 @@
     padding: 1.5mm !important;
     width: 100% !important;
     max-width: 78mm !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-    page-break-after: avoid !important;
-    break-after: avoid !important;
+  }
+
+  .colmena-printable-ticket[data-paper-width="58mm"] {
+    max-width: 54mm !important;
   }
 
   #colmena-printable-receipt *,
   #printable-kitchen-pos-ticket *,
   #printable-pos-ticket-preview *,
-  #thermal-abono-ticket * {
+  #thermal-abono-ticket *,
+  .colmena-printable-ticket * {
     background: transparent !important;
     background-color: transparent !important;
     color: #000000 !important;
