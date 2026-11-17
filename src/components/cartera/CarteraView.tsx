@@ -9,8 +9,10 @@ import {
 } from '../../types';
 import { formatCOP, formatColombiaDateTime } from '../../utils/calculations';
 import { validateAbonoAmount, isCarteraOverdue } from '../../utils/creditAndLayawayUtils';
+import { resolveCarteraProductItems } from '../../utils/carteraProductsUtils';
 import { CustomerSelectInput } from '../common/CustomerSelectInput';
 import { AbonoReceiptModal } from '../modals/AbonoReceiptModal';
+import { CarteraProductsModal } from './CarteraProductsModal';
 import {
   CreditCard,
   Plus,
@@ -31,12 +33,14 @@ import {
   X,
   Trash2,
   Ban,
+  ShoppingBag,
 } from 'lucide-react';
 
 export const CarteraView: React.FC = () => {
   const {
     cartera,
     abonos,
+    orders,
     currentBranch,
     createCarteraRecord,
     registerCarteraAbono,
@@ -89,6 +93,9 @@ export const CarteraView: React.FC = () => {
   const [receiptAbono, setReceiptAbono] = useState<Abono | null>(null);
   const [receiptTotal, setReceiptTotal] = useState<number | undefined>(undefined);
   const [receiptRemaining, setReceiptRemaining] = useState<number | undefined>(undefined);
+
+  // Modal Productos de la Cuenta de Cartera
+  const [selectedCarteraForProducts, setSelectedCarteraForProducts] = useState<CarteraRecord | null>(null);
 
   // Métricas
   const pendingCartera = cartera.filter((c) => c.status !== 'pagada' && c.status !== 'anulada');
@@ -354,6 +361,7 @@ export const CarteraView: React.FC = () => {
               ? 0
               : Math.min(100, Math.round((crd.totalAbonado / (crd.totalAmount || 1)) * 100));
             const crdAbonosList = abonos.filter((a) => a.parentId === crd.id);
+            const crdProductCount = resolveCarteraProductItems(crd, orders).length;
 
             return (
               <div
@@ -486,6 +494,18 @@ export const CarteraView: React.FC = () => {
                       <span>Abonos ({crdAbonosList.length})</span>
                     </button>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCarteraForProducts(crd)}
+                    className="w-full px-3 py-2 rounded-xl bg-[#201d16] hover:bg-[#2b261b] text-[#fef3c7] border border-[#B77900]/40 font-bold text-xs inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    title="Consultar productos, tachar líneas pagadas o agregar nuevos productos"
+                  >
+                    <ShoppingBag className="w-3.5 h-3.5 text-[#D6A21A]" />
+                    <span>
+                      Productos{crdProductCount > 0 ? ` (${crdProductCount})` : ''}
+                    </span>
+                  </button>
 
                   <button
                     type="button"
@@ -1109,6 +1129,14 @@ export const CarteraView: React.FC = () => {
         remainingBalance={receiptRemaining}
         branch={currentBranch}
       />
+
+      {/* 10. MODAL: PRODUCTOS DE LA CUENTA DE CARTERA */}
+      {selectedCarteraForProducts && (
+        <CarteraProductsModal
+          carteraRecord={selectedCarteraForProducts}
+          onClose={() => setSelectedCarteraForProducts(null)}
+        />
+      )}
     </div>
   );
 };

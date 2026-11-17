@@ -1045,6 +1045,25 @@ export interface Separado {
 
 export type CarteraStatus = 'vigente' | 'vencida' | 'pagada' | 'anulada';
 
+export interface CarteraProductItem {
+  id: string;
+  menuItemId: string;
+  name: string;
+  price: number;
+  quantity: number;
+  station?: KitchenStation;
+  notes?: string;
+  selectedModifiers?: SelectedModifierDetail[];
+  adjustments?: ProductAdjustment[];
+  effectiveRecipe?: RecipeIngredient[];
+  addedAt: string;
+  addedBy: string;
+  paidChecked?: boolean;
+  paidCheckedAt?: string;
+  paidCheckedBy?: string;
+  sentToKitchen?: boolean;
+}
+
 export interface CarteraRecord {
   id: string;
   code: string; // Ej: CRD-1001
@@ -1057,6 +1076,7 @@ export interface CarteraRecord {
   customerPhone: string;
   customerDocument: string;
   customerAddress?: string;
+  items?: CarteraProductItem[];
   totalAmount: number;
   initialPayment: number;
   totalAbonado: number;

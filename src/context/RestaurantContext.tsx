@@ -77,6 +77,7 @@ import {
   SeparadoStatus,
   SeparadoDeliveryStatus,
   CarteraRecord,
+  CarteraProductItem,
   CarteraStatus,
   Abono,
   AbonoParentType,
@@ -125,6 +126,11 @@ import {
   parseExcelProductRows,
   normalizeTextKey,
 } from '../utils/productUtils';
+import {
+  resolveCarteraProductItems,
+  toggleCarteraItemPaidVisual,
+  calculateCarteraAdditionAmounts,
+} from '../utils/carteraProductsUtils';
 
 interface RestaurantContextType {
   // Estado base
@@ -454,6 +460,28 @@ interface RestaurantContextType {
   voidAbono: (abonoId: string, reason: string) => Promise<void>;
   cancelCarteraRecord: (carteraId: string, reason: string) => Promise<void>;
   deleteCarteraRecord: (carteraId: string) => Promise<void>;
+  toggleCarteraItemPaidChecked: (
+    carteraId: string,
+    itemId: string,
+    checked?: boolean
+  ) => Promise<void>;
+  addProductsToCarteraRecord: (params: {
+    carteraId: string;
+    newItems: Array<{
+      menuItem: MenuItem;
+      quantity: number;
+      notes?: string;
+      selectedModifiers?: SelectedModifierDetail[];
+      adjustments?: ProductAdjustment[];
+      effectiveRecipe?: RecipeIngredient[];
+    }>;
+    sendToKitchen: boolean;
+  }) => Promise<{
+    addedTotal: number;
+    newTotalAmount: number;
+    newBalanceDue: number;
+    sentToKitchen: boolean;
+  }>;
 
   // Medios de Pago
   paymentMethods: PaymentMethodItem[];
@@ -5406,6 +5434,23 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       };
 
       const status: CarteraStatus = isCarteraOverdue(params.dueDate) ? 'vencida' : 'vigente';
+      const baseTimeMs = Date.now();
+      const carteraItems: CarteraProductItem[] = unpaidItems.map((it, idx) => ({
+        id: it.id || `ci-${baseTimeMs}-${idx}`,
+        menuItemId: it.menuItemId,
+        name: it.name,
+        price: it.price,
+        quantity: it.quantity,
+        station: it.station,
+        notes: it.notes || '',
+        selectedModifiers: it.selectedModifiers || [],
+        adjustments: it.adjustments || [],
+        effectiveRecipe: it.effectiveRecipe || [],
+        addedAt: new Date(baseTimeMs + idx).toISOString(),
+        addedBy: order.waiterName || staffName,
+        paidChecked: false,
+        sentToKitchen: Boolean(it.sentToKitchen),
+      }));
 
       const newCartera: CarteraRecord = {
         id,
@@ -5419,6 +5464,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         customerPhone: cleanPhone,
         customerDocument: cleanDoc,
         customerAddress: cleanAddress,
+        items: carteraItems,
         totalAmount: unpaidGrossTotal,
         initialPayment: advanceApplied,
         totalAbonado: advanceApplied,
@@ -5579,9 +5625,12 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       });
 
       // Si la cuenta de cartera quedó saldada en su totalidad, retirar comandas activas asociadas de cocina
-      if (isFullyPaid && crd.saleId) {
+      if (isFullyPaid) {
         const orderComandas = comandas.filter(
-          (c) => c.orderId === crd.saleId && c.status !== 'servida' && c.status !== 'cancelada'
+          (c) =>
+            (c.orderId === crd.saleId || c.orderId === crd.id) &&
+            c.status !== 'servida' &&
+            c.status !== 'cancelada'
         );
         for (const com of orderComandas) {
           await updateDoc(doc(db, 'comandas', com.id), {
@@ -5852,6 +5901,236 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     } catch (err) {
       console.error('Error deleting cartera record:', err);
       handleFirestoreError(err, OperationType.DELETE, 'cartera');
+      throw err;
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const toggleCarteraItemPaidChecked = async (
+    carteraId: string,
+    itemId: string,
+    checked?: boolean
+  ): Promise<void> => {
+    try {
+      const crd = cartera.find((c) => c.id === carteraId);
+      if (!crd) throw new Error('Cuenta de cartera no encontrada');
+
+      const now = new Date().toISOString();
+      const baseItems = resolveCarteraProductItems(crd, orders);
+      const updatedItems = toggleCarteraItemPaidVisual(
+        baseItems,
+        itemId,
+        staffName,
+        checked,
+        now
+      );
+
+      await updateDoc(
+        doc(db, 'cartera', carteraId),
+        sanitizeFirestoreData({
+          items: updatedItems,
+          updatedAt: now,
+        })
+      );
+
+      setCartera((prev) =>
+        prev.map((item) =>
+          item.id === carteraId
+            ? { ...item, items: updatedItems, updatedAt: now }
+            : item
+        )
+      );
+    } catch (err) {
+      console.error('Error toggling cartera item check:', err);
+      handleFirestoreError(err, OperationType.UPDATE, 'cartera');
+      throw err;
+    }
+  };
+
+  const addProductsToCarteraRecord = async (params: {
+    carteraId: string;
+    newItems: Array<{
+      menuItem: MenuItem;
+      quantity: number;
+      notes?: string;
+      selectedModifiers?: SelectedModifierDetail[];
+      adjustments?: ProductAdjustment[];
+      effectiveRecipe?: RecipeIngredient[];
+    }>;
+    sendToKitchen: boolean;
+  }): Promise<{
+    addedTotal: number;
+    newTotalAmount: number;
+    newBalanceDue: number;
+    sentToKitchen: boolean;
+  }> => {
+    if (actionLoading) throw new Error('Operación en proceso');
+    setActionLoading(true);
+    try {
+      const crd = cartera.find((c) => c.id === params.carteraId);
+      if (!crd) throw new Error('Cuenta de cartera no encontrada');
+      if (crd.status === 'anulada') {
+        throw new Error('No se pueden agregar productos a una cuenta de cartera anulada');
+      }
+      if (!params.newItems || params.newItems.length === 0) {
+        throw new Error('Seleccione al menos un producto para agregar');
+      }
+
+      const nowMs = Date.now();
+      const now = new Date(nowMs).toISOString();
+      const existingItems = resolveCarteraProductItems(crd, orders);
+
+      const addedCarteraItems: CarteraProductItem[] = params.newItems.map((it, idx) => ({
+        id: `ci-${crd.id}-${nowMs}-${idx + 1}`,
+        menuItemId: it.menuItem.id,
+        name: it.menuItem.name,
+        price: it.menuItem.price,
+        quantity: it.quantity,
+        station: it.menuItem.station,
+        notes: it.notes || '',
+        selectedModifiers: it.selectedModifiers || [],
+        adjustments: it.adjustments || [],
+        effectiveRecipe: it.effectiveRecipe || it.menuItem.recipe || [],
+        addedAt: new Date(nowMs + idx).toISOString(),
+        addedBy: staffName,
+        paidChecked: false,
+        sentToKitchen: params.sendToKitchen,
+      }));
+
+      const updatedItems = [...existingItems, ...addedCarteraItems];
+
+      const taxRate = getEffectiveTaxRate(currentBranch);
+      const {
+        addedTotal,
+        newTotalAmount,
+        newBalanceDue,
+        nextStatus,
+      } = calculateCarteraAdditionAmounts({
+        newItems: params.newItems.map((it) => ({
+          price: it.menuItem.price,
+          quantity: it.quantity,
+        })),
+        taxRate,
+        currentTotalAmount: crd.totalAmount,
+        currentBalanceDue: crd.balanceDue,
+        dueDate: crd.dueDate,
+      });
+
+      await updateDoc(
+        doc(db, 'cartera', crd.id),
+        sanitizeFirestoreData({
+          items: updatedItems,
+          totalAmount: newTotalAmount,
+          balanceDue: newBalanceDue,
+          status: nextStatus,
+          updatedAt: now,
+        })
+      );
+
+      setCartera((prev) =>
+        prev.map((item) =>
+          item.id === crd.id
+            ? {
+                ...item,
+                items: updatedItems,
+                totalAmount: newTotalAmount,
+                balanceDue: newBalanceDue,
+                status: nextStatus,
+                updatedAt: now,
+              }
+            : item
+        )
+      );
+
+      if (params.sendToKitchen) {
+        const targetOrderId = crd.saleId || crd.id;
+        const existingComandasForOrder = comandas.filter((c) => c.orderId === targetOrderId);
+        const nextRoundNumber =
+          existingComandasForOrder.reduce(
+            (maxR, c) => Math.max(maxR, c.roundNumber || 1),
+            0
+          ) + 1;
+
+        const comandaId = `com-${Date.now()}`;
+        const comanda: Comanda = {
+          id: comandaId,
+          branchId: crd.branchId || currentBranchId,
+          orderId: targetOrderId,
+          orderNumber: crd.orderNumber || 0,
+          tableName: `Cartera ${crd.code} · ${crd.customerName}`,
+          orderType: 'mostrador',
+          roundNumber: nextRoundNumber,
+          status: 'nueva',
+          items: addedCarteraItems.map((ci) => ({
+            orderItemId: ci.id,
+            menuItemId: ci.menuItemId,
+            name: ci.name,
+            quantity: ci.quantity,
+            station: ci.station || 'cocina_caliente',
+            notes: ci.notes,
+            selectedModifiers: ci.selectedModifiers || [],
+            status: 'pendiente',
+          })),
+          waiterName: staffName,
+          createdAt: now,
+          updatedAt: now,
+        };
+        await setDoc(doc(db, 'comandas', comandaId), sanitizeFirestoreData(comanda));
+
+        const recipeDeductions = calculateRecipeDeductions(
+          params.newItems.map((i) => ({
+            recipe: i.effectiveRecipe || i.menuItem.recipe,
+            quantity: i.quantity,
+          }))
+        );
+        for (const [invId, deduction] of Object.entries(recipeDeductions)) {
+          const invItem = inventory.find((it) => it.id === invId);
+          if (invItem) {
+            const previousStock = invItem.currentStock;
+            const newStock = Math.max(0, previousStock - deduction.quantity);
+            await updateDoc(doc(db, 'inventoryItems', invId), {
+              currentStock: newStock,
+              updatedAt: now,
+            });
+
+            const movId = `mov-${Date.now()}-${invId}`;
+            const mov: InventoryMovement = {
+              id: movId,
+              branchId: crd.branchId || currentBranchId,
+              itemId: invId,
+              itemName: invItem.name,
+              type: 'consumo_comanda',
+              quantity: deduction.quantity,
+              previousStock,
+              newStock,
+              reason: `Adición Cartera #${crd.code} (${crd.customerName})`,
+              userId: userRole,
+              userName: staffName,
+              createdAt: now,
+            };
+            await setDoc(doc(db, 'inventoryMovements', movId), mov);
+          }
+        }
+      }
+
+      await logAuditAction({
+        entityType: 'branch',
+        entityId: crd.id,
+        entityName: `Cartera #${crd.code}`,
+        action: 'update',
+        details: `Agregados ${params.newItems.reduce((s, i) => s + i.quantity, 0)} productos a Cartera #${crd.code} (${crd.customerName}) por ${formatCOP(addedTotal)}${params.sendToKitchen ? ' [Enviado a Cocina KDS]' : ''}. Nuevo saldo: ${formatCOP(newBalanceDue)}`,
+      });
+
+      return {
+        addedTotal,
+        newTotalAmount,
+        newBalanceDue,
+        sentToKitchen: params.sendToKitchen,
+      };
+    } catch (err) {
+      console.error('Error adding products to cartera record:', err);
+      handleFirestoreError(err, OperationType.UPDATE, 'cartera');
       throw err;
     } finally {
       setActionLoading(false);
@@ -6367,6 +6646,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         voidAbono,
         cancelCarteraRecord,
         deleteCarteraRecord,
+        toggleCarteraItemPaidChecked,
+        addProductsToCarteraRecord,
 
         // Medios de Pago
         paymentMethods,

@@ -12,9 +12,11 @@ import {
 } from '../../types';
 import { formatCOP, formatColombiaDateTime } from '../../utils/calculations';
 import { calculateCustomerMetrics } from '../../utils/creditAndLayawayUtils';
+import { resolveCarteraProductItems } from '../../utils/carteraProductsUtils';
 import { generateWhatsAppMessage, DEFAULT_LOYALTY_CONFIG } from '../../utils/loyaltyUtils';
 import { CustomerModal } from './CustomerModal';
 import { AbonoReceiptModal } from '../modals/AbonoReceiptModal';
+import { CarteraProductsModal } from '../cartera/CarteraProductsModal';
 import {
   Users,
   Search,
@@ -77,6 +79,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({ onNavigateToView }
   // Modal Comprobante Térmico de Abono
   const [showReceiptModal, setShowReceiptModal] = useState<boolean>(false);
   const [receiptAbono, setReceiptAbono] = useState<Abono | null>(null);
+  const [selectedCarteraForProducts, setSelectedCarteraForProducts] = useState<CarteraRecord | null>(null);
 
   // Filtrado de clientes
   const filteredCustomers = customers.filter((c) => {
@@ -641,33 +644,46 @@ export const CustomersView: React.FC<CustomersViewProps> = ({ onNavigateToView }
 
                   {customerCartera.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {customerCartera.map((crd) => (
-                        <div key={crd.id} className="p-4 rounded-2xl bg-[#121214] border border-[#242424] space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="font-mono font-bold text-xs text-[#D6A21A]">{crd.code}</span>
-                            <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-amber-950 text-amber-300">
-                              {crd.status}
-                            </span>
+                      {customerCartera.map((crd) => {
+                        const prodCount = resolveCarteraProductItems(crd, orders).length;
+                        return (
+                          <div key={crd.id} className="p-4 rounded-2xl bg-[#121214] border border-[#242424] space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="font-mono font-bold text-xs text-[#D6A21A]">{crd.code}</span>
+                              <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-amber-950 text-amber-300">
+                                {crd.status}
+                              </span>
+                            </div>
+                            <div className="text-xs space-y-1">
+                              <div className="flex justify-between">
+                                <span className="text-[#a8a29e]">Valor Original:</span>
+                                <span className="font-mono text-[#FFFDF5] font-bold">{formatCOP(crd.totalAmount)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-[#a8a29e]">Total Abonado:</span>
+                                <span className="font-mono text-emerald-400">{formatCOP(crd.totalAbonado)}</span>
+                              </div>
+                              <div className="flex justify-between font-bold text-amber-400 pt-1 border-t border-[#242424]">
+                                <span>Saldo por Cobrar:</span>
+                                <span className="font-mono">{formatCOP(crd.balanceDue)}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between pt-2 border-t border-[#242424] gap-2">
+                              <p className="text-[10px] text-[#a8a29e]">
+                                Vence: <strong className="text-[#FFFDF5]">{crd.dueDate}</strong>
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedCarteraForProducts(crd)}
+                                className="px-2.5 py-1.5 rounded-xl bg-[#201d16] hover:bg-[#2b261b] text-[#fef3c7] border border-[#B77900]/40 text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer"
+                              >
+                                <ShoppingBag className="w-3 h-3 text-[#D6A21A]" />
+                                <span>Productos{prodCount > 0 ? ` (${prodCount})` : ''}</span>
+                              </button>
+                            </div>
                           </div>
-                          <div className="text-xs space-y-1">
-                            <div className="flex justify-between">
-                              <span className="text-[#a8a29e]">Valor Original:</span>
-                              <span className="font-mono text-[#FFFDF5] font-bold">{formatCOP(crd.totalAmount)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-[#a8a29e]">Total Abonado:</span>
-                              <span className="font-mono text-emerald-400">{formatCOP(crd.totalAbonado)}</span>
-                            </div>
-                            <div className="flex justify-between font-bold text-amber-400 pt-1 border-t border-[#242424]">
-                              <span>Saldo por Cobrar:</span>
-                              <span className="font-mono">{formatCOP(crd.balanceDue)}</span>
-                            </div>
-                          </div>
-                          <p className="text-[10px] text-[#a8a29e]">
-                            Vence: <strong className="text-[#FFFDF5]">{crd.dueDate}</strong>
-                          </p>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <p className="text-xs text-[#a8a29e] py-8 text-center">
@@ -825,6 +841,14 @@ export const CustomersView: React.FC<CustomersViewProps> = ({ onNavigateToView }
         abono={receiptAbono}
         branch={currentBranch}
       />
+
+      {/* 6. MODAL PRODUCTOS DE CARTERA */}
+      {selectedCarteraForProducts && (
+        <CarteraProductsModal
+          carteraRecord={selectedCarteraForProducts}
+          onClose={() => setSelectedCarteraForProducts(null)}
+        />
+      )}
     </div>
   );
 };

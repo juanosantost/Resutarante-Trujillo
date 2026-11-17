@@ -19,7 +19,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch {
       // ignore
     }
-    return 'dark'; // Por defecto conserva el modo oscuro existente
+    return 'light'; // Modo claro por defecto
   });
 
   useEffect(() => {

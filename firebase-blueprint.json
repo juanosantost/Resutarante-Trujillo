@@ -248,6 +248,35 @@
         "updatedBy": { "type": "string" }
       },
       "required": ["sections", "buttons"]
+    },
+    "CarteraRecord": {
+      "title": "CarteraRecord",
+      "description": "Cuenta por cobrar / cartera de clientes con detalle de productos consumidos y control visual",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string", "maxLength": 40 },
+        "saleId": { "type": "string" },
+        "orderNumber": { "type": "integer" },
+        "branchId": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string", "maxLength": 150 },
+        "customerPhone": { "type": "string", "maxLength": 40 },
+        "customerDocument": { "type": "string", "maxLength": 40 },
+        "customerAddress": { "type": "string", "maxLength": 200 },
+        "items": { "type": "array" },
+        "totalAmount": { "type": "number" },
+        "initialPayment": { "type": "number" },
+        "totalAbonado": { "type": "number" },
+        "balanceDue": { "type": "number" },
+        "dueDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["vigente", "vencida", "pagada", "anulada"] },
+        "notes": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["id", "code", "branchId", "customerId", "customerName", "totalAmount", "balanceDue", "status", "createdAt"]
     }
   },
   "firestore": {
@@ -302,6 +331,10 @@
     "/payments/{paymentId}": {
       "schema": { "$ref": "Payment" },
       "description": "Registros de pagos y facturación"
+    },
+    "/cartera/{carteraId}": {
+      "schema": { "$ref": "CarteraRecord" },
+      "description": "Cuentas de cartera por cobrar y detalle de productos"
     }
   }
 }

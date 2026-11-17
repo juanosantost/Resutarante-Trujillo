@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useAuth } from '../../context/AuthContext';
-import { ComandaItemStatus } from '../../types';
+import { Comanda, ComandaItemStatus } from '../../types';
 import { getVisibleOrderModifiers } from '../../utils/orderModifierUtils';
+import { KitchenTicketModal } from '../modals/KitchenTicketModal';
 import {
   Flame,
   Clock,
@@ -14,6 +15,7 @@ import {
   ChevronLeft,
   ChevronRight,
   RotateCcw,
+  Printer,
 } from 'lucide-react';
 
 const GENERIC_ROLE_LABELS = new Set([
@@ -43,6 +45,7 @@ const ITEM_STATUS_LABELS: Record<ComandaItemStatus, string> = {
 export const KitchenKDSView: React.FC = () => {
   const {
     activeComandas,
+    orders,
     updateComandaStatus,
     updateComandaItemStatus,
     currentBranch,
@@ -52,6 +55,7 @@ export const KitchenKDSView: React.FC = () => {
 
   const [selectedStation, setSelectedStation] = useState<string>('todas');
   const [nowTime, setNowTime] = useState<number>(Date.now());
+  const [printingComanda, setPrintingComanda] = useState<Comanda | null>(null);
 
   // Ticker para actualizar los minutos transcurridos en tiempo real
   useEffect(() => {
@@ -349,8 +353,8 @@ export const KitchenKDSView: React.FC = () => {
                   })}
                 </div>
 
-                {/* Acciones Rápidas del Ticket (Avanzar y Devolver) */}
-                <div className="p-3 border-t border-[#2d281e] bg-[#121117] flex items-center gap-2">
+                {/* Acciones Rápidas del Ticket (Avanzar, Devolver e Imprimir POS Cocina) */}
+                <div className="p-3 border-t border-[#2d281e] bg-[#121117] flex flex-wrap items-center gap-2">
                   {comanda.status === 'en_preparacion' && (
                     <button
                       type="button"
@@ -407,12 +411,32 @@ export const KitchenKDSView: React.FC = () => {
                       <span>Entregado a Mesero / Despachado</span>
                     </button>
                   )}
+
+                  <button
+                    type="button"
+                    onClick={() => setPrintingComanda(comanda)}
+                    className="kds-back-btn py-2 px-2.5 rounded-xl bg-[#18171f] text-[#d4af37] border border-[#d4af37]/40 hover:bg-[#2a2213] font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+                    title="Imprimir ticket POS de cocina con la configuración de la sucursal"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>POS Cocina</span>
+                  </button>
                 </div>
 
               </div>
             );
           })}
         </div>
+      )}
+
+      {/* Modal de Impresión POS Cocina configurado por la sucursal */}
+      {printingComanda && (
+        <KitchenTicketModal
+          comanda={printingComanda}
+          order={orders.find((o) => o.id === printingComanda.orderId) || null}
+          initialRound={printingComanda.roundNumber || 'all'}
+          onClose={() => setPrintingComanda(null)}
+        />
       )}
 
     </div>

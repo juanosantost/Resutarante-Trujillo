@@ -83,22 +83,26 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
   const createdAt = order?.createdAt ?? comanda?.createdAt ?? new Date().toISOString();
   const generalNotes = order?.notes;
 
-  // Extraer lista de ítems según fuente
+  // Extraer lista de ítems según fuente (si viene una comanda específica del KDS, priorizar sus ítems exactos)
   const rawItems: OrderItem[] = useMemo(() => {
-    if (order?.items) return order.items;
-    if (comanda?.items) {
-      return comanda.items.map((ci) => ({
-        id: ci.orderItemId,
-        menuItemId: ci.orderItemId,
-        name: ci.name,
-        price: 0,
-        quantity: ci.quantity,
-        station: 'cocina_caliente',
-        notes: ci.notes,
-        roundNumber: comanda.roundNumber || 1,
-        sentToKitchen: true,
-      }));
+    if (comanda?.items && comanda.items.length > 0) {
+      return comanda.items.map((ci) => {
+        const matchedOrderItem = order?.items?.find((oi) => oi.id === ci.orderItemId);
+        return {
+          id: ci.orderItemId,
+          menuItemId: ci.menuItemId || ci.orderItemId,
+          name: ci.name,
+          price: matchedOrderItem?.price ?? 0,
+          quantity: ci.quantity,
+          station: ci.station || matchedOrderItem?.station || 'cocina_caliente',
+          notes: ci.notes ?? matchedOrderItem?.notes,
+          selectedModifiers: ci.selectedModifiers ?? matchedOrderItem?.selectedModifiers,
+          roundNumber: comanda.roundNumber || 1,
+          sentToKitchen: true,
+        };
+      });
     }
+    if (order?.items) return order.items;
     return [];
   }, [order, comanda]);
 
