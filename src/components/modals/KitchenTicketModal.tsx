@@ -5,7 +5,7 @@ import { useRestaurant } from '../../context/RestaurantContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatColombiaDateTime } from '../../utils/calculations';
 import { BranchReceiptHeader } from '../common/BranchReceiptHeader';
-import { getVisibleOrderModifiers } from '../../utils/orderModifierUtils';
+import { getKitchenPosOrderModifiers } from '../../utils/orderModifierUtils';
 import { resolveBranchPrintConfig } from '../../utils/printConfigUtils';
 import {
   Printer,
@@ -305,9 +305,9 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Modificadores o acompañamientos seleccionados */}
+                      {/* Modificadores o acompañamientos seleccionados (sin bebida del Menú del Día) */}
                       {(() => {
-                        const visibleMods = getVisibleOrderModifiers(it.selectedModifiers);
+                        const visibleMods = getKitchenPosOrderModifiers(it);
                         if (visibleMods.length === 0) return null;
                         return (
                           <div className="pl-3 space-y-0.5 text-black" style={bodyStyle}>

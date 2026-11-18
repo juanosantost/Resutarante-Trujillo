@@ -117,6 +117,82 @@ export function getVisibleOrderModifiers(
 }
 
 /**
+ * Identifica si un modificador corresponde a la bebida / sobremesa del Menú del Día.
+ */
+export function isDailyMenuDrinkModifier(mod: SelectedModifierDetail): boolean {
+  const gId = (mod.groupId || '').toLowerCase().trim();
+  const gName = (mod.groupName || '').toLowerCase().trim();
+  const optId = (mod.optionId || '').toLowerCase().trim();
+  const oName = (mod.optionName || '').toLowerCase().trim();
+
+  return (
+    gId === 'grp-almuerzo-bebida' ||
+    gId.includes('almuerzo-bebida') ||
+    gId.includes('sobremesa') ||
+    gId.includes('bebida') ||
+    optId.startsWith('opt-beb-') ||
+    optId === 'none-grp-almuerzo-bebida' ||
+    gName.includes('bebida') ||
+    gName.includes('sobremesa') ||
+    /^(sin\s+)?(bebida|sobremesa)\b/i.test(oName)
+  );
+}
+
+/**
+ * Determina si una línea de pedido corresponde al Menú del Día.
+ */
+export function isDailyMenuOrderItem(
+  item: Pick<OrderItem, 'menuItemId' | 'name' | 'selectedModifiers'>
+): boolean {
+  if (item.menuItemId === 'prod-almuerzo-del-dia') {
+    return true;
+  }
+
+  const normalizedName = (item.name || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+
+  if (
+    normalizedName.includes('menu del dia') ||
+    normalizedName.includes('almuerzo del dia')
+  ) {
+    return true;
+  }
+
+  return Boolean(
+    item.selectedModifiers?.some((mod) =>
+      (mod.groupId || '').toLowerCase().startsWith('grp-almuerzo-')
+    )
+  );
+}
+
+/**
+ * Obtiene la lista de modificadores visibles para un ítem en el ticket POS de cocina:
+ * - Aplica las reglas estándar de getVisibleOrderModifiers.
+ * - Oculta la bebida / sobremesa seleccionada en el Menú del Día.
+ */
+export function getKitchenPosOrderModifiers(
+  item: Pick<OrderItem, 'menuItemId' | 'name' | 'selectedModifiers'>
+): { cleanName: string; detail: SelectedModifierDetail }[] {
+  const visible = getVisibleOrderModifiers(item.selectedModifiers);
+  if (visible.length === 0) return [];
+
+  const isDaily = isDailyMenuOrderItem(item);
+  return visible.filter(({ detail }) => {
+    if (isDaily && isDailyMenuDrinkModifier(detail)) {
+      return false;
+    }
+    const gId = (detail.groupId || '').toLowerCase().trim();
+    if (gId === 'grp-almuerzo-bebida') {
+      return false;
+    }
+    return true;
+  });
+}
+
+/**
  * Formatea el resumen de modificadores en una sola línea elegante separada por ' · '
  * Ej: "Sopa de verduras · Carne asada · Frijoles" (y el acompañamiento solo si fue cambiado)
  */

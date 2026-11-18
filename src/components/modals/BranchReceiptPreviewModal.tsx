@@ -900,11 +900,11 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
                       </div>
                       <div className="flex items-start gap-1.5 font-bold">
                         <span className="font-black shrink-0">›</span>
-                        <span>Pechuga a la Plancha</span>
+                        <span>Frijoles Antioqueños</span>
                       </div>
                       <div className="flex items-start gap-1.5 font-bold">
                         <span className="font-black shrink-0">›</span>
-                        <span>Limonada Natural</span>
+                        <span>Pechuga a la Plancha</span>
                       </div>
                     </div>
 
