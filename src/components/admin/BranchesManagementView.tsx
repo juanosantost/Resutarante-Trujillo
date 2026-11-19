@@ -1632,12 +1632,6 @@ export const BranchesManagementView: React.FC = () => {
                         className="text-center font-black uppercase"
                         style={{ fontSize: `${kitchenTitleFontSize}px`, lineHeight: 1.2 }}
                       >
-                        *** COMANDA DE COCINA ***
-                      </div>
-                      <div
-                        className="text-center font-black uppercase"
-                        style={{ fontSize: `${kitchenTitleFontSize}px`, lineHeight: 1.2 }}
-                      >
                         MESA 4
                       </div>
                       <div className="border-y border-dotted border-gray-300 py-1 space-y-0.5">

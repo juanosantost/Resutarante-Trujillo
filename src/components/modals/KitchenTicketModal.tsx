@@ -201,11 +201,6 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
               </div>
             )}
 
-            {/* TÍTULO DE COMANDA DE COCINA */}
-            <div className="my-1.5 py-1 font-black tracking-wide text-center uppercase text-black" style={titleStyle}>
-              <span>*** COMANDA DE COCINA ***</span>
-            </div>
-
             {/* DESTINO: MESA O MODALIDAD */}
             <div className="my-2 py-1 text-center space-y-0.5">
               <div className="font-bold uppercase text-black tracking-wider" style={bodyStyle}>
@@ -356,16 +351,8 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
                 </span>
               </div>
 
-              <div className="text-center pt-1 font-black text-black uppercase" style={titleStyle}>
-                *** VERIFICAR ANTES DE DESPACHAR ***
-              </div>
-
               <div className="text-center font-mono font-bold text-black pt-0.5">
                 Colmena POS · Impreso: {new Date().toLocaleTimeString('es-CO')}
-              </div>
-
-              <div className="text-center font-bold text-black pt-0.5 uppercase">
-                *** FIN COMANDA DE COCINA ***
               </div>
             </div>
 

@@ -818,13 +818,6 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
                   </div>
                 )}
 
-                <div
-                  className="my-1.5 py-1 font-black tracking-wide text-center uppercase text-black"
-                  style={{ fontSize: `${kitchenTitlePts}px`, lineHeight: 1.2 }}
-                >
-                  *** COMANDA DE COCINA ***
-                </div>
-
                 <div className="my-2 py-1 text-center space-y-0.5">
                   <div
                     className="font-bold uppercase text-black tracking-wider"
@@ -960,12 +953,6 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
                     <span className="font-black" style={{ fontSize: `${kitchenTitlePts}px` }}>
                       3
                     </span>
-                  </div>
-                  <div
-                    className="text-center pt-1 font-black uppercase"
-                    style={{ fontSize: `${kitchenTitlePts}px`, lineHeight: 1.2 }}
-                  >
-                    *** VERIFICAR ANTES DE DESPACHAR ***
                   </div>
                   <div className="text-center font-mono font-bold pt-0.5">
                     Colmena POS · Ejemplo Cocina
