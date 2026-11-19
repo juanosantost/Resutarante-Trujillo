@@ -822,20 +822,50 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           try {
             const batch = writeBatch(db);
             DEFAULT_PAYMENT_METHODS.forEach((pm) => {
-              const docRef = doc(collection(db, 'payment_methods'));
-              batch.set(docRef, {
-                ...pm,
-                createdAt: new Date().toISOString(),
-              });
+              const slug = pm.name
+                .trim()
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-z0-9]+/g, '_')
+                .replace(/^_|_$/g, '');
+              const docRef = doc(db, 'payment_methods', `default_${slug}`);
+              batch.set(
+                docRef,
+                {
+                  ...pm,
+                  createdAt: new Date().toISOString(),
+                },
+                { merge: true }
+              );
             });
             await batch.commit();
           } catch (e) {
             console.error('Error sembrando medios de pago por defecto:', e);
           }
         } else {
-          const list: PaymentMethodItem[] = [];
-          snap.forEach((d) => list.push({ ...d.data(), id: d.id } as PaymentMethodItem));
-          setPaymentMethods(list.sort((a, b) => a.name.localeCompare(b.name)));
+          const rawList: PaymentMethodItem[] = [];
+          snap.forEach((d) => rawList.push({ ...d.data(), id: d.id } as PaymentMethodItem));
+
+          // Deduplicar medios de pago con el mismo nombre normalizado (evita duplicados por siembra concurrente)
+          const dedupedMap = new Map<string, PaymentMethodItem>();
+          for (const item of rawList) {
+            const key = (item.name || '').trim().toLowerCase().replace(/\s+/g, '_');
+            const existing = dedupedMap.get(key);
+            if (!existing) {
+              dedupedMap.set(key, item);
+            } else if (!existing.isActive && item.isActive) {
+              dedupedMap.set(key, item);
+            } else if (
+              existing.isActive === item.isActive &&
+              (item.createdAt || '') < (existing.createdAt || '')
+            ) {
+              dedupedMap.set(key, item);
+            }
+          }
+
+          const uniqueList = Array.from(dedupedMap.values());
+          setPaymentMethods(uniqueList.sort((a, b) => a.name.localeCompare(b.name)));
         }
       },
       (error) => handleFirestoreError(error, OperationType.GET, 'payment_methods')

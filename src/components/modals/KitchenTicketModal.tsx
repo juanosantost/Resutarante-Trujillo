@@ -7,6 +7,7 @@ import { formatColombiaDateTime } from '../../utils/calculations';
 import { BranchReceiptHeader } from '../common/BranchReceiptHeader';
 import { getKitchenPosOrderModifiers } from '../../utils/orderModifierUtils';
 import { resolveBranchPrintConfig } from '../../utils/printConfigUtils';
+import { printPosTicket } from '../../utils/thermalPrintUtils';
 import {
   Printer,
   X,
@@ -133,7 +134,7 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
   const totalItemCount = filteredItems.reduce((acc, it) => acc + (it.quantity || 1), 0);
 
   const handlePrint = () => {
-    window.print();
+    void printPosTicket('#printable-kitchen-pos-ticket');
   };
 
   const is58mm = selectedWidth === '58mm';

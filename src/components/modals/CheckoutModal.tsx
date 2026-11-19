@@ -434,6 +434,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         nit: currentBranch.nit,
         address: currentBranch.address,
         phone: currentBranch.phone,
+        logoUrl: currentBranch.logoUrl || '',
         printConfig: currentBranch.printConfig || {
           showLogo: true,
           showTradeName: true,
@@ -537,17 +538,23 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         { id: 'mixto', label: 'Pago Mixto', icon: Layers, desc: 'Combinar medios de pago' },
       ];
     }
-    const mapped = active.map((p) => {
+    const seenIds = new Set<string>();
+    const mapped: { id: PaymentMethod; label: string; icon: any; desc: string }[] = [];
+    for (const p of active) {
+      const normalizedId = p.name.trim().toLowerCase().replace(/\s+/g, '_') as PaymentMethod;
+      if (!normalizedId || normalizedId === 'mixto' || seenIds.has(normalizedId)) continue;
+      seenIds.add(normalizedId);
+
       let icon = CreditCard;
       if (p.category === 'efectivo') icon = Banknote;
       else if (p.category === 'billetera_digital') icon = Smartphone;
-      return {
-        id: (p.name.toLowerCase().replace(/\s+/g, '_')) as PaymentMethod,
-        label: p.name,
+      mapped.push({
+        id: normalizedId,
+        label: p.name.trim(),
         icon,
         desc: p.description || (p.isCashType ? 'Efectivo en caja' : p.bankName ? `Canal ${p.bankName}` : 'Medio habilitado'),
-      };
-    });
+      });
+    }
     return [...mapped, { id: 'mixto' as PaymentMethod, label: 'Pago Mixto', icon: Layers, desc: 'Combinar medios de pago' }];
   }, [paymentMethods]);
 

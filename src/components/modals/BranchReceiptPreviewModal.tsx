@@ -14,6 +14,7 @@ import {
   MIN_POS_FONT_SIZE,
   MAX_POS_FONT_SIZE,
 } from '../../utils/printConfigUtils';
+import { printPosTicket } from '../../utils/thermalPrintUtils';
 import {
   X,
   Printer,
@@ -242,7 +243,7 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
   };
 
   const handlePrintTest = () => {
-    window.print();
+    void printPosTicket('#printable-pos-ticket-preview');
   };
 
   const handleSave = async () => {

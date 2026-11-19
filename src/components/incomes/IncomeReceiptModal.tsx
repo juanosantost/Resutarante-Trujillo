@@ -4,6 +4,7 @@ import { useRestaurant } from '../../context/RestaurantContext';
 import { formatCOP, formatColombiaDateTime } from '../../utils/calculations';
 import { PaperWidth } from '../../types';
 import { BranchReceiptHeader } from '../common/BranchReceiptHeader';
+import { printPosTicket } from '../../utils/thermalPrintUtils';
 import { Printer, X, Receipt } from 'lucide-react';
 
 export interface IncomeReceiptData {
@@ -49,7 +50,7 @@ export const IncomeReceiptModal: React.FC<IncomeReceiptModalProps> = ({
   if (!isOpen || !data) return null;
 
   const handlePrint = () => {
-    window.print();
+    void printPosTicket('.colmena-printable-ticket');
   };
 
   const getTypeLabel = (type: IncomeReceiptData['type']) => {

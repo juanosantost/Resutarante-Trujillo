@@ -8,6 +8,7 @@ import { BranchReceiptHeader } from '../common/BranchReceiptHeader';
 import { filterReceiptItems } from '../../utils/checkoutCalculations';
 import { formatModifiersDisplaySummary } from '../../utils/orderModifierUtils';
 import { resolveBranchPrintConfig } from '../../utils/printConfigUtils';
+import { printPosTicket } from '../../utils/thermalPrintUtils';
 import { Printer, X, CheckCircle } from 'lucide-react';
 
 interface ReceiptModalProps {
@@ -80,13 +81,18 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
   const resolutionDian = snapshot?.resolutionDian || originatingBranch?.receiptConfig?.resolutionDian;
   const footerText = snapshot?.footerText || originatingBranch?.receiptConfig?.footerText || '¡Gracias por su visita a Colmena!';
 
+  const resolvedLogoUrl =
+    originatingBranch?.logoUrl?.trim()
+      ? originatingBranch.logoUrl
+      : snapshot?.logoUrl || '';
+
   const handlePrint = () => {
-    window.print();
+    void printPosTicket('#colmena-printable-receipt');
   };
 
   return createPortal(
     <div className="colmena-ticket-print-portal fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto print:static print:p-0 print:bg-white print:overflow-visible">
-      <div className="bg-white rounded-2xl w-full max-w-[390px] shadow-2xl text-black overflow-hidden flex flex-col border border-neutral-200 print:static print:border-none print:shadow-none print:bg-white print:max-w-none print:w-full print:overflow-visible">
+      <div className="bg-white rounded-2xl w-full max-w-[390px] shadow-2xl text-black overflow-hidden flex flex-col border border-neutral-200 print:block print:static print:border-none print:shadow-none print:bg-white print:max-w-none print:w-full print:overflow-visible">
         
         {/* Cabecera modal (oculta en impresión) */}
         <div className="px-4 py-2.5 border-b border-neutral-200 flex items-center justify-between bg-neutral-50 print:hidden">
@@ -131,6 +137,10 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
               <BranchReceiptHeader
                 branch={originatingBranch}
                 snapshot={snapshot}
+                overrideData={{
+                  logoUrl: resolvedLogoUrl,
+                  printConfig: resolvedPrintConfig,
+                }}
                 paperWidth={paperWidth}
                 showDianResolution={false}
                 titleFontSize={titleFontSize}

@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Abono, Branch } from '../../types';
 import { BranchReceiptHeader } from '../common/BranchReceiptHeader';
+import { printPosTicket } from '../../utils/thermalPrintUtils';
 import { formatCOP, formatColombiaDateTime } from '../../utils/calculations';
 import { Printer, X, ShieldAlert } from 'lucide-react';
 
@@ -39,7 +40,7 @@ export const AbonoReceiptModal: React.FC<AbonoReceiptModalProps> = ({
   const is58mm = paperWidth === '58mm';
 
   const handlePrint = () => {
-    window.print();
+    void printPosTicket('#thermal-abono-ticket');
   };
 
   const getMethodLabel = (method: string) => {
