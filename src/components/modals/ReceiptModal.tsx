@@ -4,7 +4,7 @@ import { Payment, Order } from '../../types';
 import { formatCOP, formatColombiaDateTime } from '../../utils/calculations';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useAuth } from '../../context/AuthContext';
-import { BranchReceiptHeader } from '../common/BranchReceiptHeader';
+import { BranchReceiptHeader, PosPrintAnchorLine } from '../common/BranchReceiptHeader';
 import { filterReceiptItems } from '../../utils/checkoutCalculations';
 import { formatModifiersDisplaySummary } from '../../utils/orderModifierUtils';
 import { resolveBranchPrintConfig } from '../../utils/printConfigUtils';
@@ -132,6 +132,9 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
               is58mm ? 'w-full max-w-[270px]' : 'w-full max-w-[360px]'
             }`}
           >
+            {/* Línea guía de inicio para obligar a la impresora térmica a iniciar antes del logotipo */}
+            <PosPrintAnchorLine position="top" is58mm={is58mm} />
+
             {/* Encabezado dinámico con datos de la sucursal de origen */}
             <div className="pb-2.5 border-b border-dotted border-gray-300 print:border-gray-300">
               <BranchReceiptHeader
@@ -289,8 +292,9 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
               </p>
             </div>
 
-            {/* Espacio de avance de papel para permitir corte limpio sin cortar el texto */}
-            <div className="h-8 print:h-12" aria-hidden="true" />
+            {/* Espacio de avance de papel y línea guía de cierre para corte limpio */}
+            <div className="h-4 print:h-6" aria-hidden="true" />
+            <PosPrintAnchorLine position="bottom" is58mm={is58mm} />
 
           </div>
         </div>

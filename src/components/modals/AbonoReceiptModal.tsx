@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Abono, Branch } from '../../types';
-import { BranchReceiptHeader } from '../common/BranchReceiptHeader';
+import { BranchReceiptHeader, PosPrintAnchorLine } from '../common/BranchReceiptHeader';
 import { printPosTicket } from '../../utils/thermalPrintUtils';
 import { formatCOP, formatColombiaDateTime } from '../../utils/calculations';
 import { Printer, X, ShieldAlert } from 'lucide-react';
@@ -88,6 +88,7 @@ export const AbonoReceiptModal: React.FC<AbonoReceiptModalProps> = ({
               is58mm ? 'w-[260px] text-[10px]' : 'w-[320px] text-[11px]'
             }`}
           >
+            <PosPrintAnchorLine position="top" is58mm={is58mm} />
             {/* Encabezado dinámico de la Sucursal con los 5 controles */}
             <BranchReceiptHeader
               snapshot={abono.branchSnapshot}
@@ -215,6 +216,8 @@ export const AbonoReceiptModal: React.FC<AbonoReceiptModalProps> = ({
                 Comprobante electrónico válido interno de caja · Sistema Colmena
               </p>
             </div>
+            <div className="h-4 print:h-6" aria-hidden="true" />
+            <PosPrintAnchorLine position="bottom" is58mm={is58mm} />
           </div>
         </div>
 

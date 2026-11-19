@@ -4,7 +4,7 @@ import { Order, OrderItem, Comanda, PaperWidth } from '../../types';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatColombiaDateTime } from '../../utils/calculations';
-import { BranchReceiptHeader } from '../common/BranchReceiptHeader';
+import { BranchReceiptHeader, PosPrintAnchorLine } from '../common/BranchReceiptHeader';
 import { getKitchenPosOrderModifiers } from '../../utils/orderModifierUtils';
 import { resolveBranchPrintConfig } from '../../utils/printConfigUtils';
 import { printPosTicket } from '../../utils/thermalPrintUtils';
@@ -188,6 +188,9 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
               is58mm ? 'w-full max-w-[270px]' : 'w-full max-w-[360px]'
             }`}
           >
+            {/* Línea guía de inicio para impresora térmica */}
+            <PosPrintAnchorLine position="top" is58mm={is58mm} />
+
             {/* ENCABEZADO DINÁMICO DE SUCURSAL */}
             {showBranchHeader && (
               <div className="pb-2 border-b border-dotted border-gray-300 print:border-gray-300">
@@ -357,8 +360,9 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
               </div>
             </div>
 
-            {/* Margen de avance de papel para permitir corte limpio sin cortar el texto */}
-            <div className="h-8 print:h-12" aria-hidden="true" />
+            {/* Margen de avance de papel y línea guía de cierre */}
+            <div className="h-4 print:h-6" aria-hidden="true" />
+            <PosPrintAnchorLine position="bottom" is58mm={is58mm} />
 
           </div>
         </div>

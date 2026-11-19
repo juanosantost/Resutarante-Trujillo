@@ -1,6 +1,29 @@
 import React, { useEffect, useState } from 'react';
 import { Branch, BranchReceiptSnapshot, BranchPrintConfig, DEFAULT_BRANCH_PRINT_CONFIG, PaperWidth } from '../../types';
-import { prepareThermalPrintLogo } from '../../utils/thermalPrintUtils';
+
+/**
+ * PosPrintAnchorLine
+ * Línea impresa de caracteres reales (`----`) al inicio y final de la tirilla POS.
+ * Obliga al driver de la impresora térmica a iniciar el área imprimible ANTES del logotipo
+ * y a avanzar el papel hasta el final real del comprobante antes del corte.
+ */
+export const PosPrintAnchorLine: React.FC<{
+  position: 'top' | 'bottom';
+  is58mm?: boolean;
+}> = ({ position, is58mm = false }) => {
+  const dashes = is58mm ? '------------------------' : '--------------------------------';
+  return (
+    <div
+      data-testid={`pos-print-anchor-${position}`}
+      className={`pos-print-anchor text-center font-mono font-black text-black leading-none whitespace-nowrap overflow-hidden select-none ${
+        position === 'top' ? 'pb-1.5 print:pb-1' : 'pt-2 print:pt-2'
+      }`}
+      style={{ fontSize: '11px', lineHeight: 1.1 }}
+    >
+      {dashes}
+    </div>
+  );
+};
 
 export interface BranchReceiptHeaderProps {
   branch?: Branch | null;
@@ -87,25 +110,11 @@ export const BranchReceiptHeader: React.FC<BranchReceiptHeaderProps> = ({
       ? snapshot.logoUrl
       : branch?.logoUrl || '';
 
-  const [thermalLogoUrl, setThermalLogoUrl] = useState<string>(logoUrl);
   const [logoLoadFailed, setLogoLoadFailed] = useState<boolean>(false);
 
   useEffect(() => {
     setLogoLoadFailed(false);
-    setThermalLogoUrl(logoUrl);
-    if (!logoUrl || !printConfig.showLogo) return;
-
-    let cancelled = false;
-    prepareThermalPrintLogo(logoUrl).then((prepared) => {
-      if (!cancelled && prepared) {
-        setThermalLogoUrl(prepared);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [logoUrl, printConfig.showLogo]);
+  }, [logoUrl]);
 
   const resolutionDian =
     overrideData?.resolutionDian ||
@@ -145,31 +154,20 @@ export const BranchReceiptHeader: React.FC<BranchReceiptHeaderProps> = ({
         is58mm ? 'text-[11px] space-y-0.5' : 'text-xs space-y-1'
       } ${className}`}
     >
-      {/* 1. Logotipo de la Sucursal */}
+      {/* 1. Logotipo de la Sucursal (una sola imagen siempre visible en pantalla e impresión, sin filtros CSS) */}
       {printConfig.showLogo && logoUrl && !logoLoadFailed && (
         <div
-          className="receipt-logo-container relative flex justify-center items-center w-full my-1"
+          className="receipt-logo-container flex justify-center items-center w-full my-1"
           data-logo-size={logoSize}
         >
-          {/* Vista en pantalla (color original sin filtros CSS que afecten impresión) */}
           <img
             src={logoUrl}
             alt={name || 'Logotipo Sucursal'}
             loading="eager"
             decoding="sync"
             data-logo-size={logoSize}
-            className={`receipt-logo-screen object-contain max-w-full ${logoDimensions}`}
+            className={`receipt-logo-img object-contain max-w-full ${logoDimensions}`}
             onError={() => setLogoLoadFailed(true)}
-          />
-          {/* Bitmap térmico opaco (fondo blanco puro y alto contraste sin CSS filter) listo y precargado para impresión POS */}
-          <img
-            src={thermalLogoUrl || logoUrl}
-            alt={name || 'Logotipo Sucursal'}
-            aria-hidden="true"
-            loading="eager"
-            decoding="sync"
-            data-logo-size={logoSize}
-            className="receipt-logo-print"
           />
         </div>
       )}

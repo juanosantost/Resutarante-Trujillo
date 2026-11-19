@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { formatCOP, formatColombiaDateTime } from '../../utils/calculations';
 import { PaperWidth } from '../../types';
-import { BranchReceiptHeader } from '../common/BranchReceiptHeader';
+import { BranchReceiptHeader, PosPrintAnchorLine } from '../common/BranchReceiptHeader';
 import { printPosTicket } from '../../utils/thermalPrintUtils';
 import { Printer, X, Receipt } from 'lucide-react';
 
@@ -128,6 +128,7 @@ export const IncomeReceiptModal: React.FC<IncomeReceiptModalProps> = ({
               paperWidth === '58mm' ? 'w-[280px]' : 'w-[360px]'
             }`}
           >
+            <PosPrintAnchorLine position="top" is58mm={paperWidth === '58mm'} />
             {/* Membrete de la Sucursal */}
             <div className="text-center pb-3 border-b border-dashed border-[#888] space-y-2">
               <BranchReceiptHeader
@@ -216,6 +217,8 @@ export const IncomeReceiptModal: React.FC<IncomeReceiptModalProps> = ({
               <p>¡Gracias por su pago!</p>
               <p className="text-[9px] text-[#888]">Sistema Colmena Restaurante · Colombia</p>
             </div>
+            <div className="h-4 print:h-6" aria-hidden="true" />
+            <PosPrintAnchorLine position="bottom" is58mm={paperWidth === '58mm'} />
           </div>
         </div>
 

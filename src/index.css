@@ -34,18 +34,6 @@
   background: #D6A21A;
 }
 
-/* En pantalla mantener el bitmap térmico precargado fuera del flujo visual (sin display:none) para decodificación inmediata */
-.receipt-logo-container .receipt-logo-print {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0.001;
-  pointer-events: none;
-  overflow: hidden;
-  left: 0;
-  top: 0;
-}
-
 @media print {
   @page {
     margin: 0mm;
@@ -107,6 +95,19 @@
     display: none !important;
   }
 
+  .pos-print-anchor {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    width: 100% !important;
+    text-align: center !important;
+    color: #000000 !important;
+    font-family: monospace !important;
+    font-weight: 900 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+  }
+
   html .colmena-printable-ticket .branch-receipt-header,
   .branch-receipt-header {
     display: block !important;
@@ -125,23 +126,14 @@
     position: static !important;
     text-align: center !important;
     width: 100% !important;
-    margin: 0 auto 2mm auto !important;
+    margin: 1mm auto 2mm auto !important;
     padding: 0 !important;
     overflow: visible !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
 
-  html .colmena-printable-ticket .receipt-logo-container img.receipt-logo-screen,
-  .receipt-logo-container img.receipt-logo-screen {
-    display: none !important;
-  }
-
-  html .colmena-printable-ticket .receipt-logo-container img.receipt-logo-print,
-  html.theme-light #colmena-printable-receipt .receipt-logo-container img.receipt-logo-print,
-  html.theme-light #printable-kitchen-pos-ticket .receipt-logo-container img.receipt-logo-print,
-  html.theme-light #printable-pos-ticket-preview .receipt-logo-container img.receipt-logo-print,
-  .receipt-logo-container img.receipt-logo-print {
+  html .colmena-printable-ticket .receipt-logo-container img.receipt-logo-img {
     position: static !important;
     display: block !important;
     visibility: visible !important;
@@ -159,7 +151,6 @@
     -webkit-filter: none !important;
     transform: none !important;
     transition: none !important;
-    pointer-events: auto !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     page-break-inside: avoid !important;
@@ -167,33 +158,33 @@
   }
 
   /* Escalas exactas de logotipo en milímetros según configuración de sucursal */
-  .colmena-printable-ticket .receipt-logo-container img.receipt-logo-print[data-logo-size="pequeno"] {
+  html .colmena-printable-ticket .receipt-logo-container img.receipt-logo-img[data-logo-size="pequeno"] {
     max-width: 40mm !important;
     max-height: 16mm !important;
   }
 
-  .colmena-printable-ticket .receipt-logo-container img.receipt-logo-print[data-logo-size="mediano"] {
+  html .colmena-printable-ticket .receipt-logo-container img.receipt-logo-img[data-logo-size="mediano"] {
     max-width: 56mm !important;
     max-height: 26mm !important;
   }
 
-  .colmena-printable-ticket .receipt-logo-container img.receipt-logo-print[data-logo-size="grande"] {
+  html .colmena-printable-ticket .receipt-logo-container img.receipt-logo-img[data-logo-size="grande"] {
     max-width: 70mm !important;
     max-height: 38mm !important;
   }
 
   /* Ajuste para tirillas angostas de 58mm */
-  .colmena-printable-ticket[data-paper-width="58mm"] .receipt-logo-container img.receipt-logo-print[data-logo-size="pequeno"] {
+  html .colmena-printable-ticket[data-paper-width="58mm"] .receipt-logo-container img.receipt-logo-img[data-logo-size="pequeno"] {
     max-width: 30mm !important;
     max-height: 14mm !important;
   }
 
-  .colmena-printable-ticket[data-paper-width="58mm"] .receipt-logo-container img.receipt-logo-print[data-logo-size="mediano"] {
+  html .colmena-printable-ticket[data-paper-width="58mm"] .receipt-logo-container img.receipt-logo-img[data-logo-size="mediano"] {
     max-width: 42mm !important;
     max-height: 22mm !important;
   }
 
-  .colmena-printable-ticket[data-paper-width="58mm"] .receipt-logo-container img.receipt-logo-print[data-logo-size="grande"] {
+  html .colmena-printable-ticket[data-paper-width="58mm"] .receipt-logo-container img.receipt-logo-img[data-logo-size="grande"] {
     max-width: 50mm !important;
     max-height: 30mm !important;
   }
