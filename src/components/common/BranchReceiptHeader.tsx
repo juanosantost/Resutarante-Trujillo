@@ -1,30 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Branch, BranchReceiptSnapshot, BranchPrintConfig, DEFAULT_BRANCH_PRINT_CONFIG, PaperWidth } from '../../types';
 
-/**
- * PosPrintAnchorLine
- * Línea impresa de caracteres reales (`----`) al inicio y final de la tirilla POS.
- * Obliga al driver de la impresora térmica a iniciar el área imprimible ANTES del logotipo
- * y a avanzar el papel hasta el final real del comprobante antes del corte.
- */
-export const PosPrintAnchorLine: React.FC<{
-  position: 'top' | 'bottom';
-  is58mm?: boolean;
-}> = ({ position, is58mm = false }) => {
-  const dashes = is58mm ? '------------------------' : '--------------------------------';
-  return (
-    <div
-      data-testid={`pos-print-anchor-${position}`}
-      className={`pos-print-anchor text-center font-mono font-black text-black leading-none whitespace-nowrap overflow-hidden select-none ${
-        position === 'top' ? 'pb-1.5 print:pb-1' : 'pt-2 print:pt-2'
-      }`}
-      style={{ fontSize: '11px', lineHeight: 1.1 }}
-    >
-      {dashes}
-    </div>
-  );
-};
-
 export interface BranchReceiptHeaderProps {
   branch?: Branch | null;
   snapshot?: BranchReceiptSnapshot | null;

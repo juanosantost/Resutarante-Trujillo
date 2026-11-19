@@ -4,7 +4,7 @@ import { Payment, Order } from '../../types';
 import { formatCOP, formatColombiaDateTime } from '../../utils/calculations';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { useAuth } from '../../context/AuthContext';
-import { BranchReceiptHeader, PosPrintAnchorLine } from '../common/BranchReceiptHeader';
+import { BranchReceiptHeader } from '../common/BranchReceiptHeader';
 import { filterReceiptItems } from '../../utils/checkoutCalculations';
 import { formatModifiersDisplaySummary } from '../../utils/orderModifierUtils';
 import { resolveBranchPrintConfig } from '../../utils/printConfigUtils';
@@ -132,9 +132,6 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
               is58mm ? 'w-full max-w-[270px]' : 'w-full max-w-[360px]'
             }`}
           >
-            {/* Línea guía de inicio para obligar a la impresora térmica a iniciar antes del logotipo */}
-            <PosPrintAnchorLine position="top" is58mm={is58mm} />
-
             {/* Encabezado dinámico con datos de la sucursal de origen */}
             <div className="pb-2.5 border-b border-dotted border-gray-300 print:border-gray-300">
               <BranchReceiptHeader
@@ -287,14 +284,10 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             <div className="pt-3 text-center space-y-1 text-black" style={{ fontSize: `${Math.max(9, bodyFontSize - 1)}px`, lineHeight: 1.25 }}>
               <p className="font-bold text-black">{footerText}</p>
               {resolutionDian && <p className="font-semibold text-black">{resolutionDian}</p>}
-              <p className="font-bold text-black pt-1 tracking-widest uppercase">
-                *** FIN DE LA FACTURA ***
-              </p>
             </div>
 
-            {/* Espacio de avance de papel y línea guía de cierre para corte limpio */}
-            <div className="h-4 print:h-6" aria-hidden="true" />
-            <PosPrintAnchorLine position="bottom" is58mm={is58mm} />
+            {/* Espacio de avance de papel para permitir corte limpio sin cortar el texto */}
+            <div className="h-8 print:h-12" aria-hidden="true" />
 
           </div>
         </div>

@@ -6,7 +6,7 @@ import {
   PaperWidth,
   LogoSize,
 } from '../../types';
-import { BranchReceiptHeader, PosPrintAnchorLine } from '../common/BranchReceiptHeader';
+import { BranchReceiptHeader } from '../common/BranchReceiptHeader';
 import { formatCOP } from '../../utils/calculations';
 import {
   clampPosFontSize,
@@ -649,7 +649,6 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
                   is58mm ? 'w-full max-w-[270px]' : 'w-full max-w-[360px]'
                 }`}
               >
-                <PosPrintAnchorLine position="top" is58mm={is58mm} />
                 <BranchReceiptHeader
                   branch={branch}
                   overrideData={{
@@ -787,8 +786,6 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
                     *** COMPROBANTE DE PRUEBA POS ***
                   </p>
                 </div>
-                <div className="h-4 print:h-6" aria-hidden="true" />
-                <PosPrintAnchorLine position="bottom" is58mm={is58mm} />
               </div>
             ) : (
               /* MODELO DE EJEMPLO: POS DE COCINA (COMANDA) */
@@ -801,7 +798,6 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
                   is58mm ? 'w-full max-w-[270px]' : 'w-full max-w-[360px]'
                 }`}
               >
-                <PosPrintAnchorLine position="top" is58mm={is58mm} />
                 {kitchenShowHeader && (
                   <div className="pb-2 border-b border-dotted border-gray-300 print:border-gray-300">
                     <BranchReceiptHeader
@@ -963,8 +959,6 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
                     Colmena POS · Ejemplo Cocina
                   </div>
                 </div>
-                <div className="h-4 print:h-6" aria-hidden="true" />
-                <PosPrintAnchorLine position="bottom" is58mm={is58mm} />
               </div>
             )}
           </div>

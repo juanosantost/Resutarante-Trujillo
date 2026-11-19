@@ -95,19 +95,6 @@
     display: none !important;
   }
 
-  .pos-print-anchor {
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    width: 100% !important;
-    text-align: center !important;
-    color: #000000 !important;
-    font-family: monospace !important;
-    font-weight: 900 !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-  }
-
   html .colmena-printable-ticket .branch-receipt-header,
   .branch-receipt-header {
     display: block !important;
