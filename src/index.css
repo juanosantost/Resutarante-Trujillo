@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import "./theme.css";
+@import "./theme.css" screen;
 
 @layer base {
   :root {
@@ -76,14 +76,17 @@
     backdrop-filter: none !important;
   }
 
-  body > .colmena-ticket-print-portal > div {
+  body > .colmena-ticket-print-portal > div,
+  body > .colmena-ticket-print-portal > div > div:not(.print\:hidden) {
     display: block !important;
     position: static !important;
     overflow: visible !important;
     max-height: none !important;
+    height: auto !important;
     box-shadow: none !important;
     border: none !important;
     background: #ffffff !important;
+    backdrop-filter: none !important;
   }
 
   aside:not(.colmena-printable-ticket *),
@@ -103,8 +106,6 @@
     opacity: 1 !important;
     width: 100% !important;
     color: #000000 !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
   }
 
   html .colmena-printable-ticket .receipt-logo-container,
@@ -116,8 +117,6 @@
     margin: 1mm auto 2mm auto !important;
     padding: 0 !important;
     overflow: visible !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
   }
 
   html .colmena-printable-ticket .receipt-logo-container img.receipt-logo-img {

@@ -11,6 +11,8 @@ import { formatCOP } from '../../utils/calculations';
 import {
   clampPosFontSize,
   resolveBranchPrintConfig,
+  buildReceiptHeaderPrintConfig,
+  buildKitchenHeaderPrintConfig,
   MIN_POS_FONT_SIZE,
   MAX_POS_FONT_SIZE,
 } from '../../utils/printConfigUtils';
@@ -169,16 +171,19 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
   }, []);
 
   const initialPrintConfig = resolveBranchPrintConfig(
-    branch?.printConfig,
-    overrideData?.printConfig
+    overrideData?.printConfig,
+    branch?.printConfig
   );
 
   const [previewMode, setPreviewMode] = useState<PreviewPosMode>(initialMode);
   const [activeConfig, setActiveConfig] = useState<BranchPrintConfig>(initialPrintConfig);
-  const [selectedWidth, setSelectedWidth] = useState<PaperWidth>(
-    initialPrintConfig.paperWidth || '80mm'
-  );
   const [isSaving, setIsSaving] = useState<boolean>(false);
+
+  const resolvedActive = resolveBranchPrintConfig(activeConfig);
+  const selectedWidth: PaperWidth =
+    previewMode === 'cobro'
+      ? resolvedActive.paperWidth
+      : resolvedActive.kitchenPaperWidth;
 
   const applyConfigUpdate = (updated: BranchPrintConfig) => {
     setActiveConfig(updated);
@@ -196,26 +201,44 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
       | 'showPhone'
       | 'includeKitchenPrices'
       | 'kitchenShowHeader'
+      | 'kitchenShowLogo'
+      | 'kitchenShowTradeName'
+      | 'kitchenShowNit'
+      | 'kitchenShowAddress'
+      | 'kitchenShowPhone'
   ) => {
     applyConfigUpdate({
-      ...activeConfig,
-      [key]: !activeConfig[key],
+      ...resolvedActive,
+      [key]: !resolvedActive[key],
     });
   };
 
   const handleWidthChange = (w: PaperWidth) => {
-    setSelectedWidth(w);
-    applyConfigUpdate({
-      ...activeConfig,
-      paperWidth: w,
-    });
+    if (previewMode === 'cobro') {
+      applyConfigUpdate({
+        ...resolvedActive,
+        paperWidth: w,
+      });
+    } else {
+      applyConfigUpdate({
+        ...resolvedActive,
+        kitchenPaperWidth: w,
+      });
+    }
   };
 
   const handleLogoSizeChange = (s: LogoSize) => {
-    applyConfigUpdate({
-      ...activeConfig,
-      logoSize: s,
-    });
+    if (previewMode === 'cobro') {
+      applyConfigUpdate({
+        ...resolvedActive,
+        logoSize: s,
+      });
+    } else {
+      applyConfigUpdate({
+        ...resolvedActive,
+        kitchenLogoSize: s,
+      });
+    }
   };
 
   const handleFontSizeChange = (
@@ -228,15 +251,15 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
   ) => {
     const safePts = clampPosFontSize(pts, 22);
     applyConfigUpdate({
-      ...activeConfig,
+      ...resolvedActive,
       [key]: safePts,
     });
   };
 
   const handleMatchKitchenFontSizes = () => {
-    const targetPts = clampPosFontSize(activeConfig.kitchenTitleFontSize, 22);
+    const targetPts = clampPosFontSize(resolvedActive.kitchenTitleFontSize, 22);
     applyConfigUpdate({
-      ...activeConfig,
+      ...resolvedActive,
       kitchenTitleFontSize: targetPts,
       kitchenBodyFontSize: targetPts,
     });
@@ -250,7 +273,7 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
     if (!onSavePrintConfig) return;
     setIsSaving(true);
     try {
-      await onSavePrintConfig(activeConfig);
+      await onSavePrintConfig(resolvedActive);
       onClose();
     } finally {
       setIsSaving(false);
@@ -275,12 +298,28 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
 
   const is58mm = selectedWidth === '58mm';
 
-  const receiptTitlePts = clampPosFontSize(activeConfig.receiptTitleFontSize, 16);
-  const receiptBodyPts = clampPosFontSize(activeConfig.receiptBodyFontSize, 12);
-  const kitchenTitlePts = clampPosFontSize(activeConfig.kitchenTitleFontSize, 22);
-  const kitchenBodyPts = clampPosFontSize(activeConfig.kitchenBodyFontSize, 22);
-  const kitchenShowHeader = activeConfig.kitchenShowHeader ?? true;
-  const includeKitchenPrices = activeConfig.includeKitchenPrices ?? false;
+  const receiptTitlePts = resolvedActive.receiptTitleFontSize;
+  const receiptBodyPts = resolvedActive.receiptBodyFontSize;
+  const kitchenTitlePts = resolvedActive.kitchenTitleFontSize;
+  const kitchenBodyPts = resolvedActive.kitchenBodyFontSize;
+  const kitchenShowHeader = resolvedActive.kitchenShowHeader;
+  const includeKitchenPrices = resolvedActive.includeKitchenPrices;
+
+  const currentShowLogo =
+    previewMode === 'cobro' ? resolvedActive.showLogo : resolvedActive.kitchenShowLogo;
+  const currentLogoSize: LogoSize =
+    previewMode === 'cobro' ? resolvedActive.logoSize : resolvedActive.kitchenLogoSize;
+  const currentShowTradeName =
+    previewMode === 'cobro' ? resolvedActive.showTradeName : resolvedActive.kitchenShowTradeName;
+  const currentShowNit =
+    previewMode === 'cobro' ? resolvedActive.showNit : resolvedActive.kitchenShowNit;
+  const currentShowAddress =
+    previewMode === 'cobro' ? resolvedActive.showAddress : resolvedActive.kitchenShowAddress;
+  const currentShowPhone =
+    previewMode === 'cobro' ? resolvedActive.showPhone : resolvedActive.kitchenShowPhone;
+
+  const cobroHeaderPrintConfig = buildReceiptHeaderPrintConfig(resolvedActive);
+  const cocinaHeaderPrintConfig = buildKitchenHeaderPrintConfig(resolvedActive);
 
   return createPortal(
     <div className="colmena-ticket-print-portal fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto print:static print:p-0 print:bg-white print:overflow-visible">
@@ -374,10 +413,10 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
                 <span className="text-[10px] text-[#a8a29e]">Vista previa en vivo</span>
               </div>
 
-              {/* Selector de Ancho de Papel */}
+              {/* Selector de Ancho de Papel (independiente por tipo de ticket) */}
               <div>
                 <label className="block text-xs font-semibold text-[#a8a29e] mb-2">
-                  Ancho de Papel Térmico:
+                  Ancho de Papel Térmico ({previewMode === 'cobro' ? 'POS Cobro' : 'POS Cocina'}):
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -501,112 +540,129 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
                 </div>
               )}
 
-              {/* Controles del Encabezado Comercial */}
+              {/* Controles del Encabezado Comercial (100% independientes entre Cobro y Cocina) */}
               {(previewMode === 'cobro' || kitchenShowHeader) && (
                 <div className="space-y-2 pt-2 border-t border-[#333333]">
-                  <span className="text-[11px] font-bold text-[#FFFDF5] block">
-                    Elementos del Encabezado Comercial:
-                  </span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-bold text-[#FFFDF5] block">
+                      {previewMode === 'cobro'
+                        ? 'Encabezado — Factura de Cobro:'
+                        : 'Encabezado — Comanda de Cocina:'}
+                    </span>
+                    <span className="text-[9px] text-[#D6A21A] font-semibold">
+                      Independiente
+                    </span>
+                  </div>
 
-                {/* 1. Logotipo */}
-                <div className="space-y-1.5">
+                  {/* 1. Logotipo */}
+                  <div className="space-y-1.5">
+                    <label className="flex items-center justify-between p-2.5 rounded-xl bg-[#181818] border border-[#333333] hover:border-[#B77900]/50 cursor-pointer transition-all">
+                      <div className="flex items-center gap-2.5">
+                        <ImageIcon className="w-4 h-4 text-[#D6A21A]" />
+                        <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar logotipo</span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={currentShowLogo}
+                        onChange={() =>
+                          handleToggle(previewMode === 'cobro' ? 'showLogo' : 'kitchenShowLogo')
+                        }
+                        className="w-4 h-4 accent-[#B77900] cursor-pointer"
+                      />
+                    </label>
+
+                    {currentShowLogo && (
+                      <div className="p-2 rounded-xl bg-[#151515] border border-[#2e2e2e] space-y-1">
+                        <div className="flex justify-between items-center text-[10px] text-[#a8a29e] px-0.5">
+                          <span className="font-bold text-[#D6A21A]">Tamaño del Logotipo:</span>
+                          <span className="capitalize text-[#FFFDF5] font-semibold">
+                            {currentLogoSize}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-1">
+                          {[
+                            { id: 'pequeno', label: 'Pequeño' },
+                            { id: 'mediano', label: 'Mediano' },
+                            { id: 'grande', label: 'Grande' },
+                          ].map((sz) => (
+                            <button
+                              key={sz.id}
+                              type="button"
+                              onClick={() => handleLogoSizeChange(sz.id as LogoSize)}
+                              className={`py-1 px-1.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
+                                currentLogoSize === sz.id
+                                  ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] font-black shadow-sm'
+                                  : 'bg-[#202020] text-[#a8a29e] border-[#383838] hover:border-[#B77900]'
+                              }`}
+                            >
+                              {sz.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <label className="flex items-center justify-between p-2.5 rounded-xl bg-[#181818] border border-[#333333] hover:border-[#B77900]/50 cursor-pointer transition-all">
                     <div className="flex items-center gap-2.5">
-                      <ImageIcon className="w-4 h-4 text-[#D6A21A]" />
-                      <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar logotipo</span>
+                      <Building2 className="w-4 h-4 text-[#D6A21A]" />
+                      <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar nombre comercial</span>
                     </div>
                     <input
                       type="checkbox"
-                      checked={activeConfig.showLogo}
-                      onChange={() => handleToggle('showLogo')}
+                      checked={currentShowTradeName}
+                      onChange={() =>
+                        handleToggle(previewMode === 'cobro' ? 'showTradeName' : 'kitchenShowTradeName')
+                      }
                       className="w-4 h-4 accent-[#B77900] cursor-pointer"
                     />
                   </label>
 
-                  {activeConfig.showLogo && (
-                    <div className="p-2 rounded-xl bg-[#151515] border border-[#2e2e2e] space-y-1">
-                      <div className="flex justify-between items-center text-[10px] text-[#a8a29e] px-0.5">
-                        <span className="font-bold text-[#D6A21A]">Tamaño del Logotipo:</span>
-                        <span className="capitalize text-[#FFFDF5] font-semibold">
-                          {activeConfig.logoSize || 'mediano'}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-3 gap-1">
-                        {[
-                          { id: 'pequeno', label: 'Pequeño' },
-                          { id: 'mediano', label: 'Mediano' },
-                          { id: 'grande', label: 'Grande' },
-                        ].map((sz) => (
-                          <button
-                            key={sz.id}
-                            type="button"
-                            onClick={() => handleLogoSizeChange(sz.id as LogoSize)}
-                            className={`py-1 px-1.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
-                              (activeConfig.logoSize || 'mediano') === sz.id
-                                ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] font-black shadow-sm'
-                                : 'bg-[#202020] text-[#a8a29e] border-[#383838] hover:border-[#B77900]'
-                            }`}
-                          >
-                            {sz.label}
-                          </button>
-                        ))}
-                      </div>
+                  <label className="flex items-center justify-between p-2.5 rounded-xl bg-[#181818] border border-[#333333] hover:border-[#B77900]/50 cursor-pointer transition-all">
+                    <div className="flex items-center gap-2.5">
+                      <FileText className="w-4 h-4 text-[#D6A21A]" />
+                      <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar NIT</span>
                     </div>
-                  )}
+                    <input
+                      type="checkbox"
+                      checked={currentShowNit}
+                      onChange={() =>
+                        handleToggle(previewMode === 'cobro' ? 'showNit' : 'kitchenShowNit')
+                      }
+                      className="w-4 h-4 accent-[#B77900] cursor-pointer"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-2.5 rounded-xl bg-[#181818] border border-[#333333] hover:border-[#B77900]/50 cursor-pointer transition-all">
+                    <div className="flex items-center gap-2.5">
+                      <MapPin className="w-4 h-4 text-[#D6A21A]" />
+                      <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar dirección</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={currentShowAddress}
+                      onChange={() =>
+                        handleToggle(previewMode === 'cobro' ? 'showAddress' : 'kitchenShowAddress')
+                      }
+                      className="w-4 h-4 accent-[#B77900] cursor-pointer"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-2.5 rounded-xl bg-[#181818] border border-[#333333] hover:border-[#B77900]/50 cursor-pointer transition-all">
+                    <div className="flex items-center gap-2.5">
+                      <Smartphone className="w-4 h-4 text-[#D6A21A]" />
+                      <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar celular / teléfono</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={currentShowPhone}
+                      onChange={() =>
+                        handleToggle(previewMode === 'cobro' ? 'showPhone' : 'kitchenShowPhone')
+                      }
+                      className="w-4 h-4 accent-[#B77900] cursor-pointer"
+                    />
+                  </label>
                 </div>
-
-                <label className="flex items-center justify-between p-2.5 rounded-xl bg-[#181818] border border-[#333333] hover:border-[#B77900]/50 cursor-pointer transition-all">
-                  <div className="flex items-center gap-2.5">
-                    <Building2 className="w-4 h-4 text-[#D6A21A]" />
-                    <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar nombre comercial</span>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={activeConfig.showTradeName}
-                    onChange={() => handleToggle('showTradeName')}
-                    className="w-4 h-4 accent-[#B77900] cursor-pointer"
-                  />
-                </label>
-
-                <label className="flex items-center justify-between p-2.5 rounded-xl bg-[#181818] border border-[#333333] hover:border-[#B77900]/50 cursor-pointer transition-all">
-                  <div className="flex items-center gap-2.5">
-                    <FileText className="w-4 h-4 text-[#D6A21A]" />
-                    <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar NIT</span>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={activeConfig.showNit}
-                    onChange={() => handleToggle('showNit')}
-                    className="w-4 h-4 accent-[#B77900] cursor-pointer"
-                  />
-                </label>
-
-                <label className="flex items-center justify-between p-2.5 rounded-xl bg-[#181818] border border-[#333333] hover:border-[#B77900]/50 cursor-pointer transition-all">
-                  <div className="flex items-center gap-2.5">
-                    <MapPin className="w-4 h-4 text-[#D6A21A]" />
-                    <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar dirección</span>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={activeConfig.showAddress}
-                    onChange={() => handleToggle('showAddress')}
-                    className="w-4 h-4 accent-[#B77900] cursor-pointer"
-                  />
-                </label>
-
-                <label className="flex items-center justify-between p-2.5 rounded-xl bg-[#181818] border border-[#333333] hover:border-[#B77900]/50 cursor-pointer transition-all">
-                  <div className="flex items-center gap-2.5">
-                    <Smartphone className="w-4 h-4 text-[#D6A21A]" />
-                    <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar celular / teléfono</span>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={activeConfig.showPhone}
-                    onChange={() => handleToggle('showPhone')}
-                    className="w-4 h-4 accent-[#B77900] cursor-pointer"
-                  />
-                </label>
-              </div>
               )}
 
               <div className="p-3 rounded-xl bg-[#181818] border border-[#2e2e2e] text-[11px] text-[#a8a29e] space-y-1">
@@ -657,7 +713,7 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
                     address,
                     phone,
                     logoUrl,
-                    printConfig: activeConfig,
+                    printConfig: cobroHeaderPrintConfig,
                     resolutionDian,
                   }}
                   paperWidth={selectedWidth}
@@ -808,7 +864,7 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
                         address,
                         phone,
                         logoUrl,
-                        printConfig: activeConfig,
+                        printConfig: cocinaHeaderPrintConfig,
                         resolutionDian,
                       }}
                       paperWidth={selectedWidth}

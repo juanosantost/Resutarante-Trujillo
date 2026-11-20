@@ -53,6 +53,7 @@ export type KitchenFontSize = 'compacto' | 'grande' | 'extragrande';
 export type LogoSize = 'pequeno' | 'mediano' | 'grande';
 
 export interface BranchPrintConfig {
+  // Configuración exclusiva de POS de Cobro (Factura)
   showLogo: boolean;
   logoSize?: LogoSize;
   showTradeName: boolean;
@@ -60,13 +61,22 @@ export interface BranchPrintConfig {
   showAddress: boolean;
   showPhone: boolean;
   paperWidth: PaperWidth;
-  kitchenFontSize?: KitchenFontSize;
-  includeKitchenPrices?: boolean;
   receiptTitleFontSize?: number;
   receiptBodyFontSize?: number;
+
+  // Configuración exclusiva e independiente de POS de Cocina (Comanda)
+  kitchenPaperWidth?: PaperWidth;
+  kitchenFontSize?: KitchenFontSize;
+  includeKitchenPrices?: boolean;
   kitchenTitleFontSize?: number;
   kitchenBodyFontSize?: number;
   kitchenShowHeader?: boolean;
+  kitchenShowLogo?: boolean;
+  kitchenLogoSize?: LogoSize;
+  kitchenShowTradeName?: boolean;
+  kitchenShowNit?: boolean;
+  kitchenShowAddress?: boolean;
+  kitchenShowPhone?: boolean;
 }
 
 export const DEFAULT_BRANCH_PRINT_CONFIG: BranchPrintConfig = {
@@ -77,13 +87,20 @@ export const DEFAULT_BRANCH_PRINT_CONFIG: BranchPrintConfig = {
   showAddress: true,
   showPhone: true,
   paperWidth: '80mm',
-  kitchenFontSize: 'extragrande',
-  includeKitchenPrices: false,
   receiptTitleFontSize: 16,
   receiptBodyFontSize: 12,
+  kitchenPaperWidth: '80mm',
+  kitchenFontSize: 'extragrande',
+  includeKitchenPrices: false,
   kitchenTitleFontSize: 22,
   kitchenBodyFontSize: 22,
   kitchenShowHeader: true,
+  kitchenShowLogo: true,
+  kitchenLogoSize: 'mediano',
+  kitchenShowTradeName: true,
+  kitchenShowNit: true,
+  kitchenShowAddress: true,
+  kitchenShowPhone: true,
 };
 
 export interface BranchReceiptSnapshot {

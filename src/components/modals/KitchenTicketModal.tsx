@@ -6,7 +6,10 @@ import { useAuth } from '../../context/AuthContext';
 import { formatColombiaDateTime } from '../../utils/calculations';
 import { BranchReceiptHeader } from '../common/BranchReceiptHeader';
 import { getKitchenPosOrderModifiers } from '../../utils/orderModifierUtils';
-import { resolveBranchPrintConfig } from '../../utils/printConfigUtils';
+import {
+  resolveBranchPrintConfig,
+  buildKitchenHeaderPrintConfig,
+} from '../../utils/printConfigUtils';
 import { printPosTicket } from '../../utils/thermalPrintUtils';
 import {
   Printer,
@@ -46,22 +49,18 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
   const originBranchId = order?.branchId || comanda?.branchId || currentBranch?.id;
   const branch = branches.find((b) => b.id === originBranchId) || currentBranch;
 
-  // Preferencias tomadas directamente de la configuración de la sucursal en Administración
+  // Preferencias exclusivas de POS de Cocina tomadas de la configuración de la sucursal
   const resolvedPrintConfig = resolveBranchPrintConfig(
     branch?.printConfig,
     order?.branchSnapshot?.printConfig
   );
-  // Priorizar configuración actual de la sucursal para ajustes de cocina
-  const titleFontSize =
-    branch?.printConfig?.kitchenTitleFontSize ?? resolvedPrintConfig.kitchenTitleFontSize;
-  const bodyFontSize =
-    branch?.printConfig?.kitchenBodyFontSize ?? resolvedPrintConfig.kitchenBodyFontSize;
-  const showBranchHeader =
-    branch?.printConfig?.kitchenShowHeader ?? resolvedPrintConfig.kitchenShowHeader;
-  const selectedWidth: PaperWidth = resolvedPrintConfig.paperWidth || '80mm';
+  const kitchenHeaderPrintConfig = buildKitchenHeaderPrintConfig(resolvedPrintConfig);
+  const titleFontSize = resolvedPrintConfig.kitchenTitleFontSize;
+  const bodyFontSize = resolvedPrintConfig.kitchenBodyFontSize;
+  const showBranchHeader = resolvedPrintConfig.kitchenShowHeader;
+  const selectedWidth: PaperWidth = resolvedPrintConfig.kitchenPaperWidth || '80mm';
   const selectedRound: number | 'all' = initialRound;
-  const includePrices: boolean =
-    branch?.printConfig?.includeKitchenPrices ?? resolvedPrintConfig.includeKitchenPrices;
+  const includePrices: boolean = resolvedPrintConfig.includeKitchenPrices;
 
   // Normalizar ítems a imprimir y garantizar que aparezca el nombre real del usuario en lugar del cargo
   const orderNumber = order?.orderNumber ?? comanda?.orderNumber ?? 0;
@@ -188,12 +187,18 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
               is58mm ? 'w-full max-w-[270px]' : 'w-full max-w-[360px]'
             }`}
           >
-            {/* ENCABEZADO DINÁMICO DE SUCURSAL */}
+            {/* ENCABEZADO DINÁMICO DE SUCURSAL (configuración independiente de Cocina) */}
             {showBranchHeader && (
               <div className="pb-2 border-b border-dotted border-gray-300 print:border-gray-300">
                 <BranchReceiptHeader
                   branch={branch}
                   snapshot={order?.branchSnapshot}
+                  overrideData={{
+                    logoUrl: branch?.logoUrl?.trim()
+                      ? branch.logoUrl
+                      : order?.branchSnapshot?.logoUrl || '',
+                    printConfig: kitchenHeaderPrintConfig,
+                  }}
                   paperWidth={selectedWidth}
                   showDianResolution={false}
                   titleFontSize={titleFontSize}

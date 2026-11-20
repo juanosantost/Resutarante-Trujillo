@@ -43,11 +43,11 @@ export const BranchReceiptHeader: React.FC<BranchReceiptHeaderProps> = ({
   titleFontSize,
   bodyFontSize,
 }) => {
-  // 1. Extraer configuración de impresión con prioridad: override -> snapshot -> branch -> default
+  // 1. Extraer configuración de impresión con prioridad: override -> sucursal vigente -> snapshot -> default
   const printConfig: BranchPrintConfig =
     overrideData?.printConfig ||
-    snapshot?.printConfig ||
     branch?.printConfig ||
+    snapshot?.printConfig ||
     DEFAULT_BRANCH_PRINT_CONFIG;
 
   // 2. Extraer datos comerciales (si el snapshot tiene campo vacío, respaldar con la sucursal actual)

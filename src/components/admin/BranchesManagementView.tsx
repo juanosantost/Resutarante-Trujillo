@@ -76,8 +76,9 @@ export const BranchesManagementView: React.FC = () => {
   const [logoError, setLogoError] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Form state: Configuración de impresión de comprobantes (POS Cobro & POS Cocina)
+  // Form state: Configuración de impresión de comprobantes (POS Cobro & POS Cocina 100% independientes)
   const [posConfigTab, setPosConfigTab] = useState<PreviewPosMode>('cobro');
+  // -- POS de Cobro (Factura)
   const [showLogo, setShowLogo] = useState<boolean>(true);
   const [logoSize, setLogoSize] = useState<LogoSize>('mediano');
   const [showTradeName, setShowTradeName] = useState<boolean>(true);
@@ -85,13 +86,21 @@ export const BranchesManagementView: React.FC = () => {
   const [showAddress, setShowAddress] = useState<boolean>(true);
   const [showPhone, setShowPhone] = useState<boolean>(true);
   const [paperWidth, setPaperWidth] = useState<PaperWidth>('80mm');
-  const [kitchenFontSize, setKitchenFontSize] = useState<KitchenFontSize>('extragrande');
-  const [includeKitchenPrices, setIncludeKitchenPrices] = useState<boolean>(false);
   const [receiptTitleFontSize, setReceiptTitleFontSize] = useState<number>(16);
   const [receiptBodyFontSize, setReceiptBodyFontSize] = useState<number>(12);
+  // -- POS de Cocina (Comanda — independiente de Cobro)
+  const [kitchenPaperWidth, setKitchenPaperWidth] = useState<PaperWidth>('80mm');
+  const [kitchenFontSize, setKitchenFontSize] = useState<KitchenFontSize>('extragrande');
+  const [includeKitchenPrices, setIncludeKitchenPrices] = useState<boolean>(false);
   const [kitchenTitleFontSize, setKitchenTitleFontSize] = useState<number>(22);
   const [kitchenBodyFontSize, setKitchenBodyFontSize] = useState<number>(22);
   const [kitchenShowHeader, setKitchenShowHeader] = useState<boolean>(true);
+  const [kitchenShowLogo, setKitchenShowLogo] = useState<boolean>(true);
+  const [kitchenLogoSize, setKitchenLogoSize] = useState<LogoSize>('mediano');
+  const [kitchenShowTradeName, setKitchenShowTradeName] = useState<boolean>(true);
+  const [kitchenShowNit, setKitchenShowNit] = useState<boolean>(true);
+  const [kitchenShowAddress, setKitchenShowAddress] = useState<boolean>(true);
+  const [kitchenShowPhone, setKitchenShowPhone] = useState<boolean>(true);
 
   // Form state: Configuración DIAN
   const [headerText, setHeaderText] = useState<string>('SISTEMA COLMENA RESTAURANTE');
@@ -125,7 +134,7 @@ export const BranchesManagementView: React.FC = () => {
     setLogoUrl('');
     setLogoError('');
 
-    // Reset controles de impresión
+    // Reset controles de impresión (Cobro y Cocina independientes)
     setPosConfigTab('cobro');
     setShowLogo(true);
     setLogoSize('mediano');
@@ -134,13 +143,20 @@ export const BranchesManagementView: React.FC = () => {
     setShowAddress(true);
     setShowPhone(true);
     setPaperWidth('80mm');
-    setKitchenFontSize('extragrande');
-    setIncludeKitchenPrices(false);
     setReceiptTitleFontSize(16);
     setReceiptBodyFontSize(12);
+    setKitchenPaperWidth('80mm');
+    setKitchenFontSize('extragrande');
+    setIncludeKitchenPrices(false);
     setKitchenTitleFontSize(22);
     setKitchenBodyFontSize(22);
     setKitchenShowHeader(true);
+    setKitchenShowLogo(true);
+    setKitchenLogoSize('mediano');
+    setKitchenShowTradeName(true);
+    setKitchenShowNit(true);
+    setKitchenShowAddress(true);
+    setKitchenShowPhone(true);
 
     // Reset DIAN
     setHeaderText('SISTEMA COLMENA RESTAURANTE');
@@ -171,7 +187,7 @@ export const BranchesManagementView: React.FC = () => {
     setLogoUrl(b.logoUrl || '');
     setLogoError('');
 
-    // Impresión y Preferencias POS (Cobro y Cocina)
+    // Impresión y Preferencias POS (Cobro y Cocina independientes)
     const resolvedPrint = resolveBranchPrintConfig(b.printConfig);
     setPosConfigTab('cobro');
     setShowLogo(resolvedPrint.showLogo);
@@ -181,13 +197,20 @@ export const BranchesManagementView: React.FC = () => {
     setShowAddress(resolvedPrint.showAddress);
     setShowPhone(resolvedPrint.showPhone);
     setPaperWidth(resolvedPrint.paperWidth);
-    setKitchenFontSize(resolvedPrint.kitchenFontSize);
-    setIncludeKitchenPrices(resolvedPrint.includeKitchenPrices);
     setReceiptTitleFontSize(resolvedPrint.receiptTitleFontSize);
     setReceiptBodyFontSize(resolvedPrint.receiptBodyFontSize);
+    setKitchenPaperWidth(resolvedPrint.kitchenPaperWidth);
+    setKitchenFontSize(resolvedPrint.kitchenFontSize);
+    setIncludeKitchenPrices(resolvedPrint.includeKitchenPrices);
     setKitchenTitleFontSize(resolvedPrint.kitchenTitleFontSize);
     setKitchenBodyFontSize(resolvedPrint.kitchenBodyFontSize);
     setKitchenShowHeader(resolvedPrint.kitchenShowHeader);
+    setKitchenShowLogo(resolvedPrint.kitchenShowLogo);
+    setKitchenLogoSize(resolvedPrint.kitchenLogoSize);
+    setKitchenShowTradeName(resolvedPrint.kitchenShowTradeName);
+    setKitchenShowNit(resolvedPrint.kitchenShowNit);
+    setKitchenShowAddress(resolvedPrint.kitchenShowAddress);
+    setKitchenShowPhone(resolvedPrint.kitchenShowPhone);
 
     // DIAN
     setHeaderText(b.receiptConfig?.headerText || 'SISTEMA COLMENA RESTAURANTE');
@@ -289,13 +312,20 @@ export const BranchesManagementView: React.FC = () => {
         showAddress,
         showPhone,
         paperWidth,
-        kitchenFontSize: derivedKitchenPreset,
-        includeKitchenPrices,
         receiptTitleFontSize: clampPosFontSize(receiptTitleFontSize, 16),
         receiptBodyFontSize: clampPosFontSize(receiptBodyFontSize, 12),
+        kitchenPaperWidth,
+        kitchenFontSize: derivedKitchenPreset,
+        includeKitchenPrices,
         kitchenTitleFontSize: clampPosFontSize(kitchenTitleFontSize, 22),
         kitchenBodyFontSize: clampPosFontSize(kitchenBodyFontSize, 22),
         kitchenShowHeader,
+        kitchenShowLogo,
+        kitchenLogoSize,
+        kitchenShowTradeName,
+        kitchenShowNit,
+        kitchenShowAddress,
+        kitchenShowPhone,
       };
 
       const receiptConfig: ReceiptConfig = {
@@ -395,13 +425,20 @@ export const BranchesManagementView: React.FC = () => {
         showAddress,
         showPhone,
         paperWidth,
-        kitchenFontSize,
-        includeKitchenPrices,
         receiptTitleFontSize,
         receiptBodyFontSize,
+        kitchenPaperWidth,
+        kitchenFontSize,
+        includeKitchenPrices,
         kitchenTitleFontSize,
         kitchenBodyFontSize,
         kitchenShowHeader,
+        kitchenShowLogo,
+        kitchenLogoSize,
+        kitchenShowTradeName,
+        kitchenShowNit,
+        kitchenShowAddress,
+        kitchenShowPhone,
       },
       resolutionDian,
       footerText,
@@ -537,19 +574,24 @@ export const BranchesManagementView: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Configuración de Impresión de Comprobantes (Los 5 Controles + Papel) */}
+                {/* Configuración de Impresión de Comprobantes (Cobro y Cocina independientes) */}
                 <div className="mt-3 p-3.5 rounded-2xl bg-[#222222] border border-[#2e2e2e] text-xs space-y-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-1.5">
                     <span className="text-[10px] uppercase font-bold text-[#D6A21A] flex items-center gap-1.5">
                       <Receipt className="w-3.5 h-3.5" />
                       <span>Configuración de Comprobantes POS</span>
                     </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-md font-mono font-bold bg-[#181818] text-[#D6A21A] border border-[#383838]">
-                      Papel: {config.paperWidth || '80mm'}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] px-2 py-0.5 rounded-md font-mono font-bold bg-[#18231c] text-emerald-300 border border-emerald-700/50">
+                        Cobro: {config.paperWidth || '80mm'}
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-md font-mono font-bold bg-[#292212] text-[#D6A21A] border border-[#B77900]/40">
+                        Cocina: {config.kitchenPaperWidth || '80mm'}
+                      </span>
+                    </div>
                   </div>
 
-                  {/* Badges de los 5 controles */}
+                  {/* Badges independientes de POS Cobro */}
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     <span
                       className={`text-[9.5px] px-2 py-0.5 rounded-md font-medium border flex items-center gap-1 ${
@@ -616,10 +658,13 @@ export const BranchesManagementView: React.FC = () => {
 
                     <span
                       className="text-[9.5px] px-2 py-0.5 rounded-md font-medium border flex items-center gap-1 bg-[#292212] text-[#D6A21A] border-[#B77900]/40"
-                      title="Tamaños de letra para POS de Cocina (Títulos / Textos)"
+                      title="Configuración independiente para POS de Cocina"
                     >
                       <ChefHat className="w-2.5 h-2.5" />
-                      <span>Cocina: {config.kitchenTitleFontSize}/{config.kitchenBodyFontSize} pts</span>
+                      <span>
+                        Cocina: {config.kitchenTitleFontSize}/{config.kitchenBodyFontSize} pts
+                        {config.kitchenShowHeader ? ' • Con encabezado' : ' • Sin encabezado'}
+                      </span>
                     </span>
 
                     <span
@@ -1097,52 +1142,52 @@ export const BranchesManagementView: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Selección de Ancho de Papel Térmico */}
-                <div className="p-3.5 rounded-2xl bg-[#222222] border border-[#333333] space-y-2">
-                  <label className="block text-xs font-bold text-[#FFFDF5]">
-                    Ancho Predeterminado de Papel Térmico para Comprobantes:
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setPaperWidth('58mm')}
-                      className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-between transition-all cursor-pointer ${
-                        paperWidth === '58mm'
-                          ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] shadow-md font-black'
-                          : 'bg-[#181818] text-[#a8a29e] border-[#383838] hover:border-[#B77900]'
-                      }`}
-                    >
-                      <div className="text-left">
-                        <span className="block font-black">58 mm (Estrecho)</span>
-                        <span className={`text-[10px] ${paperWidth === '58mm' ? 'text-[#181818]/80' : 'text-[#777]'}`}>
-                          Impresoras térmicas compactas
-                        </span>
-                      </div>
-                      {paperWidth === '58mm' && <Check className="w-4 h-4" />}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setPaperWidth('80mm')}
-                      className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-between transition-all cursor-pointer ${
-                        paperWidth === '80mm'
-                          ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] shadow-md font-black'
-                          : 'bg-[#181818] text-[#a8a29e] border-[#383838] hover:border-[#B77900]'
-                      }`}
-                    >
-                      <div className="text-left">
-                        <span className="block font-black">80 mm (Estándar POS)</span>
-                        <span className={`text-[10px] ${paperWidth === '80mm' ? 'text-[#181818]/80' : 'text-[#777]'}`}>
-                          Impresoras estándar de restaurante
-                        </span>
-                      </div>
-                      {paperWidth === '80mm' && <Check className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-
                 {posConfigTab === 'cobro' ? (
                   <div className="space-y-4">
+                    {/* Ancho de Papel Térmico exclusivo de POS de Cobro */}
+                    <div className="p-3.5 rounded-2xl bg-[#222222] border border-[#333333] space-y-2">
+                      <label className="block text-xs font-bold text-[#FFFDF5]">
+                        Ancho de Papel Térmico — Factura de Cobro (POS Cobro):
+                      </label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setPaperWidth('58mm')}
+                          className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-between transition-all cursor-pointer ${
+                            paperWidth === '58mm'
+                              ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] shadow-md font-black'
+                              : 'bg-[#181818] text-[#a8a29e] border-[#383838] hover:border-[#B77900]'
+                          }`}
+                        >
+                          <div className="text-left">
+                            <span className="block font-black">58 mm (Estrecho)</span>
+                            <span className={`text-[10px] ${paperWidth === '58mm' ? 'text-[#181818]/80' : 'text-[#777]'}`}>
+                              Impresoras térmicas compactas
+                            </span>
+                          </div>
+                          {paperWidth === '58mm' && <Check className="w-4 h-4" />}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setPaperWidth('80mm')}
+                          className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-between transition-all cursor-pointer ${
+                            paperWidth === '80mm'
+                              ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] shadow-md font-black'
+                              : 'bg-[#181818] text-[#a8a29e] border-[#383838] hover:border-[#B77900]'
+                          }`}
+                        >
+                          <div className="text-left">
+                            <span className="block font-black">80 mm (Estándar POS)</span>
+                            <span className={`text-[10px] ${paperWidth === '80mm' ? 'text-[#181818]/80' : 'text-[#777]'}`}>
+                              Impresoras estándar de restaurante
+                            </span>
+                          </div>
+                          {paperWidth === '80mm' && <Check className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
                     {/* Tipografía POS de Cobro */}
                     <div className="p-3.5 rounded-2xl bg-[#222222] border border-[#333333] space-y-3">
                       <span className="text-xs font-bold text-[#FFFDF5] flex items-center gap-1.5">
@@ -1381,6 +1426,39 @@ export const BranchesManagementView: React.FC = () => {
                       Ajusta en puntos el tamaño de títulos (platos, mesa, orden) y textos normales (acompañamientos, notas, mesero y pie) en el ticket de cocina.
                     </p>
 
+                    {/* Ancho de Papel Térmico exclusivo de POS de Cocina */}
+                    <div className="p-3 rounded-xl bg-[#181818] border border-[#333333] space-y-2">
+                      <label className="block text-xs font-bold text-[#FFFDF5]">
+                        Ancho de Papel Térmico — Comanda de Cocina (independiente):
+                      </label>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => setKitchenPaperWidth('58mm')}
+                          className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all cursor-pointer ${
+                            kitchenPaperWidth === '58mm'
+                              ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] shadow-md font-black'
+                              : 'bg-[#222222] text-[#a8a29e] border-[#383838] hover:border-[#B77900]'
+                          }`}
+                        >
+                          <span>58 mm (Estrecho)</span>
+                          {kitchenPaperWidth === '58mm' && <Check className="w-4 h-4" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setKitchenPaperWidth('80mm')}
+                          className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all cursor-pointer ${
+                            kitchenPaperWidth === '80mm'
+                              ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] shadow-md font-black'
+                              : 'bg-[#222222] text-[#a8a29e] border-[#383838] hover:border-[#B77900]'
+                          }`}
+                        >
+                          <span>80 mm (Estándar POS)</span>
+                          {kitchenPaperWidth === '80mm' && <Check className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
                     <label className="flex items-start justify-between gap-3 p-3 rounded-xl bg-[#181818] border border-[#B77900]/40 hover:border-[#D6A21A] cursor-pointer transition-all">
                       <div className="flex items-start gap-2.5">
                         <Building2 className="w-4 h-4 text-[#D6A21A] shrink-0 mt-0.5" />
@@ -1389,7 +1467,7 @@ export const BranchesManagementView: React.FC = () => {
                             Incluir información del local en el ticket de cocina
                           </span>
                           <span className="text-[10px] text-[#a8a29e] block mt-0.5">
-                            Muestra logotipo, nombre comercial, NIT, dirección y celular. Desactívalo para ahorrar papel en cada comanda.
+                            Exclusivo para cocina (no afecta el logotipo ni datos de la Factura de Cobro). Desactívalo para ahorrar papel.
                           </span>
                           <span
                             className={`inline-block mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded-md border ${
@@ -1399,8 +1477,8 @@ export const BranchesManagementView: React.FC = () => {
                             }`}
                           >
                             {kitchenShowHeader
-                              ? 'Imprime datos del local'
-                              : 'Ahorro de papel activo (sin datos del local)'}
+                              ? 'Imprime datos del local en cocina'
+                              : 'Ahorro de papel activo en cocina (Cobro intacto)'}
                           </span>
                         </div>
                       </div>
@@ -1411,6 +1489,90 @@ export const BranchesManagementView: React.FC = () => {
                         className="w-4 h-4 accent-[#B77900] cursor-pointer mt-0.5 shrink-0"
                       />
                     </label>
+
+                    {/* Controles independientes del encabezado de Cocina cuando está habilitado */}
+                    {kitchenShowHeader && (
+                      <div className="p-3 rounded-xl bg-[#181818] border border-[#333333] space-y-2">
+                        <span className="text-[11px] font-bold text-[#D6A21A] block">
+                          Elementos del Local en Cocina (independientes de Cobro):
+                        </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div className="p-2.5 rounded-lg bg-[#222222] border border-[#333333] space-y-1.5">
+                            <label className="flex items-center justify-between cursor-pointer">
+                              <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar logotipo</span>
+                              <input
+                                type="checkbox"
+                                checked={kitchenShowLogo}
+                                onChange={(e) => setKitchenShowLogo(e.target.checked)}
+                                className="w-4 h-4 accent-[#B77900] cursor-pointer"
+                              />
+                            </label>
+                            {kitchenShowLogo && (
+                              <div className="grid grid-cols-3 gap-1 pt-1 border-t border-[#333333]">
+                                {[
+                                  { id: 'pequeno', label: 'Pequeño' },
+                                  { id: 'mediano', label: 'Mediano' },
+                                  { id: 'grande', label: 'Grande' },
+                                ].map((sz) => (
+                                  <button
+                                    key={sz.id}
+                                    type="button"
+                                    onClick={() => setKitchenLogoSize(sz.id as LogoSize)}
+                                    className={`py-1 px-1 rounded text-[10px] font-bold border cursor-pointer ${
+                                      kitchenLogoSize === sz.id
+                                        ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] font-black'
+                                        : 'bg-[#181818] text-[#a8a29e] border-[#383838]'
+                                    }`}
+                                  >
+                                    {sz.label}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          <label className="flex items-center justify-between p-2.5 rounded-lg bg-[#222222] border border-[#333333] cursor-pointer">
+                            <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar nombre</span>
+                            <input
+                              type="checkbox"
+                              checked={kitchenShowTradeName}
+                              onChange={(e) => setKitchenShowTradeName(e.target.checked)}
+                              className="w-4 h-4 accent-[#B77900] cursor-pointer"
+                            />
+                          </label>
+
+                          <label className="flex items-center justify-between p-2.5 rounded-lg bg-[#222222] border border-[#333333] cursor-pointer">
+                            <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar NIT</span>
+                            <input
+                              type="checkbox"
+                              checked={kitchenShowNit}
+                              onChange={(e) => setKitchenShowNit(e.target.checked)}
+                              className="w-4 h-4 accent-[#B77900] cursor-pointer"
+                            />
+                          </label>
+
+                          <label className="flex items-center justify-between p-2.5 rounded-lg bg-[#222222] border border-[#333333] cursor-pointer">
+                            <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar dirección</span>
+                            <input
+                              type="checkbox"
+                              checked={kitchenShowAddress}
+                              onChange={(e) => setKitchenShowAddress(e.target.checked)}
+                              className="w-4 h-4 accent-[#B77900] cursor-pointer"
+                            />
+                          </label>
+
+                          <label className="flex items-center justify-between p-2.5 rounded-lg bg-[#222222] border border-[#333333] cursor-pointer sm:col-span-2">
+                            <span className="text-xs font-semibold text-[#FFFDF5]">Mostrar celular / teléfono</span>
+                            <input
+                              type="checkbox"
+                              checked={kitchenShowPhone}
+                              onChange={(e) => setKitchenShowPhone(e.target.checked)}
+                              className="w-4 h-4 accent-[#B77900] cursor-pointer"
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="p-3 rounded-xl bg-[#181818] border border-[#333333] space-y-2">
@@ -1544,7 +1706,7 @@ export const BranchesManagementView: React.FC = () => {
                       <span>
                         {posConfigTab === 'cobro'
                           ? `Modelo POS de Cobro (${paperWidth} · ${receiptTitleFontSize}/${receiptBodyFontSize} pts):`
-                          : `Modelo POS de Cocina (${paperWidth} · ${kitchenTitleFontSize}/${kitchenBodyFontSize} pts · ${
+                          : `Modelo POS de Cocina (${kitchenPaperWidth} · ${kitchenTitleFontSize}/${kitchenBodyFontSize} pts · ${
                               kitchenShowHeader ? 'Con info local' : 'Sin info local / ahorro papel'
                             }):`}
                       </span>
@@ -1613,16 +1775,16 @@ export const BranchesManagementView: React.FC = () => {
                               phone,
                               logoUrl,
                               printConfig: {
-                                showLogo,
-                                logoSize,
-                                showTradeName,
-                                showNit,
-                                showAddress,
-                                showPhone,
-                                paperWidth,
+                                showLogo: kitchenShowLogo,
+                                logoSize: kitchenLogoSize,
+                                showTradeName: kitchenShowTradeName,
+                                showNit: kitchenShowNit,
+                                showAddress: kitchenShowAddress,
+                                showPhone: kitchenShowPhone,
+                                paperWidth: kitchenPaperWidth,
                               },
                             }}
-                            paperWidth={paperWidth}
+                            paperWidth={kitchenPaperWidth}
                             titleFontSize={kitchenTitleFontSize}
                             bodyFontSize={kitchenBodyFontSize}
                           />
@@ -1833,11 +1995,30 @@ export const BranchesManagementView: React.FC = () => {
               setShowAddress(cfg.showAddress);
               setShowPhone(cfg.showPhone);
               setPaperWidth(cfg.paperWidth);
+              if (cfg.kitchenPaperWidth) setKitchenPaperWidth(cfg.kitchenPaperWidth);
               if (typeof cfg.includeKitchenPrices === 'boolean') {
                 setIncludeKitchenPrices(cfg.includeKitchenPrices);
               }
               if (typeof cfg.kitchenShowHeader === 'boolean') {
                 setKitchenShowHeader(cfg.kitchenShowHeader);
+              }
+              if (typeof cfg.kitchenShowLogo === 'boolean') {
+                setKitchenShowLogo(cfg.kitchenShowLogo);
+              }
+              if (cfg.kitchenLogoSize) {
+                setKitchenLogoSize(cfg.kitchenLogoSize);
+              }
+              if (typeof cfg.kitchenShowTradeName === 'boolean') {
+                setKitchenShowTradeName(cfg.kitchenShowTradeName);
+              }
+              if (typeof cfg.kitchenShowNit === 'boolean') {
+                setKitchenShowNit(cfg.kitchenShowNit);
+              }
+              if (typeof cfg.kitchenShowAddress === 'boolean') {
+                setKitchenShowAddress(cfg.kitchenShowAddress);
+              }
+              if (typeof cfg.kitchenShowPhone === 'boolean') {
+                setKitchenShowPhone(cfg.kitchenShowPhone);
               }
               if (typeof cfg.receiptTitleFontSize === 'number') {
                 setReceiptTitleFontSize(cfg.receiptTitleFontSize);

@@ -238,11 +238,25 @@ export async function waitForPrintableImages(
 }
 
 /**
- * Asegura la decodificación completa de imágenes/logotipos de la tirilla y ejecuta `window.print()`.
+ * Asegura la decodificación completa de imágenes/logotipos de la tirilla,
+ * restablece el scroll superior para no recortar el encabezado y ejecuta `window.print()`.
  */
 export async function printPosTicket(
   containerSelector: string = '.colmena-printable-ticket'
 ): Promise<void> {
+  if (typeof document !== 'undefined') {
+    const ticketEl = document.querySelector(containerSelector);
+    let el: HTMLElement | null = ticketEl as HTMLElement | null;
+    while (el) {
+      if (el.scrollTop > 0) {
+        el.scrollTop = 0;
+      }
+      el = el.parentElement;
+    }
+    if (typeof window !== 'undefined') {
+      window.scrollTo(0, 0);
+    }
+  }
   await waitForPrintableImages(containerSelector);
   window.print();
 }

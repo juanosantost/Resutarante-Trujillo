@@ -7,7 +7,10 @@ import { useAuth } from '../../context/AuthContext';
 import { BranchReceiptHeader } from '../common/BranchReceiptHeader';
 import { filterReceiptItems } from '../../utils/checkoutCalculations';
 import { formatModifiersDisplaySummary } from '../../utils/orderModifierUtils';
-import { resolveBranchPrintConfig } from '../../utils/printConfigUtils';
+import {
+  resolveBranchPrintConfig,
+  buildReceiptHeaderPrintConfig,
+} from '../../utils/printConfigUtils';
 import { printPosTicket } from '../../utils/thermalPrintUtils';
 import { Printer, X, CheckCircle } from 'lucide-react';
 
@@ -68,12 +71,11 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
     originatingBranch?.printConfig,
     snapshot?.printConfig
   );
-  const paperWidth = resolvedPrintConfig.paperWidth || '80mm';
+  const receiptHeaderPrintConfig = buildReceiptHeaderPrintConfig(resolvedPrintConfig);
+  const paperWidth = receiptHeaderPrintConfig.paperWidth || '80mm';
   const is58mm = paperWidth === '58mm';
-  const titleFontSize =
-    originatingBranch?.printConfig?.receiptTitleFontSize ?? resolvedPrintConfig.receiptTitleFontSize;
-  const bodyFontSize =
-    originatingBranch?.printConfig?.receiptBodyFontSize ?? resolvedPrintConfig.receiptBodyFontSize;
+  const titleFontSize = resolvedPrintConfig.receiptTitleFontSize;
+  const bodyFontSize = resolvedPrintConfig.receiptBodyFontSize;
   const titleStyle: React.CSSProperties = { fontSize: `${titleFontSize}px`, lineHeight: 1.25 };
   const bodyStyle: React.CSSProperties = { fontSize: `${bodyFontSize}px`, lineHeight: 1.3 };
 
@@ -139,7 +141,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                 snapshot={snapshot}
                 overrideData={{
                   logoUrl: resolvedLogoUrl,
-                  printConfig: resolvedPrintConfig,
+                  printConfig: receiptHeaderPrintConfig,
                 }}
                 paperWidth={paperWidth}
                 showDianResolution={false}
