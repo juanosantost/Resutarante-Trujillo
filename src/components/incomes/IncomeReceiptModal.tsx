@@ -124,7 +124,7 @@ export const IncomeReceiptModal: React.FC<IncomeReceiptModalProps> = ({
         <div className="p-4 sm:p-6 overflow-y-auto flex-1 bg-[#121214] flex justify-center print:block print:p-0 print:bg-white print:overflow-visible">
           <div
             data-paper-width={paperWidth}
-            className={`colmena-printable-ticket bg-[#FFFDF5] text-[#181818] p-5 rounded-2xl shadow-xl font-mono text-xs border border-amber-900/30 transition-all print:shadow-none print:border-none print:p-0 ${
+            className={`colmena-printable-ticket bg-[#FFFDF5] text-[#181818] p-5 rounded-2xl shadow-xl font-mono text-xs border border-amber-900/30 print:shadow-none print:border-none print:p-0 ${
               paperWidth === '58mm' ? 'w-[280px]' : 'w-[360px]'
             }`}
           >

@@ -701,7 +701,7 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
                 data-testid="pos-ticket-preview"
                 data-paper-width={selectedWidth}
                 style={{ fontSize: `${receiptBodyPts}px`, lineHeight: 1.3 }}
-                className={`colmena-printable-ticket bg-white text-black font-mono shadow-2xl rounded-sm p-4 sm:p-5 border-t-8 border-b-8 border-dashed border-[#e7e5e4] transition-all select-all print:shadow-none print:border-none print:m-0 print:p-0 ${
+                className={`colmena-printable-ticket bg-white text-black font-mono shadow-2xl rounded-sm p-4 sm:p-5 border-t-8 border-b-8 border-dashed border-[#e7e5e4] select-all print:shadow-none print:border-none print:m-0 print:p-0 ${
                   is58mm ? 'w-full max-w-[270px]' : 'w-full max-w-[360px]'
                 }`}
               >
@@ -850,7 +850,7 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
                 data-testid="kitchen-ticket-preview"
                 data-paper-width={selectedWidth}
                 style={{ fontSize: `${kitchenBodyPts}px`, lineHeight: 1.25 }}
-                className={`colmena-printable-ticket bg-white text-black font-mono shadow-2xl rounded-sm p-4 sm:p-5 border-t-8 border-b-8 border-dashed border-[#e7e5e4] transition-all select-all print:shadow-none print:border-none print:m-0 print:p-0 ${
+                className={`colmena-printable-ticket bg-white text-black font-mono shadow-2xl rounded-sm p-4 sm:p-5 border-t-8 border-b-8 border-dashed border-[#e7e5e4] select-all print:shadow-none print:border-none print:m-0 print:p-0 ${
                   is58mm ? 'w-full max-w-[270px]' : 'w-full max-w-[360px]'
                 }`}
               >

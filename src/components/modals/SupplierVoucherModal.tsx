@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Branch, BranchReceiptSnapshot } from '../../types';
 import { BranchReceiptHeader } from '../common/BranchReceiptHeader';
+import { printPosTicket } from '../../utils/thermalPrintUtils';
 import { formatCOP, formatColombiaDateTime } from '../../utils/calculations';
 import { Printer, X, ShieldAlert } from 'lucide-react';
 
@@ -59,7 +60,7 @@ export const SupplierVoucherModal: React.FC<SupplierVoucherModalProps> = ({
   const is58mm = paperWidth === '58mm';
 
   const handlePrint = () => {
-    window.print();
+    void printPosTicket('#thermal-supplier-voucher');
   };
 
   const getTitle = () => {
@@ -116,6 +117,7 @@ export const SupplierVoucherModal: React.FC<SupplierVoucherModalProps> = ({
 
         {/* Contenido Imprimible (Tirilla Térmica POS) */}
         <div
+          id="thermal-supplier-voucher"
           data-paper-width={paperWidth}
           className={`colmena-printable-ticket p-6 bg-white text-black font-mono text-xs shadow-inner mx-auto ${is58mm ? 'max-w-[240px]' : 'max-w-[320px]'} relative`}
         >
