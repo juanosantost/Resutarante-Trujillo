@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useAuth, DEFAULT_RECEIPT_CONFIG } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { Branch, ReceiptConfig, BranchPrintConfig, DEFAULT_BRANCH_PRINT_CONFIG, PaperWidth, KitchenFontSize, LogoSize } from '../../types';
+import { Branch, ReceiptConfig, BranchPrintConfig, DEFAULT_BRANCH_PRINT_CONFIG, PaperWidth, KitchenFontSize, LogoSize, LogoPrintMode } from '../../types';
 import { BranchReceiptHeader } from '../common/BranchReceiptHeader';
 import { BranchReceiptPreviewModal, PreviewPosMode } from '../modals/BranchReceiptPreviewModal';
 import { formatColombiaDateTime } from '../../utils/calculations';
@@ -81,6 +81,7 @@ export const BranchesManagementView: React.FC = () => {
   // -- POS de Cobro (Factura)
   const [showLogo, setShowLogo] = useState<boolean>(true);
   const [logoSize, setLogoSize] = useState<LogoSize>('mediano');
+  const [logoPrintMode, setLogoPrintMode] = useState<LogoPrintMode>('escala_grises');
   const [showTradeName, setShowTradeName] = useState<boolean>(true);
   const [showNit, setShowNit] = useState<boolean>(true);
   const [showAddress, setShowAddress] = useState<boolean>(true);
@@ -97,6 +98,7 @@ export const BranchesManagementView: React.FC = () => {
   const [kitchenShowHeader, setKitchenShowHeader] = useState<boolean>(true);
   const [kitchenShowLogo, setKitchenShowLogo] = useState<boolean>(true);
   const [kitchenLogoSize, setKitchenLogoSize] = useState<LogoSize>('mediano');
+  const [kitchenLogoPrintMode, setKitchenLogoPrintMode] = useState<LogoPrintMode>('escala_grises');
   const [kitchenShowTradeName, setKitchenShowTradeName] = useState<boolean>(true);
   const [kitchenShowNit, setKitchenShowNit] = useState<boolean>(true);
   const [kitchenShowAddress, setKitchenShowAddress] = useState<boolean>(true);
@@ -138,6 +140,7 @@ export const BranchesManagementView: React.FC = () => {
     setPosConfigTab('cobro');
     setShowLogo(true);
     setLogoSize('mediano');
+    setLogoPrintMode('escala_grises');
     setShowTradeName(true);
     setShowNit(true);
     setShowAddress(true);
@@ -153,6 +156,7 @@ export const BranchesManagementView: React.FC = () => {
     setKitchenShowHeader(true);
     setKitchenShowLogo(true);
     setKitchenLogoSize('mediano');
+    setKitchenLogoPrintMode('escala_grises');
     setKitchenShowTradeName(true);
     setKitchenShowNit(true);
     setKitchenShowAddress(true);
@@ -192,6 +196,7 @@ export const BranchesManagementView: React.FC = () => {
     setPosConfigTab('cobro');
     setShowLogo(resolvedPrint.showLogo);
     setLogoSize(resolvedPrint.logoSize);
+    setLogoPrintMode(resolvedPrint.logoPrintMode);
     setShowTradeName(resolvedPrint.showTradeName);
     setShowNit(resolvedPrint.showNit);
     setShowAddress(resolvedPrint.showAddress);
@@ -207,6 +212,7 @@ export const BranchesManagementView: React.FC = () => {
     setKitchenShowHeader(resolvedPrint.kitchenShowHeader);
     setKitchenShowLogo(resolvedPrint.kitchenShowLogo);
     setKitchenLogoSize(resolvedPrint.kitchenLogoSize);
+    setKitchenLogoPrintMode(resolvedPrint.kitchenLogoPrintMode);
     setKitchenShowTradeName(resolvedPrint.kitchenShowTradeName);
     setKitchenShowNit(resolvedPrint.kitchenShowNit);
     setKitchenShowAddress(resolvedPrint.kitchenShowAddress);
@@ -307,6 +313,7 @@ export const BranchesManagementView: React.FC = () => {
       const printConfig: BranchPrintConfig = {
         showLogo,
         logoSize,
+        logoPrintMode,
         showTradeName,
         showNit,
         showAddress,
@@ -322,6 +329,7 @@ export const BranchesManagementView: React.FC = () => {
         kitchenShowHeader,
         kitchenShowLogo,
         kitchenLogoSize,
+        kitchenLogoPrintMode,
         kitchenShowTradeName,
         kitchenShowNit,
         kitchenShowAddress,
@@ -420,6 +428,7 @@ export const BranchesManagementView: React.FC = () => {
       printConfig: {
         showLogo,
         logoSize,
+        logoPrintMode,
         showTradeName,
         showNit,
         showAddress,
@@ -435,6 +444,7 @@ export const BranchesManagementView: React.FC = () => {
         kitchenShowHeader,
         kitchenShowLogo,
         kitchenLogoSize,
+        kitchenLogoPrintMode,
         kitchenShowTradeName,
         kitchenShowNit,
         kitchenShowAddress,
@@ -1319,30 +1329,67 @@ export const BranchesManagementView: React.FC = () => {
                             />
                           </label>
                           {showLogo && (
-                            <div className="pt-2 border-t border-[#333333] space-y-1">
-                              <div className="flex justify-between items-center text-[10px] text-[#a8a29e]">
-                                <span className="text-[#D6A21A] font-bold">Tamaño de Impresión:</span>
-                                <span className="capitalize text-[#FFFDF5] font-semibold">{logoSize}</span>
+                            <div className="pt-2 border-t border-[#333333] space-y-2">
+                              <div className="space-y-1">
+                                <div className="flex justify-between items-center text-[10px] text-[#a8a29e]">
+                                  <span className="text-[#D6A21A] font-bold">Tamaño de Impresión:</span>
+                                  <span className="capitalize text-[#FFFDF5] font-semibold">{logoSize}</span>
+                                </div>
+                                <div className="grid grid-cols-3 gap-1">
+                                  {[
+                                    { id: 'pequeno', label: 'Pequeño' },
+                                    { id: 'mediano', label: 'Mediano' },
+                                    { id: 'grande', label: 'Grande' },
+                                  ].map((sz) => (
+                                    <button
+                                      key={sz.id}
+                                      type="button"
+                                      onClick={() => setLogoSize(sz.id as LogoSize)}
+                                      className={`py-1 px-1.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
+                                        logoSize === sz.id
+                                          ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] font-black shadow-sm'
+                                          : 'bg-[#181818] text-[#a8a29e] border-[#383838] hover:border-[#B77900]'
+                                      }`}
+                                    >
+                                      {sz.label}
+                                    </button>
+                                  ))}
+                                </div>
                               </div>
-                              <div className="grid grid-cols-3 gap-1">
-                                {[
-                                  { id: 'pequeno', label: 'Pequeño' },
-                                  { id: 'mediano', label: 'Mediano' },
-                                  { id: 'grande', label: 'Grande' },
-                                ].map((sz) => (
-                                  <button
-                                    key={sz.id}
-                                    type="button"
-                                    onClick={() => setLogoSize(sz.id as LogoSize)}
-                                    className={`py-1 px-1.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
-                                      logoSize === sz.id
-                                        ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] font-black shadow-sm'
-                                        : 'bg-[#181818] text-[#a8a29e] border-[#383838] hover:border-[#B77900]'
-                                    }`}
-                                  >
-                                    {sz.label}
-                                  </button>
-                                ))}
+                              <div className="space-y-1 pt-1.5 border-t border-[#2e2e2e]">
+                                <div className="flex justify-between items-center text-[10px] text-[#a8a29e]">
+                                  <span className="text-[#D6A21A] font-bold">Estilo Térmico:</span>
+                                  <span className="text-[#FFFDF5] font-semibold">
+                                    {logoPrintMode === 'escala_grises'
+                                      ? 'Escala de grises'
+                                      : logoPrintMode === 'termico_bn'
+                                      ? 'Térmico B/N'
+                                      : logoPrintMode === 'alto_contraste'
+                                      ? 'Silueta limpia'
+                                      : 'Original'}
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-1">
+                                  {[
+                                    { id: 'escala_grises', label: 'Escala de grises' },
+                                    { id: 'termico_bn', label: 'Térmico B/N' },
+                                    { id: 'alto_contraste', label: 'Silueta limpia' },
+                                    { id: 'original', label: 'Original' },
+                                  ].map((m) => (
+                                    <button
+                                      key={m.id}
+                                      type="button"
+                                      onClick={() => setLogoPrintMode(m.id as LogoPrintMode)}
+                                      className={`py-1 px-1.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
+                                        logoPrintMode === m.id
+                                          ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] font-black shadow-sm'
+                                          : 'bg-[#181818] text-[#a8a29e] border-[#383838] hover:border-[#B77900]'
+                                      }`}
+                                    >
+                                      {m.label}
+                                    </button>
+                                  ))}
+                                </div>
                               </div>
                             </div>
                           )}
@@ -1508,25 +1555,48 @@ export const BranchesManagementView: React.FC = () => {
                               />
                             </label>
                             {kitchenShowLogo && (
-                              <div className="grid grid-cols-3 gap-1 pt-1 border-t border-[#333333]">
-                                {[
-                                  { id: 'pequeno', label: 'Pequeño' },
-                                  { id: 'mediano', label: 'Mediano' },
-                                  { id: 'grande', label: 'Grande' },
-                                ].map((sz) => (
-                                  <button
-                                    key={sz.id}
-                                    type="button"
-                                    onClick={() => setKitchenLogoSize(sz.id as LogoSize)}
-                                    className={`py-1 px-1 rounded text-[10px] font-bold border cursor-pointer ${
-                                      kitchenLogoSize === sz.id
-                                        ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] font-black'
-                                        : 'bg-[#181818] text-[#a8a29e] border-[#383838]'
-                                    }`}
-                                  >
-                                    {sz.label}
-                                  </button>
-                                ))}
+                              <div className="space-y-1.5 pt-1 border-t border-[#333333]">
+                                <div className="grid grid-cols-3 gap-1">
+                                  {[
+                                    { id: 'pequeno', label: 'Pequeño' },
+                                    { id: 'mediano', label: 'Mediano' },
+                                    { id: 'grande', label: 'Grande' },
+                                  ].map((sz) => (
+                                    <button
+                                      key={sz.id}
+                                      type="button"
+                                      onClick={() => setKitchenLogoSize(sz.id as LogoSize)}
+                                      className={`py-1 px-1 rounded text-[10px] font-bold border cursor-pointer ${
+                                        kitchenLogoSize === sz.id
+                                          ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] font-black'
+                                          : 'bg-[#181818] text-[#a8a29e] border-[#383838]'
+                                      }`}
+                                    >
+                                      {sz.label}
+                                    </button>
+                                  ))}
+                                </div>
+                                <div className="grid grid-cols-2 gap-1">
+                                  {[
+                                    { id: 'escala_grises', label: 'Escala grises' },
+                                    { id: 'termico_bn', label: 'Térmico B/N' },
+                                    { id: 'alto_contraste', label: 'Silueta limpia' },
+                                    { id: 'original', label: 'Original' },
+                                  ].map((m) => (
+                                    <button
+                                      key={m.id}
+                                      type="button"
+                                      onClick={() => setKitchenLogoPrintMode(m.id as LogoPrintMode)}
+                                      className={`py-1 px-1 rounded text-[9.5px] font-bold border cursor-pointer ${
+                                        kitchenLogoPrintMode === m.id
+                                          ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] font-black'
+                                          : 'bg-[#181818] text-[#a8a29e] border-[#383838]'
+                                      }`}
+                                    >
+                                      {m.label}
+                                    </button>
+                                  ))}
+                                </div>
                               </div>
                             )}
                           </div>
@@ -1735,6 +1805,7 @@ export const BranchesManagementView: React.FC = () => {
                           printConfig: {
                             showLogo,
                             logoSize,
+                            logoPrintMode,
                             showTradeName,
                             showNit,
                             showAddress,
@@ -1777,6 +1848,7 @@ export const BranchesManagementView: React.FC = () => {
                               printConfig: {
                                 showLogo: kitchenShowLogo,
                                 logoSize: kitchenLogoSize,
+                                logoPrintMode: kitchenLogoPrintMode,
                                 showTradeName: kitchenShowTradeName,
                                 showNit: kitchenShowNit,
                                 showAddress: kitchenShowAddress,
@@ -1990,6 +2062,7 @@ export const BranchesManagementView: React.FC = () => {
             if (isModalOpen) {
               setShowLogo(cfg.showLogo);
               if (cfg.logoSize) setLogoSize(cfg.logoSize);
+              if (cfg.logoPrintMode) setLogoPrintMode(cfg.logoPrintMode);
               setShowTradeName(cfg.showTradeName);
               setShowNit(cfg.showNit);
               setShowAddress(cfg.showAddress);
@@ -2007,6 +2080,9 @@ export const BranchesManagementView: React.FC = () => {
               }
               if (cfg.kitchenLogoSize) {
                 setKitchenLogoSize(cfg.kitchenLogoSize);
+              }
+              if (cfg.kitchenLogoPrintMode) {
+                setKitchenLogoPrintMode(cfg.kitchenLogoPrintMode);
               }
               if (typeof cfg.kitchenShowTradeName === 'boolean') {
                 setKitchenShowTradeName(cfg.kitchenShowTradeName);

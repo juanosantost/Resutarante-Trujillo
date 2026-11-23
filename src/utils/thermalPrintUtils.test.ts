@@ -2,6 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   computeThermalPixelValue,
+  computeGrayscaleThermalPixel,
+  applyAtkinsonDithering,
+  applyCleanSilhouetteThreshold,
+  processLogoPixelsForMode,
   detectLightOnTransparentLogo,
   getThermalPrintableWidthMm,
   buildThermalPrintDocumentHtml,
@@ -25,6 +29,53 @@ test('oscurece colores de marca (ej. dorado Colmena #D6A21A y #B77900) para impr
   assert.ok(colmenaGoldLight < 60, `Expected < 60, got ${colmenaGoldLight}`);
   assert.ok(colmenaGoldDark < 40, `Expected < 40, got ${colmenaGoldDark}`);
   assert.ok(brightYellow < 80, `Expected < 80, got ${brightYellow}`);
+});
+
+test('computeGrayscaleThermalPixel genera escala de grises equilibrada sin empastar colores ni ensuciar el fondo', () => {
+  // Fondo casi blanco y transparente se limpian a blanco puro (255)
+  assert.equal(computeGrayscaleThermalPixel(240, 238, 232, 255, false), 255);
+  assert.equal(computeGrayscaleThermalPixel(0, 0, 0, 0, false), 255);
+  // Negro puro se mantiene en 0
+  assert.equal(computeGrayscaleThermalPixel(0, 0, 0, 255, false), 0);
+  // Color verde/amarillo vivo permanece en tono gris medio abierto (no aplastado a negro)
+  const warmLeaf = computeGrayscaleThermalPixel(140, 175, 70, 255, false);
+  assert.ok(warmLeaf > 120 && warmLeaf < 230, `Expected balanced mid-gray, got ${warmLeaf}`);
+});
+
+test('applyAtkinsonDithering produce salida estricta 1-bit (0 o 255) sin ensuciar blancos', () => {
+  const whiteGrid = new Uint8ClampedArray(16).fill(255);
+  const ditheredWhite = applyAtkinsonDithering(whiteGrid, 4, 4);
+  assert.ok(Array.from(ditheredWhite).every((v) => v === 255));
+
+  const midGrayGrid = new Uint8ClampedArray(16).fill(140);
+  const ditheredMid = applyAtkinsonDithering(midGrayGrid, 4, 4);
+  assert.ok(Array.from(ditheredMid).every((v) => v === 0 || v === 255));
+  const blacks = Array.from(ditheredMid).filter((v) => v === 0).length;
+  const whites = Array.from(ditheredMid).filter((v) => v === 255).length;
+  assert.ok(blacks > 0 && whites > 0, `Expected mixed 1-bit pattern, got ${blacks}B/${whites}W`);
+});
+
+test('applyCleanSilhouetteThreshold limpia tonos claros y deja solo trazos oscuros', () => {
+  const res = applyCleanSilhouetteThreshold(new Uint8ClampedArray([20, 110, 160, 240]), 148);
+  assert.deepEqual(Array.from(res), [0, 0, 255, 255]);
+});
+
+test('processLogoPixelsForMode convierte colores a escala de grises opaca (R=G=B, A=255)', () => {
+  const pixels = new Uint8ClampedArray([
+    220, 40, 30, 255,   // rojo
+    40, 180, 70, 255,   // verde
+    250, 250, 250, 255, // fondo blanco
+    0, 0, 0, 0,         // transparente
+  ]);
+  processLogoPixelsForMode(pixels, 2, 2, 'escala_grises');
+  for (let i = 0; i < pixels.length; i += 4) {
+    assert.equal(pixels[i], pixels[i + 1]);
+    assert.equal(pixels[i + 1], pixels[i + 2]);
+    assert.equal(pixels[i + 3], 255);
+  }
+  // Fondo blanco y transparente deben quedar en 255
+  assert.equal(pixels[8], 255);
+  assert.equal(pixels[12], 255);
 });
 
 test('detecta e invierte logotipos blancos sobre fondo transparente a tinta oscura imprimible', () => {

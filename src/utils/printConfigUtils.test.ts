@@ -99,3 +99,16 @@ test('hiding logo and local info in POS Cocina does NOT affect POS Cobro header 
   assert.equal(cocinaHeader.showPhone, false);
   assert.equal(cocinaHeader.paperWidth, '58mm');
 });
+
+test('logoPrintMode defaults to escala_grises and stays independent between POS Cobro and POS Cocina', () => {
+  const defaults = resolveBranchPrintConfig(undefined, undefined);
+  assert.equal(defaults.logoPrintMode, 'escala_grises');
+  assert.equal(defaults.kitchenLogoPrintMode, 'escala_grises');
+
+  const custom = resolveBranchPrintConfig({
+    logoPrintMode: 'termico_bn',
+    kitchenLogoPrintMode: 'alto_contraste',
+  });
+  assert.equal(buildReceiptHeaderPrintConfig(custom).logoPrintMode, 'termico_bn');
+  assert.equal(buildKitchenHeaderPrintConfig(custom).logoPrintMode, 'alto_contraste');
+});

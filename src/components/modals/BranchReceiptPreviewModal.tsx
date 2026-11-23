@@ -5,6 +5,7 @@ import {
   BranchPrintConfig,
   PaperWidth,
   LogoSize,
+  LogoPrintMode,
 } from '../../types';
 import { BranchReceiptHeader } from '../common/BranchReceiptHeader';
 import { formatCOP } from '../../utils/calculations';
@@ -241,6 +242,20 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
     }
   };
 
+  const handleLogoPrintModeChange = (mode: LogoPrintMode) => {
+    if (previewMode === 'cobro') {
+      applyConfigUpdate({
+        ...resolvedActive,
+        logoPrintMode: mode,
+      });
+    } else {
+      applyConfigUpdate({
+        ...resolvedActive,
+        kitchenLogoPrintMode: mode,
+      });
+    }
+  };
+
   const handleFontSizeChange = (
     key:
       | 'receiptTitleFontSize'
@@ -309,6 +324,8 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
     previewMode === 'cobro' ? resolvedActive.showLogo : resolvedActive.kitchenShowLogo;
   const currentLogoSize: LogoSize =
     previewMode === 'cobro' ? resolvedActive.logoSize : resolvedActive.kitchenLogoSize;
+  const currentLogoPrintMode: LogoPrintMode =
+    previewMode === 'cobro' ? resolvedActive.logoPrintMode : resolvedActive.kitchenLogoPrintMode;
   const currentShowTradeName =
     previewMode === 'cobro' ? resolvedActive.showTradeName : resolvedActive.kitchenShowTradeName;
   const currentShowNit =
@@ -572,32 +589,73 @@ export const BranchReceiptPreviewModal: React.FC<BranchReceiptPreviewModalProps>
                     </label>
 
                     {currentShowLogo && (
-                      <div className="p-2 rounded-xl bg-[#151515] border border-[#2e2e2e] space-y-1">
-                        <div className="flex justify-between items-center text-[10px] text-[#a8a29e] px-0.5">
-                          <span className="font-bold text-[#D6A21A]">Tamaño del Logotipo:</span>
-                          <span className="capitalize text-[#FFFDF5] font-semibold">
-                            {currentLogoSize}
-                          </span>
+                      <div className="p-2 rounded-xl bg-[#151515] border border-[#2e2e2e] space-y-2">
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center text-[10px] text-[#a8a29e] px-0.5">
+                            <span className="font-bold text-[#D6A21A]">Tamaño del Logotipo:</span>
+                            <span className="capitalize text-[#FFFDF5] font-semibold">
+                              {currentLogoSize}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-1">
+                            {[
+                              { id: 'pequeno', label: 'Pequeño' },
+                              { id: 'mediano', label: 'Mediano' },
+                              { id: 'grande', label: 'Grande' },
+                            ].map((sz) => (
+                              <button
+                                key={sz.id}
+                                type="button"
+                                onClick={() => handleLogoSizeChange(sz.id as LogoSize)}
+                                className={`py-1 px-1.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
+                                  currentLogoSize === sz.id
+                                    ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] font-black shadow-sm'
+                                    : 'bg-[#202020] text-[#a8a29e] border-[#383838] hover:border-[#B77900]'
+                                }`}
+                              >
+                                {sz.label}
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                        <div className="grid grid-cols-3 gap-1">
-                          {[
-                            { id: 'pequeno', label: 'Pequeño' },
-                            { id: 'mediano', label: 'Mediano' },
-                            { id: 'grande', label: 'Grande' },
-                          ].map((sz) => (
-                            <button
-                              key={sz.id}
-                              type="button"
-                              onClick={() => handleLogoSizeChange(sz.id as LogoSize)}
-                              className={`py-1 px-1.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
-                                currentLogoSize === sz.id
-                                  ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] font-black shadow-sm'
-                                  : 'bg-[#202020] text-[#a8a29e] border-[#383838] hover:border-[#B77900]'
-                              }`}
-                            >
-                              {sz.label}
-                            </button>
-                          ))}
+
+                        <div className="space-y-1 pt-1.5 border-t border-[#2a2a2a]">
+                          <div className="flex justify-between items-center text-[10px] text-[#a8a29e] px-0.5">
+                            <span className="font-bold text-[#D6A21A]">Estilo Térmico del Logo:</span>
+                            <span className="text-[#FFFDF5] font-semibold">
+                              {currentLogoPrintMode === 'escala_grises'
+                                ? 'Escala de grises'
+                                : currentLogoPrintMode === 'termico_bn'
+                                ? 'Térmico B/N'
+                                : currentLogoPrintMode === 'alto_contraste'
+                                ? 'Silueta limpia'
+                                : 'Original'}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-1">
+                            {[
+                              { id: 'escala_grises', label: 'Escala de grises' },
+                              { id: 'termico_bn', label: 'Térmico B/N' },
+                              { id: 'alto_contraste', label: 'Silueta limpia' },
+                              { id: 'original', label: 'Original' },
+                            ].map((m) => (
+                              <button
+                                key={m.id}
+                                type="button"
+                                onClick={() => handleLogoPrintModeChange(m.id as LogoPrintMode)}
+                                className={`py-1 px-1.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
+                                  currentLogoPrintMode === m.id
+                                    ? 'bg-[#B77900] text-[#181818] border-[#D6A21A] font-black shadow-sm'
+                                    : 'bg-[#202020] text-[#a8a29e] border-[#383838] hover:border-[#B77900]'
+                                }`}
+                              >
+                                {m.label}
+                              </button>
+                            ))}
+                          </div>
+                          <p className="text-[9.5px] text-[#a8a29e] leading-snug px-0.5">
+                            Escala de grises y Térmico B/N suavizan colores cargados para imprimir nítido en la JAL-821.
+                          </p>
                         </div>
                       </div>
                     )}

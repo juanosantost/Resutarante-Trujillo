@@ -51,11 +51,13 @@ export interface ReceiptConfig {
 export type PaperWidth = '58mm' | '80mm';
 export type KitchenFontSize = 'compacto' | 'grande' | 'extragrande';
 export type LogoSize = 'pequeno' | 'mediano' | 'grande';
+export type LogoPrintMode = 'escala_grises' | 'termico_bn' | 'alto_contraste' | 'original';
 
 export interface BranchPrintConfig {
   // Configuración exclusiva de POS de Cobro (Factura)
   showLogo: boolean;
   logoSize?: LogoSize;
+  logoPrintMode?: LogoPrintMode;
   showTradeName: boolean;
   showNit: boolean;
   showAddress: boolean;
@@ -73,6 +75,7 @@ export interface BranchPrintConfig {
   kitchenShowHeader?: boolean;
   kitchenShowLogo?: boolean;
   kitchenLogoSize?: LogoSize;
+  kitchenLogoPrintMode?: LogoPrintMode;
   kitchenShowTradeName?: boolean;
   kitchenShowNit?: boolean;
   kitchenShowAddress?: boolean;
@@ -82,6 +85,7 @@ export interface BranchPrintConfig {
 export const DEFAULT_BRANCH_PRINT_CONFIG: BranchPrintConfig = {
   showLogo: true,
   logoSize: 'mediano',
+  logoPrintMode: 'escala_grises',
   showTradeName: true,
   showNit: true,
   showAddress: true,
@@ -97,6 +101,7 @@ export const DEFAULT_BRANCH_PRINT_CONFIG: BranchPrintConfig = {
   kitchenShowHeader: true,
   kitchenShowLogo: true,
   kitchenLogoSize: 'mediano',
+  kitchenLogoPrintMode: 'escala_grises',
   kitchenShowTradeName: true,
   kitchenShowNit: true,
   kitchenShowAddress: true,

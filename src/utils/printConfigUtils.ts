@@ -55,6 +55,11 @@ export function resolveBranchPrintConfig(
       snapshotConfig?.logoSize ??
       DEFAULT_BRANCH_PRINT_CONFIG.logoSize ??
       'mediano',
+    logoPrintMode:
+      branchConfig?.logoPrintMode ??
+      snapshotConfig?.logoPrintMode ??
+      DEFAULT_BRANCH_PRINT_CONFIG.logoPrintMode ??
+      'escala_grises',
     showTradeName:
       branchConfig?.showTradeName ??
       snapshotConfig?.showTradeName ??
@@ -112,6 +117,11 @@ export function resolveBranchPrintConfig(
       snapshotConfig?.kitchenLogoSize ??
       DEFAULT_BRANCH_PRINT_CONFIG.kitchenLogoSize ??
       'mediano',
+    kitchenLogoPrintMode:
+      branchConfig?.kitchenLogoPrintMode ??
+      snapshotConfig?.kitchenLogoPrintMode ??
+      DEFAULT_BRANCH_PRINT_CONFIG.kitchenLogoPrintMode ??
+      'escala_grises',
     kitchenShowTradeName:
       branchConfig?.kitchenShowTradeName ??
       snapshotConfig?.kitchenShowTradeName ??
@@ -146,6 +156,7 @@ export function buildReceiptHeaderPrintConfig(
   return {
     showLogo: resolved.showLogo,
     logoSize: resolved.logoSize,
+    logoPrintMode: resolved.logoPrintMode,
     showTradeName: resolved.showTradeName,
     showNit: resolved.showNit,
     showAddress: resolved.showAddress,
@@ -168,6 +179,7 @@ export function buildKitchenHeaderPrintConfig(
   return {
     showLogo: enabled && resolved.kitchenShowLogo,
     logoSize: resolved.kitchenLogoSize,
+    logoPrintMode: resolved.kitchenLogoPrintMode,
     showTradeName: enabled && resolved.kitchenShowTradeName,
     showNit: enabled && resolved.kitchenShowNit,
     showAddress: enabled && resolved.kitchenShowAddress,

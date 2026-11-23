@@ -10,7 +10,7 @@
  * 4. Rasterización de logotipos a blanco y negro de alto contraste 100% opacos (sin transparencia ni colores claros que el cabezal 1-bit omita).
  */
 
-import type { PaperWidth } from '../types';
+import type { PaperWidth, LogoPrintMode } from '../types';
 
 const thermalLogoCache = new Map<string, string>();
 
@@ -57,7 +57,7 @@ export function detectLightOnTransparentLogo(data: Uint8ClampedArray): boolean {
 
 /**
  * Convierte un píxel RGBA en un valor de escala de grises (0 = negro puro, 255 = blanco puro)
- * optimizado para cabezales térmicos monocromáticos de 203 DPI (como Jaltech JAL-821).
+ * profundizando colores de marca (útil para sellos o logos dorados claros).
  */
 export function computeThermalPixelValue(
   r: number,
@@ -72,11 +72,9 @@ export function computeThermalPixelValue(
   }
 
   if (isLightOnTransparent) {
-    // Invertir trazos blancos/claros sobre fondo transparente a tinta oscura nítida
     return Math.max(0, Math.min(255, Math.round(255 * (1 - alpha * 0.95))));
   }
 
-  // Componer sobre fondo blanco puro (#FFFFFF) para eliminar canal alfa
   const cr = r * alpha + 255 * (1 - alpha);
   const cg = g * alpha + 255 * (1 - alpha);
   const cb = b * alpha + 255 * (1 - alpha);
@@ -84,12 +82,10 @@ export function computeThermalPixelValue(
   const luma = 0.299 * cr + 0.587 * cg + 0.114 * cb;
   const chroma = Math.max(cr, cg, cb) - Math.min(cr, cg, cb);
 
-  // Preservar fondo blanco / casi blanco limpio sin recuadros grises
   if (luma >= 242 && chroma < 18) {
     return 255;
   }
 
-  // Profundizar colores de marca (dorado, amarillo, rojo, azul, etc.) para que el cabezal 1-bit los queme en negro nítido
   const effectiveLuma = Math.max(0, luma - chroma * 0.55);
   const normalized = Math.min(1, effectiveLuma / 242);
   const darkened = Math.pow(normalized, 1.45) * 255;
@@ -98,15 +94,180 @@ export function computeThermalPixelValue(
 }
 
 /**
- * Prepara una versión opaca (fondo blanco puro, sin transparencia) y de alto contraste térmico
- * de un logotipo, devuelta como Data URL PNG lista para imprimir en impresoras térmicas 203 DPI.
- * Si por CORS o entorno no puede procesarse en Canvas, devuelve el `src` original de forma segura.
+ * Convierte un píxel RGBA a escala de grises limpia y equilibrada (Rec. 709) para impresión térmica.
+ * A diferencia del oscurecimiento agresivo, evita aplastar detalles/colores en manchas negras densas:
+ * - Limpia fondos casi blancos y ruido claro a blanco puro (255).
+ * - Conserva gradaciones suaves y aireadas para que letras finas y detalles respiren al imprimir.
  */
-export async function prepareThermalPrintLogo(src: string): Promise<string> {
+export function computeGrayscaleThermalPixel(
+  r: number,
+  g: number,
+  b: number,
+  a: number,
+  isLightOnTransparent: boolean
+): number {
+  const alpha = a / 255;
+  if (alpha < 0.08) {
+    return 255;
+  }
+
+  if (isLightOnTransparent) {
+    return Math.max(0, Math.min(255, Math.round(255 * (1 - alpha * 0.92))));
+  }
+
+  // Componer sobre papel blanco puro (#FFFFFF)
+  const cr = r * alpha + 255 * (1 - alpha);
+  const cg = g * alpha + 255 * (1 - alpha);
+  const cb = b * alpha + 255 * (1 - alpha);
+
+  // Luminancia perceptual Rec. 709 (fiel al ojo humano, sin aplastar rojos/verdes/amarillos en negro sólido)
+  const luma = 0.2126 * cr + 0.7152 * cg + 0.0722 * cb;
+
+  // Limpiar fondos claros y artefactos de compresión directamente a blanco de papel
+  if (luma >= 230) {
+    return 255;
+  }
+
+  // Estiramiento suave de rango [12..230] -> [0..255] con curva limpia que preserva claros y nitidez en negros
+  const stretched = Math.max(0, Math.min(1, (luma - 12) / (230 - 12)));
+  // Curva sigmoidea suave para mejorar legibilidad del texto sin empastar ilustraciones
+  const contrasted = stretched < 0.5
+    ? 0.5 * Math.pow(stretched * 2, 1.08)
+    : 1 - 0.5 * Math.pow((1 - stretched) * 2, 1.15);
+
+  return Math.max(0, Math.min(255, Math.round(contrasted * 255)));
+}
+
+/**
+ * Aplica tramado Atkinson (1-bit: 0 o 255) sobre un búfer en escala de grises.
+ * El algoritmo Atkinson difunde solo 6/8 del error, evitando el sangrado térmico ("empastado")
+ * en impresoras POS de 203 DPI como la Jaltech JAL-821 y manteniendo el logotipo abierto y nítido.
+ */
+export function applyAtkinsonDithering(
+  gray: Uint8ClampedArray | Float32Array,
+  width: number,
+  height: number
+): Uint8ClampedArray {
+  const buf = new Float32Array(gray.length);
+  for (let i = 0; i < gray.length; i++) {
+    buf[i] = gray[i];
+  }
+
+  const out = new Uint8ClampedArray(gray.length);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x;
+      const oldVal = buf[idx];
+      // Mantener blancos limpios sin ruido disperso
+      const newVal = oldVal >= 142 ? 255 : 0;
+      out[idx] = newVal;
+      const err = (oldVal - newVal) / 8;
+
+      if (err === 0) continue;
+
+      if (x + 1 < width) buf[idx + 1] += err;
+      if (x + 2 < width) buf[idx + 2] += err;
+      if (y + 1 < height) {
+        if (x - 1 >= 0) buf[(y + 1) * width + (x - 1)] += err;
+        buf[(y + 1) * width + x] += err;
+        if (x + 1 < width) buf[(y + 1) * width + (x + 1)] += err;
+      }
+      if (y + 2 < height) {
+        buf[(y + 2) * width + x] += err;
+      }
+    }
+  }
+
+  return out;
+}
+
+/**
+ * Convierte un búfer en escala de grises a silueta limpia de alto contraste (0 o 255),
+ * eliminando adornos grises/claros y dejando únicamente los trazos principales y la tipografía.
+ */
+export function applyCleanSilhouetteThreshold(
+  gray: Uint8ClampedArray,
+  threshold: number = 148
+): Uint8ClampedArray {
+  const out = new Uint8ClampedArray(gray.length);
+  for (let i = 0; i < gray.length; i++) {
+    out[i] = gray[i] < threshold ? 0 : 255;
+  }
+  return out;
+}
+
+/**
+ * Procesa un arreglo RGBA in-place según el modo térmico elegido:
+ * - `escala_grises`: Escala de grises limpia y equilibrada (recomendado para logos con muchos colores/detalles).
+ * - `termico_bn`: Blanco y negro térmico 1-bit con tramado fino Atkinson (ideal para JAL-821 203 DPI).
+ * - `alto_contraste`: Blanco y negro sólido/silueta limpia que remueve detalles claros.
+ * - `original`: Mantiene colores originales compuestos sobre fondo blanco opaco (sin transparencia).
+ */
+export function processLogoPixelsForMode(
+  pixels: Uint8ClampedArray,
+  width: number,
+  height: number,
+  mode: LogoPrintMode = 'escala_grises'
+): void {
+  const total = width * height;
+  if (total <= 0) return;
+
+  if (mode === 'original') {
+    for (let i = 0; i < pixels.length; i += 4) {
+      const alpha = pixels[i + 3] / 255;
+      pixels[i] = Math.round(pixels[i] * alpha + 255 * (1 - alpha));
+      pixels[i + 1] = Math.round(pixels[i + 1] * alpha + 255 * (1 - alpha));
+      pixels[i + 2] = Math.round(pixels[i + 2] * alpha + 255 * (1 - alpha));
+      pixels[i + 3] = 255;
+    }
+    return;
+  }
+
+  const isLightOnTransparent = detectLightOnTransparentLogo(pixels);
+  const gray = new Uint8ClampedArray(total);
+
+  for (let p = 0; p < total; p++) {
+    const i = p * 4;
+    gray[p] = computeGrayscaleThermalPixel(
+      pixels[i],
+      pixels[i + 1],
+      pixels[i + 2],
+      pixels[i + 3],
+      isLightOnTransparent
+    );
+  }
+
+  let finalGray: Uint8ClampedArray = gray;
+  if (mode === 'termico_bn') {
+    finalGray = applyAtkinsonDithering(gray, width, height);
+  } else if (mode === 'alto_contraste') {
+    finalGray = applyCleanSilhouetteThreshold(gray, 148);
+  }
+
+  for (let p = 0; p < total; p++) {
+    const i = p * 4;
+    const v = finalGray[p];
+    pixels[i] = v;
+    pixels[i + 1] = v;
+    pixels[i + 2] = v;
+    pixels[i + 3] = 255;
+  }
+}
+
+/**
+ * Prepara una versión optimizada (100% opaca sobre papel blanco) del logotipo según el modo elegido
+ * (`escala_grises`, `termico_bn`, `alto_contraste` u `original`), devuelta como Data URL PNG.
+ */
+export async function prepareThermalPrintLogo(
+  src: string,
+  mode: LogoPrintMode = 'escala_grises'
+): Promise<string> {
   const cleanSrc = (src || '').trim();
   if (!cleanSrc) return '';
 
-  const cached = thermalLogoCache.get(cleanSrc);
+  const cacheKey = `${mode}::${cleanSrc}`;
+  const cached = thermalLogoCache.get(cacheKey);
   if (cached) return cached;
 
   if (typeof window === 'undefined' || typeof document === 'undefined') {
@@ -129,7 +290,7 @@ export async function prepareThermalPrintLogo(src: string): Promise<string> {
           return;
         }
 
-        // Limitar resolución máxima a 384px para impresión térmica 203 DPI rápida y nítida en JAL-821 / POS-80
+        // Resolución óptima para impresión térmica 203 DPI (cabezal JAL-821 576 dots)
         const maxDim = 384;
         let width = naturalWidth;
         let height = naturalHeight;
@@ -148,7 +309,7 @@ export async function prepareThermalPrintLogo(src: string): Promise<string> {
           return;
         }
 
-        // Pintar fondo blanco sólido antes de dibujar para eliminar cualquier artefacto de canal alfa
+        // Pintar fondo blanco sólido antes de dibujar para eliminar transparencia
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, width, height);
         ctx.imageSmoothingEnabled = true;
@@ -156,33 +317,17 @@ export async function prepareThermalPrintLogo(src: string): Promise<string> {
         ctx.drawImage(img, 0, 0, width, height);
 
         const imageData = ctx.getImageData(0, 0, width, height);
-        const pixels = imageData.data;
-        const isLightOnTransparent = detectLightOnTransparentLogo(pixels);
-
-        for (let i = 0; i < pixels.length; i += 4) {
-          const v = computeThermalPixelValue(
-            pixels[i],
-            pixels[i + 1],
-            pixels[i + 2],
-            pixels[i + 3],
-            isLightOnTransparent
-          );
-          pixels[i] = v;
-          pixels[i + 1] = v;
-          pixels[i + 2] = v;
-          pixels[i + 3] = 255; // 100% opaco: sin canal alfa para impresoras térmicas
-        }
+        processLogoPixelsForMode(imageData.data, width, height, mode);
 
         ctx.putImageData(imageData, 0, 0);
         const thermalDataUrl = canvas.toDataURL('image/png');
 
-        if (thermalLogoCache.size > 20) {
+        if (thermalLogoCache.size > 40) {
           thermalLogoCache.clear();
         }
-        thermalLogoCache.set(cleanSrc, thermalDataUrl);
+        thermalLogoCache.set(cacheKey, thermalDataUrl);
         resolve(thermalDataUrl);
       } catch {
-        // Fallback silencioso si la imagen externa bloquea lectura por CORS
         resolve(cleanSrc);
       }
     };
@@ -604,15 +749,26 @@ export async function printPosTicket(
     const clonedTicket = ticketEl.cloneNode(true) as HTMLElement;
     clonedTicket.querySelectorAll('.print\\:hidden, .no-print').forEach((el) => el.remove());
 
-    // 2. Rasterizar logotipos a blanco y negro de alto contraste 100% opacos para cabezal térmico 203 DPI (JAL-821)
+    // 2. Optimizar logotipos según el modo configurado (escala de grises, térmico B/N Atkinson, silueta o original)
     const clonedImages = Array.from(clonedTicket.querySelectorAll<HTMLImageElement>('img'));
     await Promise.all(
       clonedImages.map(async (img) => {
         const src = img.getAttribute('src') || img.src || '';
         if (!src) return;
-        const thermalSrc = await prepareThermalPrintLogo(src);
-        if (thermalSrc) {
-          img.setAttribute('src', thermalSrc);
+        const alreadyPrepared = img.getAttribute('data-logo-ready') === '1';
+        if (!alreadyPrepared) {
+          const modeAttr = img.getAttribute('data-logo-mode') as LogoPrintMode | null;
+          const mode: LogoPrintMode =
+            modeAttr === 'termico_bn' ||
+            modeAttr === 'alto_contraste' ||
+            modeAttr === 'original' ||
+            modeAttr === 'escala_grises'
+              ? modeAttr
+              : 'escala_grises';
+          const thermalSrc = await prepareThermalPrintLogo(src, mode);
+          if (thermalSrc) {
+            img.setAttribute('src', thermalSrc);
+          }
         }
         img.setAttribute('loading', 'eager');
         img.setAttribute('decoding', 'sync');

@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { Branch, BranchReceiptSnapshot, BranchPrintConfig, DEFAULT_BRANCH_PRINT_CONFIG, PaperWidth } from '../../types';
+import {
+  Branch,
+  BranchReceiptSnapshot,
+  BranchPrintConfig,
+  DEFAULT_BRANCH_PRINT_CONFIG,
+  PaperWidth,
+  LogoPrintMode,
+} from '../../types';
+import { prepareThermalPrintLogo } from '../../utils/thermalPrintUtils';
 
 export interface BranchReceiptHeaderProps {
   branch?: Branch | null;
@@ -25,7 +33,7 @@ export interface BranchReceiptHeaderProps {
  * Componente modular y reutilizable para el encabezado de comprobantes térmicos y tirillas POS.
  * Construye dinámicamente el encabezado respetando estrictamente los 5 controles configurados
  * por sucursal o los valores congelados en el snapshot histórico del documento:
- * 1. Mostrar logotipo
+ * 1. Mostrar logotipo (optimizado en escala de grises / modo térmico para impresión limpia)
  * 2. Mostrar nombre comercial
  * 3. Mostrar NIT
  * 4. Mostrar dirección
@@ -86,11 +94,33 @@ export const BranchReceiptHeader: React.FC<BranchReceiptHeaderProps> = ({
       ? snapshot.logoUrl
       : branch?.logoUrl || '';
 
+  const logoPrintMode: LogoPrintMode = printConfig.logoPrintMode || 'escala_grises';
+
   const [logoLoadFailed, setLogoLoadFailed] = useState<boolean>(false);
+  const [processedLogoUrl, setProcessedLogoUrl] = useState<string>(logoUrl);
+  const [isLogoProcessed, setIsLogoProcessed] = useState<boolean>(false);
 
   useEffect(() => {
     setLogoLoadFailed(false);
-  }, [logoUrl]);
+    if (!logoUrl || !printConfig.showLogo) {
+      setProcessedLogoUrl(logoUrl);
+      setIsLogoProcessed(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLogoProcessed(false);
+
+    void prepareThermalPrintLogo(logoUrl, logoPrintMode).then((result) => {
+      if (cancelled) return;
+      setProcessedLogoUrl(result || logoUrl);
+      setIsLogoProcessed(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [logoUrl, logoPrintMode, printConfig.showLogo]);
 
   const resolutionDian =
     overrideData?.resolutionDian ||
@@ -130,18 +160,20 @@ export const BranchReceiptHeader: React.FC<BranchReceiptHeaderProps> = ({
         is58mm ? 'text-[11px] space-y-0.5' : 'text-xs space-y-1'
       } ${className}`}
     >
-      {/* 1. Logotipo de la Sucursal (una sola imagen siempre visible en pantalla e impresión, sin filtros CSS) */}
+      {/* 1. Logotipo de la Sucursal optimizado en escala de grises / térmico (100% fiel en pantalla e impresión) */}
       {printConfig.showLogo && logoUrl && !logoLoadFailed && (
         <div
           className="receipt-logo-container flex justify-center items-center w-full my-1"
           data-logo-size={logoSize}
         >
           <img
-            src={logoUrl}
+            src={processedLogoUrl || logoUrl}
             alt={name || 'Logotipo Sucursal'}
             loading="eager"
             decoding="sync"
             data-logo-size={logoSize}
+            data-logo-mode={logoPrintMode}
+            data-logo-ready={isLogoProcessed ? '1' : '0'}
             className={`receipt-logo-img object-contain max-w-full ${logoDimensions}`}
             onError={() => setLogoLoadFailed(true)}
           />
