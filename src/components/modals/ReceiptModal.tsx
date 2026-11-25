@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Payment, Order } from '../../types';
 import { formatCOP, formatColombiaDateTime } from '../../utils/calculations';
@@ -11,7 +11,7 @@ import {
   resolveBranchPrintConfig,
   buildReceiptHeaderPrintConfig,
 } from '../../utils/printConfigUtils';
-import { printPosTicket } from '../../utils/thermalPrintUtils';
+import { executePrintAndClose, printPosTicket } from '../../utils/thermalPrintUtils';
 import { Printer, X, CheckCircle } from 'lucide-react';
 
 interface ReceiptModalProps {
@@ -88,8 +88,23 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
       ? originatingBranch.logoUrl
       : snapshot?.logoUrl || '';
 
-  const handlePrint = () => {
-    void printPosTicket('#colmena-printable-receipt');
+  const [isPrinting, setIsPrinting] = useState(false);
+  const printingLockRef = useRef(false);
+
+  const handlePrint = async () => {
+    if (printingLockRef.current) return;
+    setIsPrinting(true);
+    try {
+      await executePrintAndClose(
+        () => printPosTicket('#colmena-printable-receipt'),
+        onClose,
+        printingLockRef
+      );
+    } catch {
+      // onClose ya fue invocado en finally de executePrintAndClose
+    } finally {
+      setIsPrinting(false);
+    }
   };
 
   return createPortal(
@@ -106,11 +121,12 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             <button
               type="button"
               onClick={handlePrint}
-              className="px-3 py-1.5 rounded-lg bg-black hover:bg-neutral-800 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              disabled={isPrinting}
+              className="px-3 py-1.5 rounded-lg bg-black hover:bg-neutral-800 disabled:opacity-60 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
               title="Imprimir Tirilla POS"
             >
               <Printer className="w-3.5 h-3.5 text-[#D6A21A]" />
-              <span>Imprimir</span>
+              <span>{isPrinting ? 'Imprimiendo...' : 'Imprimir'}</span>
             </button>
             <button
               type="button"
@@ -306,10 +322,11 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
           <button
             type="button"
             onClick={handlePrint}
-            className="px-5 py-2 rounded-xl bg-black hover:bg-neutral-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-md cursor-pointer"
+            disabled={isPrinting}
+            className="px-5 py-2 rounded-xl bg-black hover:bg-neutral-800 disabled:opacity-60 text-white font-bold text-xs flex items-center gap-1.5 shadow-md cursor-pointer"
           >
             <Printer className="w-4 h-4 text-[#D6A21A]" />
-            <span>Imprimir Tirilla POS</span>
+            <span>{isPrinting ? 'Imprimiendo...' : 'Imprimir Tirilla POS'}</span>
           </button>
         </div>
 

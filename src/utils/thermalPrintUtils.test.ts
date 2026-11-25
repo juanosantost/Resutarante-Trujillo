@@ -9,6 +9,7 @@ import {
   detectLightOnTransparentLogo,
   getThermalPrintableWidthMm,
   buildThermalPrintDocumentHtml,
+  executePrintAndClose,
 } from './thermalPrintUtils';
 
 test('mantiene píxeles transparentes y fondo blanco puro como 255 (blanco)', () => {
@@ -139,3 +140,75 @@ test('buildThermalPrintDocumentHtml calibra correctamente tirillas de 58mm a 46m
   assert.ok(html.includes('data-paper-width="58mm"'));
   assert.ok(html.includes('COMANDA #5'));
 });
+
+test('executePrintAndClose ejecuta impresión primero y cierra el modal al finalizar', async () => {
+  const events: string[] = [];
+  const lock = { current: false };
+
+  const ran = await executePrintAndClose(
+    async () => {
+      events.push('print-start');
+      await new Promise((r) => setTimeout(r, 5));
+      events.push('print-end');
+    },
+    () => {
+      events.push('modal-closed');
+    },
+    lock
+  );
+
+  assert.equal(ran, true);
+  assert.equal(lock.current, false);
+  assert.deepEqual(events, ['print-start', 'print-end', 'modal-closed']);
+});
+
+test('executePrintAndClose bloquea clics duplicados simultáneos y cierra incluso si falla la impresión', async () => {
+  const lock = { current: false };
+  let printCount = 0;
+  let closeCount = 0;
+
+  const first = executePrintAndClose(
+    async () => {
+      printCount++;
+      await new Promise((r) => setTimeout(r, 15));
+    },
+    () => {
+      closeCount++;
+    },
+    lock
+  );
+
+  const duplicate = await executePrintAndClose(
+    async () => {
+      printCount++;
+    },
+    () => {
+      closeCount++;
+    },
+    lock
+  );
+
+  await first;
+  assert.equal(duplicate, false);
+  assert.equal(printCount, 1);
+  assert.equal(closeCount, 1);
+  assert.equal(lock.current, false);
+
+  let closedAfterError = false;
+  await assert.rejects(
+    () =>
+      executePrintAndClose(
+        async () => {
+          throw new Error('simulated print failure');
+        },
+        () => {
+          closedAfterError = true;
+        },
+        lock
+      ),
+    /simulated print failure/
+  );
+  assert.equal(closedAfterError, true);
+  assert.equal(lock.current, false);
+});
+

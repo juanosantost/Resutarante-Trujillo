@@ -807,3 +807,24 @@ export async function printPosTicket(
     window.print();
   }
 }
+
+/**
+ * Ejecuta la orden de impresión evitando disparos duplicados y cierra el modal
+ * automáticamente una vez enviada la impresión (incluso si ocurre fallback o error).
+ */
+export async function executePrintAndClose(
+  printAction: () => Promise<void> | void,
+  onClose: () => void,
+  lockRef?: { current: boolean }
+): Promise<boolean> {
+  if (lockRef?.current) return false;
+  if (lockRef) lockRef.current = true;
+  try {
+    await printAction();
+  } finally {
+    if (lockRef) lockRef.current = false;
+    onClose();
+  }
+  return true;
+}
+

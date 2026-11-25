@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Order, OrderItem, Comanda, PaperWidth } from '../../types';
 import { useRestaurant } from '../../context/RestaurantContext';
@@ -10,7 +10,7 @@ import {
   resolveBranchPrintConfig,
   buildKitchenHeaderPrintConfig,
 } from '../../utils/printConfigUtils';
-import { printPosTicket } from '../../utils/thermalPrintUtils';
+import { executePrintAndClose, printPosTicket } from '../../utils/thermalPrintUtils';
 import {
   Printer,
   X,
@@ -132,8 +132,23 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
 
   const totalItemCount = filteredItems.reduce((acc, it) => acc + (it.quantity || 1), 0);
 
-  const handlePrint = () => {
-    void printPosTicket('#printable-kitchen-pos-ticket');
+  const [isPrinting, setIsPrinting] = useState(false);
+  const printingLockRef = useRef(false);
+
+  const handlePrint = async () => {
+    if (printingLockRef.current) return;
+    setIsPrinting(true);
+    try {
+      await executePrintAndClose(
+        () => printPosTicket('#printable-kitchen-pos-ticket'),
+        onClose,
+        printingLockRef
+      );
+    } catch {
+      // onClose ya fue invocado en finally de executePrintAndClose
+    } finally {
+      setIsPrinting(false);
+    }
   };
 
   const is58mm = selectedWidth === '58mm';
@@ -160,11 +175,12 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
             <button
               type="button"
               onClick={handlePrint}
-              className="px-3 py-1.5 rounded-lg bg-black hover:bg-neutral-800 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              disabled={isPrinting}
+              className="px-3 py-1.5 rounded-lg bg-black hover:bg-neutral-800 disabled:opacity-60 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
               title="Imprimir Tirilla POS"
             >
               <Printer className="w-3.5 h-3.5 text-[#D6A21A]" />
-              <span>Imprimir</span>
+              <span>{isPrinting ? 'Imprimiendo...' : 'Imprimir'}</span>
             </button>
             <button
               type="button"
@@ -380,10 +396,11 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
           <button
             type="button"
             onClick={handlePrint}
-            className="px-5 py-2 rounded-xl bg-black hover:bg-neutral-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-md cursor-pointer"
+            disabled={isPrinting}
+            className="px-5 py-2 rounded-xl bg-black hover:bg-neutral-800 disabled:opacity-60 text-white font-bold text-xs flex items-center gap-1.5 shadow-md cursor-pointer"
           >
             <Printer className="w-4 h-4 text-[#D6A21A]" />
-            <span>Imprimir Tirilla POS</span>
+            <span>{isPrinting ? 'Imprimiendo...' : 'Imprimir Tirilla POS'}</span>
           </button>
         </div>
 
