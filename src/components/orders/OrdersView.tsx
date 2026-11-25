@@ -260,6 +260,11 @@ export const OrdersView: React.FC = () => {
                                           ✓ Pagado
                                         </span>
                                       )}
+                                      {it.deliveryDestination?.label && !isCancelled && (
+                                        <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-sky-950/70 text-sky-300 border border-sky-700/50">
+                                          → {it.deliveryDestination.label}
+                                        </span>
+                                      )}
                                     </div>
                                     <div className="flex items-center gap-1.5 shrink-0">
                                       <span className={`font-semibold shrink-0 ${isCancelled ? 'line-through text-red-400/70' : 'text-[#fef3c7]'}`}>

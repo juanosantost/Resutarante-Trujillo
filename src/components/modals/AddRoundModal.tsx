@@ -1,16 +1,26 @@
 import React, { useState, useMemo } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
-import { MenuItem, Order, Product, CustomizedItemSelection } from '../../types';
+import {
+  MenuItem,
+  Order,
+  OrderType,
+  Product,
+  CustomizedItemSelection,
+  RoundDestinationInput,
+} from '../../types';
 import { formatCOP, calculateOrderTotals, getEffectiveTaxRate } from '../../utils/calculations';
 import { ProductCustomizeModal } from '../catalog/ProductCustomizeModal';
 import {
   buildDefaultDailyMenuItem,
-  sortProductsWithDailyFirst,
   getCatalogGroupByCategoryPreference,
   groupProductsByCategories,
   sortOrderItemsByCatalogConfig,
 } from '../../utils/productUtils';
 import { getVisibleOrderModifiers } from '../../utils/orderModifierUtils';
+import {
+  formatOrderDestinationLabel,
+  resolveRoundDestination,
+} from '../../utils/orderDestinationUtils';
 import {
   X,
   Plus,
@@ -27,11 +37,17 @@ import {
   CheckCircle,
   History,
   Trash2,
-  Layers,
-  Tag,
   Edit,
   Sliders,
   RotateCcw,
+  Building2,
+  Store,
+  Bike,
+  MapPin,
+  User,
+  Phone,
+  AlertCircle,
+  Navigation,
 } from 'lucide-react';
 
 interface AddRoundModalProps {
@@ -47,6 +63,7 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
 }) => {
   const {
     orders,
+    tables,
     currentBranch,
     catalogCategories,
     menuItems,
@@ -76,6 +93,38 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
   // Estado para modal de personalización (ej: Almuerzo del día u otros)
   const [customizingProduct, setCustomizingProduct] = useState<Product | null>(null);
   const [editingLineItem, setEditingLineItem] = useState<CustomizedItemSelection | null>(null);
+
+  // Estado para preguntar el destino antes de confirmar la adición (mismo lugar vs otro lugar)
+  const [showDestinationPrompt, setShowDestinationPrompt] = useState<boolean>(false);
+  const [destinationChoice, setDestinationChoice] = useState<'mismo_lugar' | 'otro_lugar'>('mismo_lugar');
+  const [otherScope, setOtherScope] = useState<'solo_ronda' | 'cambiar_pedido'>('solo_ronda');
+  const [otherType, setOtherType] = useState<OrderType>(
+    liveOrder.type === 'domicilio' ? 'mesa' : 'domicilio'
+  );
+  const [otherTableId, setOtherTableId] = useState<string>('');
+  const [otherCustomerName, setOtherCustomerName] = useState<string>(() => {
+    const raw = (liveOrder.customerName || '').trim();
+    if (!raw || raw === liveOrder.tableName || raw.toLowerCase() === 'cliente general') {
+      return '';
+    }
+    return raw;
+  });
+  const [otherCustomerPhone, setOtherCustomerPhone] = useState<string>(liveOrder.customerPhone || '');
+  const [otherCustomerAddress, setOtherCustomerAddress] = useState<string>(
+    liveOrder.customerAddress || ''
+  );
+  const [destinationError, setDestinationError] = useState<string>('');
+
+  const currentOrderDestinationLabel = useMemo(
+    () => formatOrderDestinationLabel(liveOrder),
+    [liveOrder]
+  );
+
+  const selectableTables = useMemo(() => {
+    return [...tables]
+      .filter((t) => t.isActive !== false && t.id !== liveOrder.tableId)
+      .sort((a, b) => (a.displayOrder ?? a.number) - (b.displayOrder ?? b.number));
+  }, [tables, liveOrder.tableId]);
 
   const groupByCategory = useMemo(() => getCatalogGroupByCategoryPreference(), []);
 
@@ -356,9 +405,40 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
     0.10
   );
 
-  const handleSubmit = async (e?: React.FormEvent) => {
+  const handleOpenDestinationPrompt = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (roundCartItems.length === 0) return;
+    setDestinationError('');
+    setShowDestinationPrompt(true);
+  };
+
+  const handleConfirmDestinationAndSubmit = async () => {
+    if (roundCartItems.length === 0) return;
+
+    const destinationInput: RoundDestinationInput =
+      destinationChoice === 'mismo_lugar'
+        ? { scope: 'mismo_lugar' }
+        : {
+            scope: otherScope,
+            type: otherType,
+            tableId: otherType === 'mesa' ? otherTableId : null,
+            customerName: otherCustomerName,
+            customerPhone: otherCustomerPhone,
+            customerAddress: otherCustomerAddress,
+          };
+
+    const validation = resolveRoundDestination({
+      order: liveOrder,
+      input: destinationInput,
+      tables,
+    });
+
+    if (!validation.valid) {
+      setDestinationError(validation.error || 'Verifica el destino seleccionado.');
+      return;
+    }
+
+    setDestinationError('');
 
     try {
       await addRoundToOrder(
@@ -388,12 +468,15 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
             adjustments: c.adjustments,
             effectiveRecipe: c.effectiveRecipe,
           };
-        })
+        }),
+        destinationInput
       );
+      setShowDestinationPrompt(false);
       onSuccess();
       onClose();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error adding round:', err);
+      setDestinationError(err?.message || 'No se pudo enviar la adición. Intenta de nuevo.');
     }
   };
 
@@ -895,7 +978,7 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
 
             <button
               type="button"
-              onClick={() => handleSubmit()}
+              onClick={() => handleOpenDestinationPrompt()}
               disabled={cartItemCount === 0 || actionLoading}
               className={`py-2.5 px-4 sm:px-5 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-lg transition-all cursor-pointer whitespace-nowrap ${
                 cartItemCount === 0 || actionLoading
@@ -1055,7 +1138,7 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
 
                   <button
                     type="button"
-                    onClick={() => handleSubmit()}
+                    onClick={() => handleOpenDestinationPrompt()}
                     disabled={roundCartItems.length === 0 || actionLoading}
                     className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 cursor-pointer shadow-lg transition-all ${
                       roundCartItems.length === 0 || actionLoading
@@ -1067,6 +1150,403 @@ export const AddRoundModal: React.FC<AddRoundModalProps> = ({
                     <span>{actionLoading ? 'Enviando...' : `Confirmar Ronda #${nextRoundNumber}`}</span>
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL DE CONFIRMACIÓN DE DESTINO AL AGREGAR PRODUCTOS */}
+        {showDestinationPrompt && (
+          <div
+            data-testid="round-destination-modal"
+            className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+          >
+            <div
+              className="bg-[#14131a] border border-[#3f3521] rounded-3xl w-full max-w-lg shadow-2xl text-[#faf5ee] overflow-hidden flex flex-col max-h-[92vh]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Encabezado */}
+              <div className="px-5 py-4 border-b border-[#2d281e] bg-[#18171f] flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-[#2a2213] border border-[#d4af37]/50 flex items-center justify-center text-[#d4af37] shrink-0">
+                    <Navigation className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-sm sm:text-base text-[#fef3c7] leading-tight">
+                      ¿Para dónde van estos productos?
+                    </h3>
+                    <p className="text-[11px] text-[#a8a29e]">
+                      Pedido #{liveOrder.orderNumber} · {cartItemCount}{' '}
+                      {cartItemCount === 1 ? 'producto nuevo' : 'productos nuevos'} (+
+                      {formatCOP(newRoundTotals.total)})
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowDestinationPrompt(false)}
+                  className="w-8 h-8 rounded-xl bg-[#24222e] hover:bg-[#322f3f] text-[#a8a29e] hover:text-white flex items-center justify-center cursor-pointer"
+                  aria-label="Cerrar selector de destino"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Contenido */}
+              <div className="p-5 overflow-y-auto space-y-4">
+                {/* Opciones principales: Mismo lugar vs Otro lugar */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDestinationChoice('mismo_lugar');
+                      setDestinationError('');
+                    }}
+                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex flex-col gap-1 ${
+                      destinationChoice === 'mismo_lugar'
+                        ? 'bg-[#2a2213] border-[#d4af37] ring-1 ring-[#d4af37]/60 shadow-md'
+                        : 'bg-[#1a1922] border-[#2d281e] hover:border-[#483d29]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-black text-[#fef3c7]">Mismo lugar</span>
+                      <span
+                        className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                          destinationChoice === 'mismo_lugar'
+                            ? 'border-[#d4af37] bg-[#d4af37]'
+                            : 'border-[#78716c]'
+                        }`}
+                      >
+                        {destinationChoice === 'mismo_lugar' && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#0e0e12]" />
+                        )}
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-bold text-[#d4af37] break-words">
+                      {currentOrderDestinationLabel}
+                    </span>
+                    <span className="text-[10px] text-[#a8a29e]">
+                      Mantener el destino actual del pedido
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDestinationChoice('otro_lugar');
+                      setDestinationError('');
+                    }}
+                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex flex-col gap-1 ${
+                      destinationChoice === 'otro_lugar'
+                        ? 'bg-[#2a2213] border-[#d4af37] ring-1 ring-[#d4af37]/60 shadow-md'
+                        : 'bg-[#1a1922] border-[#2d281e] hover:border-[#483d29]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-black text-[#fef3c7]">Otro lugar</span>
+                      <span
+                        className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                          destinationChoice === 'otro_lugar'
+                            ? 'border-[#d4af37] bg-[#d4af37]'
+                            : 'border-[#78716c]'
+                        }`}
+                      >
+                        {destinationChoice === 'otro_lugar' && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#0e0e12]" />
+                        )}
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-bold text-[#d4af37]">
+                      Domicilio, Mostrador u Otra Mesa
+                    </span>
+                    <span className="text-[10px] text-[#a8a29e]">
+                      Elegir un destino diferente para la entrega
+                    </span>
+                  </button>
+                </div>
+
+                {/* Detalles cuando se elige "Otro lugar" */}
+                {destinationChoice === 'otro_lugar' && (
+                  <div className="p-4 rounded-2xl bg-[#1a1922] border border-[#383124] space-y-3.5">
+                    <div>
+                      <span className="block text-[11px] font-black text-[#d4af37] uppercase tracking-wider mb-2">
+                        Selecciona el nuevo destino
+                      </span>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 bg-[#121117] rounded-xl border border-[#2d281e]">
+                        {[
+                          { id: 'mesa' as OrderType, label: 'Otra Mesa', icon: Building2 },
+                          { id: 'mostrador' as OrderType, label: 'Mostrador', icon: Store },
+                          { id: 'para_llevar' as OrderType, label: 'Para Llevar', icon: ShoppingBag },
+                          { id: 'domicilio' as OrderType, label: 'Domicilio', icon: Bike },
+                        ].map((opt) => {
+                          const IconComp = opt.icon;
+                          const isActive = otherType === opt.id;
+                          return (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              onClick={() => {
+                                setOtherType(opt.id);
+                                setDestinationError('');
+                              }}
+                              className={`py-2 px-2 text-xs font-black rounded-lg transition-all cursor-pointer flex flex-col items-center gap-1 ${
+                                isActive
+                                  ? 'bg-[#d4af37] text-[#0e0e12] shadow-md'
+                                  : 'text-[#a8a29e] hover:text-[#fef3c7] hover:bg-[#1f1d28]'
+                              }`}
+                            >
+                              <IconComp className="w-3.5 h-3.5" />
+                              <span className="text-[11px]">{opt.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Campos según el tipo de destino */}
+                    {otherType === 'mesa' && (
+                      <div className="space-y-1.5">
+                        <label
+                          htmlFor="round-other-table-select"
+                          className="block text-xs font-bold text-[#fef3c7] flex items-center gap-1.5"
+                        >
+                          <Building2 className="w-3.5 h-3.5 text-[#d4af37]" />
+                          Seleccionar otra mesa:
+                        </label>
+                        <select
+                          id="round-other-table-select"
+                          value={otherTableId}
+                          onChange={(e) => {
+                            setOtherTableId(e.target.value);
+                            setDestinationError('');
+                          }}
+                          className="w-full bg-[#121117] border border-[#483d29] rounded-xl px-3 py-2 text-xs text-[#fef3c7] font-bold focus:outline-none focus:border-[#d4af37]"
+                        >
+                          <option value="">-- Elige la mesa de destino --</option>
+                          {selectableTables.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              Mesa {t.number} — {t.zone} ({t.status === 'libre' ? 'Libre' : 'Ocupada'})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {otherType === 'mostrador' && (
+                      <div>
+                        <label
+                          htmlFor="round-mostrador-name"
+                          className="block text-[11px] font-bold text-[#a8a29e] mb-1"
+                        >
+                          Nombre o referencia en mostrador (Opcional):
+                        </label>
+                        <div className="relative">
+                          <User className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#a8a29e]" />
+                          <input
+                            id="round-mostrador-name"
+                            type="text"
+                            placeholder="Ej: Para recoger en barra..."
+                            value={otherCustomerName}
+                            onChange={(e) => setOtherCustomerName(e.target.value)}
+                            className="w-full pl-9 pr-3 py-2 bg-[#121117] border border-[#2d281e] rounded-xl text-xs text-[#fef3c7] focus:outline-none focus:border-[#d4af37]"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {otherType === 'para_llevar' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                          <label
+                            htmlFor="round-takeout-name"
+                            className="block text-[11px] font-bold text-[#a8a29e] mb-1"
+                          >
+                            Nombre Cliente (Opcional):
+                          </label>
+                          <div className="relative">
+                            <User className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#a8a29e]" />
+                            <input
+                              id="round-takeout-name"
+                              type="text"
+                              placeholder="Ej: María Gómez..."
+                              value={otherCustomerName}
+                              onChange={(e) => setOtherCustomerName(e.target.value)}
+                              className="w-full pl-9 pr-3 py-2 bg-[#121117] border border-[#2d281e] rounded-xl text-xs text-[#fef3c7] focus:outline-none focus:border-[#d4af37]"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label
+                            htmlFor="round-takeout-phone"
+                            className="block text-[11px] font-bold text-[#a8a29e] mb-1"
+                          >
+                            Teléfono (Opcional):
+                          </label>
+                          <div className="relative">
+                            <Phone className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#a8a29e]" />
+                            <input
+                              id="round-takeout-phone"
+                              type="text"
+                              placeholder="300 000 0000"
+                              value={otherCustomerPhone}
+                              onChange={(e) => setOtherCustomerPhone(e.target.value)}
+                              className="w-full pl-9 pr-3 py-2 bg-[#121117] border border-[#2d281e] rounded-xl text-xs text-[#fef3c7] focus:outline-none focus:border-[#d4af37]"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {otherType === 'domicilio' && (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div>
+                            <label
+                              htmlFor="round-delivery-name"
+                              className="block text-[11px] font-bold text-[#a8a29e] mb-1"
+                            >
+                              Nombre Cliente:
+                            </label>
+                            <div className="relative">
+                              <User className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#a8a29e]" />
+                              <input
+                                id="round-delivery-name"
+                                type="text"
+                                placeholder="Ej: Andrés López..."
+                                value={otherCustomerName}
+                                onChange={(e) => setOtherCustomerName(e.target.value)}
+                                className="w-full pl-9 pr-3 py-2 bg-[#121117] border border-[#2d281e] rounded-xl text-xs text-[#fef3c7] focus:outline-none focus:border-[#d4af37]"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label
+                              htmlFor="round-delivery-phone"
+                              className="block text-[11px] font-bold text-[#a8a29e] mb-1"
+                            >
+                              Teléfono:
+                            </label>
+                            <div className="relative">
+                              <Phone className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#a8a29e]" />
+                              <input
+                                id="round-delivery-phone"
+                                type="text"
+                                placeholder="315 000 0000"
+                                value={otherCustomerPhone}
+                                onChange={(e) => setOtherCustomerPhone(e.target.value)}
+                                className="w-full pl-9 pr-3 py-2 bg-[#121117] border border-[#2d281e] rounded-xl text-xs text-[#fef3c7] focus:outline-none focus:border-[#d4af37]"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label
+                            htmlFor="round-delivery-address"
+                            className="block text-[11px] font-bold text-[#a8a29e] mb-1"
+                          >
+                            Dirección de Entrega (Obligatorio):
+                          </label>
+                          <div className="relative">
+                            <MapPin className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#d4af37]" />
+                            <input
+                              id="round-delivery-address"
+                              type="text"
+                              placeholder="Calle 10 # 8-20, Barrio Centro..."
+                              value={otherCustomerAddress}
+                              onChange={(e) => {
+                                setOtherCustomerAddress(e.target.value);
+                                setDestinationError('');
+                              }}
+                              className="w-full pl-9 pr-3 py-2 bg-[#121117] border border-[#2d281e] rounded-xl text-xs text-[#fef3c7] focus:outline-none focus:border-[#d4af37]"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Alcance: solo esta adición en la misma cuenta vs cambiar todo el pedido */}
+                    <div className="pt-2 border-t border-[#2d281e] space-y-1.5">
+                      <span className="block text-[10px] font-black text-[#a8a29e] uppercase tracking-wider">
+                        ¿Cómo aplicar este destino?
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOtherScope('solo_ronda');
+                            setDestinationError('');
+                          }}
+                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                            otherScope === 'solo_ronda'
+                              ? 'bg-[#2b2416] border-[#d4af37] text-[#fef3c7]'
+                              : 'bg-[#121117] border-[#2d281e] text-[#a8a29e] hover:text-[#fef3c7]'
+                          }`}
+                        >
+                          <span className="block text-[11px] font-black">Solo estos productos</span>
+                          <span className="block text-[10px] opacity-80">
+                            Se cobran en este mismo pedido (#{liveOrder.orderNumber})
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOtherScope('cambiar_pedido');
+                            setDestinationError('');
+                          }}
+                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                            otherScope === 'cambiar_pedido'
+                              ? 'bg-[#2b2416] border-[#d4af37] text-[#fef3c7]'
+                              : 'bg-[#121117] border-[#2d281e] text-[#a8a29e] hover:text-[#fef3c7]'
+                          }`}
+                        >
+                          <span className="block text-[11px] font-black">Mover todo el pedido</span>
+                          <span className="block text-[10px] opacity-80">
+                            Cambia el destino completo del pedido #{liveOrder.orderNumber}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {destinationError && (
+                  <div
+                    role="alert"
+                    className="p-3 rounded-xl bg-red-950/60 border border-red-700/60 text-red-200 text-xs font-bold flex items-center gap-2"
+                  >
+                    <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+                    <span>{destinationError}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Botones de acción */}
+              <div className="px-5 py-3.5 border-t border-[#2d281e] bg-[#16151c] flex items-center justify-between gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowDestinationPrompt(false)}
+                  disabled={actionLoading}
+                  className="px-4 py-2.5 rounded-xl border border-[#383124] text-xs font-bold text-[#a8a29e] hover:bg-[#1f1d28] cursor-pointer"
+                >
+                  Volver
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDestinationAndSubmit}
+                  disabled={actionLoading}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#d4af37] to-[#b89728] text-[#0e0e12] font-black text-xs flex items-center justify-center gap-2 shadow-lg hover:brightness-110 active:scale-95 disabled:opacity-60 cursor-pointer"
+                >
+                  <CheckCircle className="w-4 h-4 stroke-[2.5]" />
+                  <span>
+                    {actionLoading
+                      ? 'Enviando...'
+                      : destinationChoice === 'mismo_lugar'
+                      ? `Confirmar (${currentOrderDestinationLabel})`
+                      : 'Confirmar y Enviar a Cocina'}
+                  </span>
+                </button>
               </div>
             </div>
           </div>

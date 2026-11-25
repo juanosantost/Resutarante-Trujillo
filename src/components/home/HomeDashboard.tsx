@@ -746,6 +746,11 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
                                         ✓ Pagado
                                       </span>
                                     )}
+                                    {it.deliveryDestination?.label && !isCancelled && (
+                                      <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-sky-950/70 text-sky-300 border border-sky-700/50">
+                                        → {it.deliveryDestination.label}
+                                      </span>
+                                    )}
                                   </div>
                                   {modSummary && (
                                     <span className={`text-[10px] block leading-snug pl-3 whitespace-normal break-words ${isCancelled ? 'line-through text-[#78716c]' : 'text-[#a8a29e]'}`}>

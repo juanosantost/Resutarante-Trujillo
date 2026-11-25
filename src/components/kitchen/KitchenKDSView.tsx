@@ -213,10 +213,20 @@ export const KitchenKDSView: React.FC = () => {
                     </span>
                   </div>
 
-                  {/* Fila 2: Nombre de la mesa */}
+                  {/* Fila 2: Nombre de la mesa / destino */}
                   <div className="font-extrabold text-sm text-[#fef3c7] leading-snug">
                     {comanda.tableName}
                   </div>
+                  {comanda.originTableName && comanda.originTableName !== comanda.tableName && (
+                    <div className="text-[11px] font-bold text-amber-300">
+                      Cuenta origen: {comanda.originTableName}
+                    </div>
+                  )}
+                  {(comanda.customerName || comanda.customerPhone) && comanda.orderType !== 'mesa' && (
+                    <div className="text-[11px] text-[#d6d3d1]">
+                      {[comanda.customerName, comanda.customerPhone].filter(Boolean).join(' · ')}
+                    </div>
+                  )}
 
                   {/* Fila 3: Ronda */}
                   <div>

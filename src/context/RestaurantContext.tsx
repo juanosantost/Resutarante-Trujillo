@@ -36,6 +36,7 @@ import {
   AuditActionType,
   Order,
   OrderItem,
+  RoundDestinationInput,
   Comanda,
   ComandaStatus,
   ComandaItemStatus,
@@ -101,6 +102,10 @@ import {
   calculateEarnedPoints,
   DEFAULT_LOYALTY_CONFIG,
 } from '../utils/loyaltyUtils';
+import {
+  formatOrderDestinationLabel,
+  resolveRoundDestination,
+} from '../utils/orderDestinationUtils';
 import {
   calculateSelectedItemsTotals,
   markItemsAsPaid,
@@ -260,7 +265,8 @@ interface RestaurantContextType {
       selectedModifiers?: SelectedModifierDetail[];
       adjustments?: ProductAdjustment[];
       effectiveRecipe?: RecipeIngredient[];
-    }>
+    }>,
+    destinationInput?: RoundDestinationInput
   ) => Promise<void>;
   cancelOrder: (orderId: string, reason?: string) => Promise<void>;
 
@@ -1330,8 +1336,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   };
 
-  // OPERACIÓN 2: Agregar Ronda de productos a una mesa existente
+  // OPERACIÓN 2: Agregar Ronda de productos a un pedido existente
   // REGLA COLMENA: La cocina recibe ÚNICAMENTE los productos nuevos de esta ronda, evitando duplicar comandas.
+  // Permite mantener el mismo destino o despachar la adición / trasladar el pedido a domicilio, mostrador, para llevar u otra mesa.
   const addRoundToOrder = async (
     orderId: string,
     newItems: Array<{
@@ -1341,7 +1348,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       selectedModifiers?: SelectedModifierDetail[];
       adjustments?: ProductAdjustment[];
       effectiveRecipe?: RecipeIngredient[];
-    }>
+    }>,
+    destinationInput?: RoundDestinationInput
   ) => {
     if (actionLoading) throw new Error('Operación en proceso');
     setActionLoading(true);
@@ -1350,8 +1358,21 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const targetOrder = orders.find((o) => o.id === orderId);
       if (!targetOrder) throw new Error('Orden no encontrada');
 
+      const resolvedDest = resolveRoundDestination({
+        order: targetOrder,
+        input: destinationInput,
+        tables,
+      });
+
+      if (!resolvedDest.valid) {
+        throw new Error(resolvedDest.error || 'Destino de entrega inválido');
+      }
+
       const nextRound = (targetOrder.currentRound || 1) + 1;
       const now = new Date().toISOString();
+      const previousOrderLabel = formatOrderDestinationLabel(targetOrder);
+      const attachItemDestination =
+        resolvedDest.scope === 'solo_ronda' && resolvedDest.isDifferentFromOrder;
 
       // Convertir nuevos items
       const roundOrderItems: OrderItem[] = newItems.map((it, idx) => ({
@@ -1367,6 +1388,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         selectedModifiers: it.selectedModifiers || [],
         adjustments: it.adjustments || [],
         effectiveRecipe: it.effectiveRecipe || it.menuItem.recipe || [],
+        ...(attachItemDestination ? { deliveryDestination: resolvedDest.destination } : {}),
       }));
 
       // Combinar con items existentes
@@ -1377,8 +1399,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const hasTip = targetOrder.tip > 0;
       const { subtotal, tax, tip, total } = calculateOrderTotals(allItems, taxRate, hasTip, 0.10);
 
-      // Actualizar Orden
-      await updateDoc(doc(db, 'orders', orderId), sanitizeFirestoreData({
+      // Construir actualización de la orden (incluyendo cambio de destino completo si se eligió 'cambiar_pedido')
+      const orderUpdatePayload: Record<string, any> = {
         items: allItems,
         subtotal,
         tax,
@@ -1386,17 +1408,115 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         total,
         currentRound: nextRound,
         updatedAt: now,
-      }));
+      };
+
+      if (resolvedDest.scope === 'cambiar_pedido') {
+        const nextType = resolvedDest.destination.type;
+        const nextTableId =
+          nextType === 'mesa' ? resolvedDest.destination.tableId || null : null;
+        const nextTableName =
+          nextType === 'mesa'
+            ? resolvedDest.destination.tableName || resolvedDest.destination.label
+            : nextType === 'mostrador'
+            ? 'Mostrador'
+            : nextType === 'para_llevar'
+            ? 'Para Llevar'
+            : 'Domicilio';
+
+        orderUpdatePayload.type = nextType;
+        orderUpdatePayload.tableId = nextTableId;
+        orderUpdatePayload.tableName = nextTableName;
+
+        if (resolvedDest.destination.customerName) {
+          orderUpdatePayload.customerName = resolvedDest.destination.customerName;
+        } else if (nextType === 'mesa') {
+          orderUpdatePayload.customerName = nextTableName;
+        }
+
+        if (resolvedDest.destination.customerPhone !== undefined) {
+          orderUpdatePayload.customerPhone = resolvedDest.destination.customerPhone;
+        }
+
+        if (nextType === 'domicilio') {
+          orderUpdatePayload.customerAddress = resolvedDest.destination.customerAddress || '';
+          orderUpdatePayload.deliveryStatus = targetOrder.deliveryStatus || 'recibido';
+          orderUpdatePayload.paymentStatus = targetOrder.paymentStatus || 'contraentrega';
+        }
+      }
+
+      // Actualizar Orden
+      await updateDoc(doc(db, 'orders', orderId), sanitizeFirestoreData(orderUpdatePayload));
+
+      // Actualizar ocupación de mesas si cambió el destino completo del pedido
+      if (resolvedDest.scope === 'cambiar_pedido') {
+        const oldTableId = targetOrder.tableId || null;
+        const newTableId =
+          resolvedDest.destination.type === 'mesa'
+            ? resolvedDest.destination.tableId || null
+            : null;
+
+        if (oldTableId && oldTableId !== newTableId) {
+          const oldTable = tables.find((t) => t.id === oldTableId);
+          if (!oldTable || oldTable.currentOrderId === orderId) {
+            await updateDoc(doc(db, 'tables', oldTableId), {
+              status: 'libre',
+              currentOrderId: null,
+              assignedWaiterName: null,
+              openedAt: null,
+              updatedAt: now,
+            });
+          }
+        }
+
+        if (newTableId && newTableId !== oldTableId) {
+          await updateDoc(doc(db, 'tables', newTableId), {
+            status: 'ocupada',
+            currentOrderId: orderId,
+            assignedWaiterName: staffName,
+            openedAt: now,
+            updatedAt: now,
+          });
+        }
+
+        if (resolvedDest.isDifferentFromOrder) {
+          await logAuditAction({
+            entityType: 'pedidos',
+            entityId: orderId,
+            entityName: `Pedido #${targetOrder.orderNumber}`,
+            action: 'update',
+            details: `Destino del pedido cambiado de "${previousOrderLabel}" a "${resolvedDest.destination.label}" al agregar Ronda #${nextRound}.`,
+          });
+        }
+      }
 
       // Crear Comanda para Cocina (SOLO CON LOS PRODUCTOS NUEVOS DE ESTA RONDA)
       const comandaId = `com-${Date.now()}`;
+      const comandaTableName =
+        resolvedDest.scope === 'mismo_lugar'
+          ? targetOrder.tableName || previousOrderLabel
+          : resolvedDest.destination.label;
+      const comandaOrderType =
+        resolvedDest.scope === 'mismo_lugar'
+          ? targetOrder.type
+          : resolvedDest.destination.type;
+
       const comanda: Comanda = {
         id: comandaId,
         branchId: currentBranchId,
         orderId,
         orderNumber: targetOrder.orderNumber,
-        tableName: targetOrder.tableName || 'Mesa',
-        orderType: targetOrder.type,
+        tableName: comandaTableName,
+        orderType: comandaOrderType,
+        ...(attachItemDestination ? { originTableName: previousOrderLabel } : {}),
+        ...(resolvedDest.destination.customerName
+          ? { customerName: resolvedDest.destination.customerName }
+          : {}),
+        ...(resolvedDest.destination.customerPhone
+          ? { customerPhone: resolvedDest.destination.customerPhone }
+          : {}),
+        ...(resolvedDest.destination.customerAddress
+          ? { customerAddress: resolvedDest.destination.customerAddress }
+          : {}),
         roundNumber: nextRound,
         status: 'nueva',
         items: roundOrderItems.map((oi) => ({

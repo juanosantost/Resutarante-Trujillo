@@ -63,9 +63,16 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
   const includePrices: boolean = resolvedPrintConfig.includeKitchenPrices;
 
   // Normalizar ítems a imprimir y garantizar que aparezca el nombre real del usuario en lugar del cargo
-  const orderNumber = order?.orderNumber ?? comanda?.orderNumber ?? 0;
-  const tableName = order?.tableName ?? comanda?.tableName ?? (order?.type === 'mesa' ? 'Mesa' : 'Mostrador');
-  const orderType = order?.type ?? comanda?.orderType ?? 'mesa';
+  const orderNumber = comanda?.orderNumber ?? order?.orderNumber ?? 0;
+  const tableName =
+    comanda?.tableName ??
+    order?.tableName ??
+    (order?.type === 'mesa' ? 'Mesa' : 'Mostrador');
+  const orderType = comanda?.orderType ?? order?.type ?? 'mesa';
+  const originTableName = comanda?.originTableName;
+  const ticketCustomerName = comanda?.customerName || order?.customerName;
+  const ticketCustomerPhone = comanda?.customerPhone || order?.customerPhone;
+  const ticketCustomerAddress = comanda?.customerAddress || order?.customerAddress;
   const rawWaiterName = (order?.waiterName ?? comanda?.waiterName ?? '').trim();
   const isGenericRoleLabel = [
     'administrador colmena',
@@ -80,7 +87,7 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
     !rawWaiterName || isGenericRoleLabel
       ? currentUser?.fullName?.trim() || staffName || rawWaiterName || 'Usuario'
       : rawWaiterName;
-  const createdAt = order?.createdAt ?? comanda?.createdAt ?? new Date().toISOString();
+  const createdAt = comanda?.createdAt ?? order?.createdAt ?? new Date().toISOString();
   const generalNotes = order?.notes;
 
   // Extraer lista de ítems según fuente (si viene una comanda específica del KDS, priorizar sus ítems exactos)
@@ -97,6 +104,7 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
           station: ci.station || matchedOrderItem?.station || 'cocina_caliente',
           notes: ci.notes ?? matchedOrderItem?.notes,
           selectedModifiers: ci.selectedModifiers ?? matchedOrderItem?.selectedModifiers,
+          deliveryDestination: matchedOrderItem?.deliveryDestination,
           roundNumber: comanda.roundNumber || 1,
           sentToKitchen: true,
         };
@@ -231,9 +239,24 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
               <div className="text-black uppercase font-black break-words" style={titleStyle}>
                 {tableName}
               </div>
-              {order?.customerName && orderType !== 'mesa' && (
+              {originTableName && originTableName !== tableName && (
                 <div className="font-bold text-black mt-0.5 uppercase break-words" style={bodyStyle}>
-                  CLIENTE: {order.customerName}
+                  CUENTA ORIGEN: {originTableName}
+                </div>
+              )}
+              {ticketCustomerName && orderType !== 'mesa' && (
+                <div className="font-bold text-black mt-0.5 uppercase break-words" style={bodyStyle}>
+                  CLIENTE: {ticketCustomerName}
+                </div>
+              )}
+              {orderType === 'domicilio' && ticketCustomerAddress && !tableName.includes(ticketCustomerAddress) && (
+                <div className="font-bold text-black mt-0.5 uppercase break-words" style={bodyStyle}>
+                  DIR: {ticketCustomerAddress}
+                </div>
+              )}
+              {orderType !== 'mesa' && ticketCustomerPhone && (
+                <div className="font-bold text-black mt-0.5 uppercase break-words" style={bodyStyle}>
+                  TEL: {ticketCustomerPhone}
                 </div>
               )}
             </div>
@@ -317,6 +340,12 @@ export const KitchenTicketModal: React.FC<KitchenTicketModalProps> = ({
                           {includePrices && it.price > 0 && (
                             <div className="font-mono text-black font-bold" style={bodyStyle}>
                               ${(it.price * it.quantity).toLocaleString('es-CO')}
+                            </div>
+                          )}
+                          {!comanda && it.deliveryDestination?.label && (
+                            <div className="font-black text-black uppercase break-words mt-0.5" style={bodyStyle}>
+                              → PARA: {it.deliveryDestination.label}
+                              {it.deliveryDestination.customerPhone ? ` · TEL: ${it.deliveryDestination.customerPhone}` : ''}
                             </div>
                           )}
                         </div>

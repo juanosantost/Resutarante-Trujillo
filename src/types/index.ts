@@ -451,6 +451,26 @@ export interface MenuCategory {
 
 export type OrderType = 'mesa' | 'mostrador' | 'para_llevar' | 'domicilio';
 export type OrderStatus = 'abierto' | 'facturado' | 'cancelado';
+export type RoundDestinationScope = 'mismo_lugar' | 'solo_ronda' | 'cambiar_pedido';
+
+export interface OrderItemDestination {
+  type: OrderType;
+  label: string;
+  tableId?: string | null;
+  tableName?: string | null;
+  customerName?: string;
+  customerPhone?: string;
+  customerAddress?: string;
+}
+
+export interface RoundDestinationInput {
+  scope: RoundDestinationScope;
+  type?: OrderType;
+  tableId?: string | null;
+  customerName?: string;
+  customerPhone?: string;
+  customerAddress?: string;
+}
 
 export interface OrderItem {
   id: string;
@@ -466,6 +486,7 @@ export interface OrderItem {
   selectedModifiers?: SelectedModifierDetail[];
   adjustments?: ProductAdjustment[];
   effectiveRecipe?: RecipeIngredient[];
+  deliveryDestination?: OrderItemDestination;
   paid?: boolean;
   paidAt?: string;
   paidPaymentId?: string;
@@ -551,6 +572,10 @@ export interface Comanda {
   orderNumber: number;
   tableName: string;
   orderType: OrderType;
+  originTableName?: string;
+  customerName?: string;
+  customerPhone?: string;
+  customerAddress?: string;
   roundNumber: number;
   status: ComandaStatus;
   items: ComandaItem[];
