@@ -43,7 +43,7 @@ export const TableDetailModal: React.FC<TableDetailModalProps> = ({
   onAddRound,
   onCheckout,
 }) => {
-  const { setTableStatus, liberateTable, orders, staffName, userRole, cancelOrder, toggleOrderItemCancelled } = useRestaurant();
+  const { setTableStatus, liberateTable, orders, visibleOrders, staffName, userRole, cancelOrder, toggleOrderItemCancelled } = useRestaurant();
   const { allUsers } = useAuth();
   const { showToast } = useToast();
 
@@ -58,12 +58,16 @@ export const TableDetailModal: React.FC<TableDetailModalProps> = ({
   const [showKitchenTicket, setShowKitchenTicket] = useState<boolean>(false);
   const [cancelReason, setCancelReason] = useState<string>('Cancelación por el cliente');
 
-  // Buscar comanda / pedido abierto si existe
-  const activeOrder = table.currentOrderId
+  // Distinguir si la mesa tiene una cuenta abierta física vs si el usuario actual puede verla/gestionarla
+  const rawActiveOrder = table.currentOrderId
     ? orders.find((o) => o.id === table.currentOrderId && o.status === 'abierto')
     : undefined;
+  const activeOrder = table.currentOrderId
+    ? visibleOrders.find((o) => o.id === table.currentOrderId && o.status === 'abierto')
+    : undefined;
+  const isOrderOwnedByAnother = Boolean(rawActiveOrder && !activeOrder);
 
-  const hasOpenTab = Boolean(table.hasOpenTab || activeOrder);
+  const hasOpenTab = Boolean(table.hasOpenTab || rawActiveOrder);
   const statusMeta = getTableStatusConfig(table.status);
 
   // Lista de camareros disponibles para asignar
@@ -314,7 +318,16 @@ export const TableDetailModal: React.FC<TableDetailModalProps> = ({
             )}
           </div>
 
-          {activeOrder ? (
+          {isOrderOwnedByAnother ? (
+            <div className="p-3.5 rounded-xl bg-amber-950/40 border border-amber-700/50 text-xs text-amber-200 space-y-1">
+              <p className="font-bold">
+                Pedido atendido por {rawActiveOrder?.waiterName || table.assignedWaiterName || 'otro asesor'}
+              </p>
+              <p className="text-[11px] text-amber-200/80">
+                Solo el administrador o el asesor propietario pueden visualizar y gestionar los detalles de este pedido activo.
+              </p>
+            </div>
+          ) : activeOrder ? (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs text-[#d6d3d1]">
                 <span>Pedido #{activeOrder.orderNumber}</span>

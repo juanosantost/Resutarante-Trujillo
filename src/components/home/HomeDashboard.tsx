@@ -18,6 +18,7 @@ import { Order, OrderType, OrderStatus, DeliveryStatus, Payment, Separado } from
 import { formatCOP, formatColombiaDateTime } from '../../utils/calculations';
 import { formatModifiersDisplaySummary } from '../../utils/orderModifierUtils';
 import { getUpcomingSeparadosAlert } from '../../utils/creditAndLayawayUtils';
+import { normalizeUserRole } from '../../utils/auth';
 import { db } from '../../services/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 
@@ -28,6 +29,7 @@ import { ReceiptModal } from '../modals/ReceiptModal';
 import { NewOrderModal } from '../modals/NewOrderModal';
 import { KitchenTicketModal } from '../modals/KitchenTicketModal';
 import { DailyMenuConfigModal } from '../modals/DailyMenuConfigModal';
+import { QuickSaleModal } from '../modals/QuickSaleModal';
 
 import {
   ClipboardList,
@@ -62,6 +64,7 @@ import {
   Printer,
   Soup,
   RotateCcw,
+  Zap,
 } from 'lucide-react';
 
 interface HomeDashboardProps {
@@ -70,7 +73,7 @@ interface HomeDashboardProps {
 
 export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
   const {
-    orders,
+    activeOrders,
     tables,
     separados,
     cartera,
@@ -80,10 +83,12 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
     logAuditAction,
     toggleOrderItemCancelled,
     staffName,
+    userRole,
     actionLoading,
   } = useRestaurant();
   const { currentUser } = useAuth();
   const { showToast } = useToast();
+  const isAsesorScope = normalizeUserRole(userRole || currentUser?.role) === 'asesor';
 
   // Estados de Filtros
   const [filterType, setFilterType] = useState<string>('todos'); // 'todos', 'mesa', 'domicilio', 'para_llevar', 'cocina', 'listo'
@@ -91,6 +96,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
 
   // Modales interactivos
   const [showNewOrderModal, setShowNewOrderModal] = useState<boolean>(false);
+  const [showQuickSaleModal, setShowQuickSaleModal] = useState<boolean>(false);
   const [separadoForKitchenOrder, setSeparadoForKitchenOrder] = useState<Separado | null>(null);
   const [showDailyMenuConfig, setShowDailyMenuConfig] = useState<boolean>(false);
   const [selectedOrderForRound, setSelectedOrderForRound] = useState<Order | null>(null);
@@ -120,10 +126,8 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
     [separados]
   );
 
-  // 1. Filtrar únicamente pedidos en curso / abiertos
-  const activeOrders = useMemo(() => {
-    return orders.filter((o) => o.status === 'abierto');
-  }, [orders]);
+  // 1. Pedidos activos filtrados por rol (Administrador: todos; Asesor: solo los propios)
+  // activeOrders proviene directamente de RestaurantContext ya filtrado por propietario/rol.
 
   // 2. Métricas y estadísticas rápidas del día
   const metrics = useMemo(() => {
@@ -295,14 +299,25 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
                 <MapPin className="w-3.5 h-3.5 text-[#D6A21A]" />
                 <span>Restrepo (Valle) · Sede Única</span>
               </span>
+              <span
+                className={`px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider border ${
+                  isAsesorScope
+                    ? 'bg-sky-950/70 text-sky-300 border-sky-700/60'
+                    : 'bg-emerald-950/70 text-emerald-300 border-emerald-700/60'
+                }`}
+              >
+                {isAsesorScope ? 'Solo mis pedidos' : 'Todos los pedidos activos'}
+              </span>
               <span className="text-xs text-[#a8a29e]">Valle del Cauca · Pesos Colombianos (COP)</span>
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-black text-[#FFFDF5] tracking-tight">
-              Tablero de Pedidos en Curso
+              {isAsesorScope ? 'Mis Pedidos en Curso' : 'Tablero de Pedidos en Curso'}
             </h1>
             <p className="text-xs sm:text-sm text-[#d6d3d1] mt-1 max-w-2xl leading-relaxed">
-              Control en vivo de mesas, domicilios y pedidos para llevar. Agrega productos, despacha a cocina o procesa pagos de forma inmediata.
+              {isAsesorScope
+                ? 'Visualizas y gestionas únicamente tus propios pedidos activos de mesas, domicilios y para llevar.'
+                : 'Control en vivo de todos los pedidos activos de mesas, domicilios y para llevar. Agrega productos, despacha a cocina o procesa pagos de forma inmediata.'}
             </p>
           </div>
 
@@ -316,6 +331,16 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
             >
               <UtensilsCrossed className="w-4 h-4 text-[#d4af37]" />
               <span>Menú del día</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowQuickSaleModal(true)}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-black text-xs inline-flex items-center gap-2 hover:brightness-110 shadow-lg shadow-emerald-900/25 cursor-pointer transition-all"
+              title="Venta rápida en mostrador con cobro inmediato"
+            >
+              <Zap className="w-4 h-4 fill-current" />
+              <span>Venta rápida</span>
             </button>
 
             <button
@@ -576,10 +601,14 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
           </div>
           <div className="max-w-md mx-auto">
             <h3 className="text-base font-bold text-[#FFFDF5] mb-1">
-              No hay pedidos activos {filterType !== 'todos' ? `en la categoría '${filterType}'` : 'en este momento'}
+              {isAsesorScope
+                ? `No tienes pedidos activos ${filterType !== 'todos' ? `en la categoría '${filterType}'` : 'en este momento'}`
+                : `No hay pedidos activos ${filterType !== 'todos' ? `en la categoría '${filterType}'` : 'en este momento'}`}
             </h3>
             <p className="text-xs text-[#a8a29e] leading-relaxed">
-              El restaurante en Restrepo (Valle) se encuentra al día. Haz clic en el botón a continuación para abrir una nueva mesa o registrar un pedido de domicilio.
+              {isAsesorScope
+                ? 'Los pedidos que registres aparecerán aquí. Haz clic en el botón a continuación para abrir una nueva mesa o registrar un pedido.'
+                : 'El restaurante en Restrepo (Valle) se encuentra al día. Haz clic en el botón a continuación para abrir una nueva mesa o registrar un pedido de domicilio.'}
             </p>
           </div>
           <button
@@ -981,6 +1010,17 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ onNavigate }) => {
           onSuccess={(orderId) => {
             setShowNewOrderModal(false);
             showToast(`¡Pedido creado exitosamente con comanda a cocina!`, 'success');
+          }}
+        />
+      )}
+
+      {/* MODAL 4.0: Venta Rápida en Mostrador con Cobro Automático */}
+      {showQuickSaleModal && (
+        <QuickSaleModal
+          onClose={() => setShowQuickSaleModal(false)}
+          onOrderCreatedForCheckout={(createdOrder) => {
+            setShowQuickSaleModal(false);
+            setSelectedOrderForCheckout(createdOrder);
           }}
         />
       )}

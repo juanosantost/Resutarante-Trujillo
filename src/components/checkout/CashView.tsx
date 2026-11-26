@@ -1,763 +1,1239 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useRestaurant } from '../../context/RestaurantContext';
-import { formatCOP, formatColombiaDateTime, calculateCashBalance } from '../../utils/calculations';
-import { CheckoutModal } from '../modals/CheckoutModal';
-import { ReceiptModal } from '../modals/ReceiptModal';
-import { Order, Payment } from '../../types';
+import { useToast } from '../../context/ToastContext';
+import { formatCOP, formatColombiaDateTime } from '../../utils/calculations';
+import {
+  resolveActivePaymentMethods,
+  getLastClosureTimestamp,
+  buildCurrentPeriodIncomes,
+  buildCurrentPeriodDisbursements,
+  summarizeByPaymentMethod,
+  validateCashClosureInputs,
+  isLastCashClosure,
+  getDifferenceStatus,
+} from '../../utils/cashReconciliationUtils';
+import { CashClosure, CashFlowEntry, CashFlowEntryKind } from '../../types';
+import { CashClosureReportModal } from './CashClosureReportModal';
+import { CashClosureEditModal } from './CashClosureEditModal';
 import {
   DollarSign,
-  Receipt,
-  ArrowDownRight,
-  ArrowUpRight,
+  Coins,
+  Banknote,
   CreditCard,
   Smartphone,
-  Banknote,
-  Clock,
-  User,
-  AlertTriangle,
-  CheckCircle,
-  PlusCircle,
-  Lock,
-  Unlock,
-  Layers,
-  Coins,
+  Building2,
+  Wallet,
+  ArrowUpRight,
+  ArrowDownRight,
+  ClipboardCheck,
+  Eye,
   Edit2,
   Trash2,
+  CheckCircle2,
+  AlertTriangle,
+  TrendingUp,
+  Search,
+  Clock,
+  Loader2,
+  AlertCircle,
+  X,
+  Plus,
 } from 'lucide-react';
+
+type CashTab = 'ingresos' | 'desembolsos' | 'cierres';
+
+const KIND_LABELS: Record<CashFlowEntryKind, string> = {
+  venta: 'Venta',
+  abono_separado: 'Abono Separado',
+  abono_cartera: 'Abono Cartera',
+  otro_ingreso: 'Otro Ingreso',
+  reintegro_proveedor: 'Reintegro',
+  caja_menor_ingreso: 'Caja Menor (+)',
+  gasto: 'Gasto',
+  pago_proveedor: 'Pago Proveedor',
+  anticipo_proveedor: 'Anticipo Proveedor',
+  caja_menor_egreso: 'Caja Menor (-)',
+};
 
 export const CashView: React.FC = () => {
   const {
     activeShift,
-    openCashShift,
     addCashBase,
     updateCashBase,
     deleteCashBase,
-    closeCashShift,
-    addCashMovement,
     cashMovements,
-    activeOrders,
-    currentBranch,
+    cashClosures,
+    registerCashClosure,
+    updateCashClosureValues,
+    deleteLastCashClosure,
+    paymentMethods,
+    payments,
     orders,
+    abonos,
+    otherIncomes,
+    supplierAdvanceReintegros,
+    expenses,
+    purchasePayments,
+    supplierAdvances,
+    currentBranch,
     actionLoading,
   } = useRestaurant();
+  const { showToast } = useToast();
 
-  // Modals state
-  const [selectedOrderForPay, setSelectedOrderForPay] = useState<Order | null>(null);
-  const [receiptPayment, setReceiptPayment] = useState<Payment | null>(null);
+  // 1. Registro de Base (campo SIEMPRE vacío por defecto, sin número precargado)
+  const [baseAmountInput, setBaseAmountInput] = useState<string>('');
+  const [baseReasonInput, setBaseReasonInput] = useState<string>('');
+  const [baseError, setBaseError] = useState<string>('');
+  const [isSavingBase, setIsSavingBase] = useState<boolean>(false);
 
-  // Estados para abrir turno
-  const [openShiftBase, setOpenShiftBase] = useState<number>(350000);
-  const [openShiftNotes, setOpenShiftNotes] = useState<string>('Apertura de turno de caja');
-
-  // Estados para registrar base adicional (múltiples bases)
-  const [showBaseModal, setShowBaseModal] = useState<boolean>(false);
-  const [baseAmount, setBaseAmount] = useState<number>(100000);
-  const [baseReason, setBaseReason] = useState<string>('Adición de base de caja');
-
-  // Estados para editar base
+  // Editar / Borrar base registrada (sin window.confirm)
   const [editingBaseId, setEditingBaseId] = useState<string | null>(null);
-  const [editBaseAmount, setEditBaseAmount] = useState<number>(0);
-  const [editBaseReason, setEditBaseReason] = useState<string>('');
+  const [editBaseAmountInput, setEditBaseAmountInput] = useState<string>('');
+  const [editBaseReasonInput, setEditBaseReasonInput] = useState<string>('');
+  const [baseIdPendingDelete, setBaseIdPendingDelete] = useState<string | null>(null);
 
-  // Estados para arqueo y cierre
-  const [showCloseModal, setShowCloseModal] = useState<boolean>(false);
-  const [actualCashCount, setActualCashCount] = useState<number>(0);
-  const [closeShiftNotes, setCloseShiftNotes] = useState<string>('');
+  // 2. Registro de Cuadre por Medios de Pago Activos (inputs vacíos por defecto; solo Efectivo obligatorio)
+  const [closureInputs, setClosureInputs] = useState<Record<string, string>>({});
+  const [closureNotes, setClosureNotes] = useState<string>('');
+  const [closureError, setClosureError] = useState<string>('');
+  const [isRegisteringClosure, setIsRegisteringClosure] = useState<boolean>(false);
 
-  // Estados para movimiento de caja menor
-  const [showMovementModal, setShowMovementModal] = useState<boolean>(false);
-  const [movementType, setMovementType] = useState<'ingreso' | 'egreso'>('egreso');
-  const [movementAmount, setMovementAmount] = useState<number>(20000);
-  const [movementReason, setMovementReason] = useState<string>('');
+  // 3. Navegación en 3 pestañas inferiores
+  const [activeTab, setActiveTab] = useState<CashTab>('ingresos');
+  const [incomeMethodFilter, setIncomeMethodFilter] = useState<string>('todos');
+  const [disbursementMethodFilter, setDisbursementMethodFilter] = useState<string>('todos');
+  const [incomeSearch, setIncomeSearch] = useState<string>('');
+  const [disbursementSearch, setDisbursementSearch] = useState<string>('');
 
-  // Cálculo de arqueo en tiempo real si el turno está abierto
-  const balance = activeShift
-    ? calculateCashBalance(
-        activeShift.initialCash,
-        activeShift.salesCash,
-        activeShift.inflowCash,
-        activeShift.outflowCash,
-        showCloseModal ? actualCashCount : undefined
-      )
-    : null;
+  // Modales de Cierres (Consultar, Editar, Confirmar Borrado del último cierre)
+  const [closureToConsult, setClosureToConsult] = useState<CashClosure | null>(null);
+  const [closureToEdit, setClosureToEdit] = useState<CashClosure | null>(null);
+  const [closureToDelete, setClosureToDelete] = useState<CashClosure | null>(null);
+  const [isUpdatingClosure, setIsUpdatingClosure] = useState<boolean>(false);
+  const [isDeletingClosure, setIsDeletingClosure] = useState<boolean>(false);
 
-  const handleOpenShift = async () => {
-    if (actionLoading) return;
-    await openCashShift(openShiftBase, openShiftNotes);
-  };
+  // Medios de pago activos (Efectivo primero)
+  const activePaymentMethods = useMemo(
+    () => resolveActivePaymentMethods(paymentMethods),
+    [paymentMethods]
+  );
 
-  const handleAddBaseSubmit = async () => {
-    if (actionLoading || !activeShift || baseAmount <= 0 || !baseReason.trim()) return;
-    await addCashBase(baseAmount, baseReason.trim());
-    setShowBaseModal(false);
-    setBaseReason('Adición de base de caja');
-  };
+  // Marca temporal del último cierre de caja
+  const lastClosureTimestamp = useMemo(
+    () => getLastClosureTimestamp(cashClosures),
+    [cashClosures]
+  );
 
-  const handleUpdateBaseSubmit = async () => {
-    if (actionLoading || !activeShift || !editingBaseId || editBaseAmount <= 0 || !editBaseReason.trim()) return;
-    await updateCashBase(editingBaseId, editBaseAmount, editBaseReason.trim());
-    setEditingBaseId(null);
-  };
+  // Ingresos del período abierto (desde último cierre hasta el momento)
+  const periodIncomes = useMemo(
+    () =>
+      buildCurrentPeriodIncomes({
+        sinceIso: lastClosureTimestamp,
+        activeMethods: activePaymentMethods,
+        payments,
+        orders,
+        abonos,
+        otherIncomes,
+        supplierAdvanceReintegros,
+        cashMovements,
+        branchId: currentBranch?.id,
+      }),
+    [
+      lastClosureTimestamp,
+      activePaymentMethods,
+      payments,
+      orders,
+      abonos,
+      otherIncomes,
+      supplierAdvanceReintegros,
+      cashMovements,
+      currentBranch?.id,
+    ]
+  );
 
-  const handleDeleteBase = async (baseId: string) => {
-    if (actionLoading || !activeShift) return;
-    if (window.confirm('¿Estás seguro de eliminar este registro de base de caja?')) {
-      await deleteCashBase(baseId);
+  // Desembolsos del período abierto (desde último cierre hasta el momento)
+  const periodDisbursements = useMemo(
+    () =>
+      buildCurrentPeriodDisbursements({
+        sinceIso: lastClosureTimestamp,
+        activeMethods: activePaymentMethods,
+        expenses,
+        purchasePayments,
+        supplierAdvances,
+        cashMovements,
+        branchId: currentBranch?.id,
+      }),
+    [
+      lastClosureTimestamp,
+      activePaymentMethods,
+      expenses,
+      purchasePayments,
+      supplierAdvances,
+      cashMovements,
+      currentBranch?.id,
+    ]
+  );
+
+  // Resúmenes por medio de pago
+  const incomeSummary = useMemo(
+    () => summarizeByPaymentMethod(periodIncomes, activePaymentMethods),
+    [periodIncomes, activePaymentMethods]
+  );
+  const disbursementSummary = useMemo(
+    () => summarizeByPaymentMethod(periodDisbursements, activePaymentMethods),
+    [periodDisbursements, activePaymentMethods]
+  );
+
+  // Filas filtradas en pestaña Ingresos
+  const filteredIncomes = useMemo(() => {
+    const q = incomeSearch.trim().toLowerCase();
+    return periodIncomes.filter((item) => {
+      if (incomeMethodFilter !== 'todos' && item.paymentMethodId !== incomeMethodFilter) {
+        return false;
+      }
+      if (q) {
+        const hay = `${item.consecutivo} ${item.concept} ${item.thirdParty} ${item.paymentMethodName} ${item.userName}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [periodIncomes, incomeMethodFilter, incomeSearch]);
+
+  // Filas filtradas en pestaña Desembolsos
+  const filteredDisbursements = useMemo(() => {
+    const q = disbursementSearch.trim().toLowerCase();
+    return periodDisbursements.filter((item) => {
+      if (
+        disbursementMethodFilter !== 'todos' &&
+        item.paymentMethodId !== disbursementMethodFilter
+      ) {
+        return false;
+      }
+      if (q) {
+        const hay = `${item.consecutivo} ${item.concept} ${item.thirdParty} ${item.paymentMethodName} ${item.userName}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [periodDisbursements, disbursementMethodFilter, disbursementSearch]);
+
+  const currentBaseTotal = activeShift?.initialCash || 0;
+  const currentBaseEntries = activeShift?.baseEntries || [];
+
+  // Handlers de Base
+  const handleRegisterBase = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBaseError('');
+    const trimmed = baseAmountInput.trim();
+    if (!trimmed) {
+      setBaseError('Ingresa el valor de la base para registrarla.');
+      return;
+    }
+    const parsed = Number(trimmed.replace(/[$,\s]/g, ''));
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      setBaseError('Ingresa un monto numérico mayor a 0.');
+      return;
+    }
+
+    setIsSavingBase(true);
+    try {
+      await addCashBase(Math.round(parsed), baseReasonInput.trim() || 'Base de caja');
+      setBaseAmountInput('');
+      setBaseReasonInput('');
+      showToast(`Base de ${formatCOP(Math.round(parsed))} registrada correctamente`, 'success');
+    } catch (err: any) {
+      setBaseError(err?.message || 'Error al registrar la base.');
+      showToast('No se pudo registrar la base', 'error');
+    } finally {
+      setIsSavingBase(false);
     }
   };
 
-  const handleCloseShift = async () => {
-    if (actionLoading || !activeShift) return;
-    await closeCashShift(actualCashCount, closeShiftNotes);
-    setShowCloseModal(false);
+  const handleUpdateBaseSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingBaseId) return;
+    const parsed = Number(editBaseAmountInput.trim().replace(/[$,\s]/g, ''));
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      showToast('El monto de la base debe ser mayor a 0', 'error');
+      return;
+    }
+    try {
+      await updateCashBase(
+        editingBaseId,
+        Math.round(parsed),
+        editBaseReasonInput.trim() || 'Base de caja'
+      );
+      setEditingBaseId(null);
+      showToast('Base actualizada correctamente', 'success');
+    } catch {
+      showToast('Error al actualizar la base', 'error');
+    }
   };
 
-  const handleAddMovement = async () => {
-    if (actionLoading || !activeShift || !movementReason.trim()) return;
-    await addCashMovement(movementType, movementAmount, movementReason.trim());
-    setShowMovementModal(false);
-    setMovementReason('');
+  const handleConfirmDeleteBase = async (baseId: string) => {
+    try {
+      await deleteCashBase(baseId);
+      setBaseIdPendingDelete(null);
+      showToast('Registro de base eliminado', 'info');
+    } catch {
+      showToast('Error al eliminar la base', 'error');
+    }
+  };
+
+  // Handler de Registro de Cuadre
+  const handleRegisterCuadre = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setClosureError('');
+
+    const validation = validateCashClosureInputs(closureInputs, activePaymentMethods);
+    if (!validation.isValid) {
+      setClosureError(validation.error || 'Verifica los valores ingresados.');
+      return;
+    }
+
+    setIsRegisteringClosure(true);
+    try {
+      const created = await registerCashClosure({
+        rawValuesByMethodId: closureInputs,
+        notes: closureNotes,
+      });
+      setClosureInputs({});
+      setClosureNotes('');
+      setIncomeMethodFilter('todos');
+      setDisbursementMethodFilter('todos');
+      setActiveTab('cierres');
+      setClosureToConsult(created);
+      showToast(`Cuadre ${created.consecutivo} registrado exitosamente`, 'success');
+    } catch (err: any) {
+      const msg = err?.message || 'No se pudo registrar el cuadre de caja.';
+      setClosureError(msg);
+      showToast(msg, 'error');
+    } finally {
+      setIsRegisteringClosure(false);
+    }
+  };
+
+  // Handler de Edición de Cierre
+  const handleSaveEditedClosure = async (
+    rawValuesByMethodId: Record<string, string>,
+    notes: string
+  ) => {
+    if (!closureToEdit) return;
+    setIsUpdatingClosure(true);
+    try {
+      const updated = await updateCashClosureValues(
+        closureToEdit.id,
+        rawValuesByMethodId,
+        notes
+      );
+      setClosureToEdit(null);
+      if (closureToConsult?.id === updated.id) {
+        setClosureToConsult(updated);
+      }
+      showToast(`Cierre ${updated.consecutivo} actualizado correctamente`, 'success');
+    } finally {
+      setIsUpdatingClosure(false);
+    }
+  };
+
+  // Handler de Borrado del Último Cierre
+  const handleConfirmDeleteLastClosure = async () => {
+    if (!closureToDelete) return;
+    setIsDeletingClosure(true);
+    try {
+      const code = closureToDelete.consecutivo;
+      await deleteLastCashClosure(closureToDelete.id);
+      if (closureToConsult?.id === closureToDelete.id) {
+        setClosureToConsult(null);
+      }
+      setClosureToDelete(null);
+      showToast(`Último cierre (${code}) eliminado sin afectar cierres anteriores`, 'info');
+    } catch (err: any) {
+      showToast(err?.message || 'No se pudo borrar el cierre', 'error');
+    } finally {
+      setIsDeletingClosure(false);
+    }
+  };
+
+  const getMethodIcon = (category: string, isCash: boolean) => {
+    if (isCash || category === 'efectivo') return Banknote;
+    if (category === 'tarjeta') return CreditCard;
+    if (category === 'billetera_digital') return Smartphone;
+    if (category === 'transferencia') return Building2;
+    return Wallet;
+  };
+
+  const renderFlowTable = (rows: CashFlowEntry[], flow: 'ingreso' | 'desembolso') => {
+    if (rows.length === 0) {
+      return (
+        <div className="p-8 rounded-2xl border border-dashed border-[#383124] bg-[#18171f] text-center text-xs text-[#a8a29e]">
+          {flow === 'ingreso'
+            ? 'No hay ingresos registrados con este filtro desde el último cierre de caja.'
+            : 'No hay desembolsos registrados con este filtro desde el último cierre de caja.'}
+        </div>
+      );
+    }
+
+    return (
+      <div className="rounded-2xl border border-[#2d281e] overflow-hidden bg-[#18171f]">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-[#1a1922] text-[10px] uppercase text-[#a8a29e] border-b border-[#2d281e]">
+              <tr>
+                <th className="px-4 py-3">Fecha / Hora</th>
+                <th className="px-3 py-3">Tipo</th>
+                <th className="px-3 py-3">Ref.</th>
+                <th className="px-3 py-3">Concepto</th>
+                <th className="px-3 py-3">Tercero</th>
+                <th className="px-3 py-3">Medio de Pago</th>
+                <th className="px-3 py-3">Usuario</th>
+                <th className="px-4 py-3 text-right">Valor</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#2d281e]">
+              {rows.map((row) => (
+                <tr key={row.id} className="hover:bg-[#2b2416]/30 transition-colors">
+                  <td className="px-4 py-2.5 text-[11px] text-[#a8a29e] whitespace-nowrap">
+                    {formatColombiaDateTime(row.date)}
+                  </td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                        flow === 'ingreso'
+                          ? 'bg-emerald-950/60 text-emerald-300 border-emerald-700/50'
+                          : 'bg-red-950/60 text-red-300 border-red-700/50'
+                      }`}
+                    >
+                      {KIND_LABELS[row.kind] || row.kind}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 font-mono text-[11px] font-bold text-[#d4af37] whitespace-nowrap">
+                    {row.consecutivo}
+                  </td>
+                  <td className="px-3 py-2.5 text-[#fef3c7] font-medium max-w-xs truncate">
+                    {row.concept}
+                  </td>
+                  <td className="px-3 py-2.5 text-[#a8a29e] whitespace-nowrap">
+                    {row.thirdParty}
+                  </td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    <span className="px-2.5 py-0.5 rounded-lg bg-[#2b2416] text-[#fef3c7] border border-[#d4af37]/30 text-[10px] font-bold">
+                      {row.paymentMethodName}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-[#a8a29e] whitespace-nowrap">{row.userName}</td>
+                  <td
+                    className={`px-4 py-2.5 text-right font-mono font-black whitespace-nowrap ${
+                      flow === 'ingreso' ? 'text-emerald-400' : 'text-red-400'
+                    }`}
+                  >
+                    {flow === 'ingreso' ? '+' : '-'}
+                    {formatCOP(row.amount)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
   };
 
   return (
     <div className="space-y-6">
-      
-      {/* 1. Panel Principal del Turno de Caja & Bases */}
-      <div className="bg-[#14131a] p-5 rounded-2xl border border-[#2d281e] shadow-xl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-[#2d281e] gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#d4af37] to-[#735812] flex items-center justify-center text-[#0e0e12] font-black shadow-lg">
-              <DollarSign className="w-6 h-6" />
+      {/* CABECERA */}
+      <div className="bg-[#14131a] p-5 rounded-3xl border border-[#2d281e] shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#d4af37] to-[#735812] flex items-center justify-center text-[#0e0e12] shadow-lg shrink-0">
+            <DollarSign className="w-6 h-6" />
+          </div>
+          <div>
+            <h2 className="text-lg font-black text-[#fef3c7] tracking-tight">
+              Cuadre y Cierre de Caja
+            </h2>
+            <p className="text-xs text-[#a8a29e] flex flex-wrap items-center gap-2 mt-0.5">
+              <span>{currentBranch?.name || 'Sede Principal'}</span>
+              <span>·</span>
+              <span className="inline-flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 text-[#d4af37]" />
+                {lastClosureTimestamp
+                  ? `Movimientos desde último cierre: ${formatColombiaDateTime(lastClosureTimestamp)}`
+                  : 'Primer período activo (sin cierres previos)'}
+              </span>
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="px-3.5 py-2 rounded-2xl bg-[#18171f] border border-[#2d281e] text-xs">
+            <span className="text-[10px] uppercase font-bold text-[#a8a29e] block">Base Actual</span>
+            <span className="text-sm font-black font-mono text-[#d4af37]">
+              {formatCOP(currentBaseTotal)}
+            </span>
+          </div>
+          <div className="px-3.5 py-2 rounded-2xl bg-[#18171f] border border-[#2d281e] text-xs">
+            <span className="text-[10px] uppercase font-bold text-emerald-400 block">
+              Ingresos Período
+            </span>
+            <span className="text-sm font-black font-mono text-emerald-400">
+              {formatCOP(incomeSummary.grandTotal)}
+            </span>
+          </div>
+          <div className="px-3.5 py-2 rounded-2xl bg-[#18171f] border border-[#2d281e] text-xs">
+            <span className="text-[10px] uppercase font-bold text-red-400 block">
+              Desembolsos Período
+            </span>
+            <span className="text-sm font-black font-mono text-red-400">
+              {formatCOP(disbursementSummary.grandTotal)}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ============================================================ */}
+      {/* 1. REGISTRO DE LA BASE (CAMPO VACÍO POR DEFECTO)             */}
+      {/* ============================================================ */}
+      <div className="bg-[#14131a] p-5 rounded-3xl border border-[#2d281e] shadow-xl space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-[#2d281e]">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-[#2b2416] border border-[#d4af37]/50 flex items-center justify-center text-[#d4af37]">
+              <Coins className="w-4 h-4" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-[#fef3c7]">
-                  Control de Caja, Bases & Cierre de Turno (Arqueo)
-                </h2>
-                <span
-                  className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
-                    activeShift
-                      ? 'bg-emerald-950 text-emerald-400 border border-emerald-600/50'
-                      : 'bg-red-950 text-red-300 border border-red-700/50'
-                  }`}
-                >
-                  {activeShift ? 'Turno Abierto' : 'Caja Cerrada'}
-                </span>
-              </div>
-              <p className="text-xs text-[#a8a29e]">
-                {currentBranch?.name} · {activeShift ? `Cajero: ${activeShift.cashierName} (Desde: ${formatColombiaDateTime(activeShift.openedAt)})` : 'Inicia un turno para registrar bases y cobros'}
+              <h3 className="text-sm font-black text-[#fef3c7]">1. Registro de Base de Caja</h3>
+              <p className="text-[11px] text-[#a8a29e]">
+                Ingresa el efectivo base del turno actual. Puedes registrar una o varias bases antes del cierre.
               </p>
             </div>
           </div>
-
-          {/* Botones de control del turno y bases */}
-          <div className="flex flex-wrap items-center gap-2">
-            {activeShift ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setShowBaseModal(true)}
-                  className="px-3.5 py-2 rounded-xl bg-[#2b2416] text-[#fef3c7] border border-[#d4af37]/50 hover:bg-[#3d321d] text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all"
-                >
-                  <Coins className="w-4 h-4 text-[#d4af37]" />
-                  <span>Registrar Base Adicional</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setShowMovementModal(true)}
-                  className="px-3.5 py-2 rounded-xl bg-[#252016] text-[#d4af37] border border-[#d4af37]/40 hover:bg-[#352c1b] text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all"
-                >
-                  <PlusCircle className="w-4 h-4" />
-                  <span>Movimiento Caja Menor</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActualCashCount(balance?.expectedCash || 0);
-                    setShowCloseModal(true);
-                  }}
-                  className="px-4 py-2 rounded-xl bg-red-950 text-red-300 border border-red-700/50 hover:bg-red-900 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all"
-                >
-                  <Lock className="w-4 h-4" />
-                  <span>Cerrar Turno (Arqueo)</span>
-                </button>
-              </>
-            ) : (
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  aria-label="Base inicial en pesos"
-                  value={openShiftBase}
-                  onChange={(e) => setOpenShiftBase(parseInt(e.target.value) || 0)}
-                  placeholder="Base inicial ($ COP)"
-                  className="w-36 bg-[#18171f] border border-[#383124] rounded-xl px-3 py-2 text-xs font-bold text-[#fef3c7]"
-                />
-                <button
-                  type="button"
-                  onClick={handleOpenShift}
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#d4af37] to-[#b89728] text-[#0e0e12] font-black text-xs flex items-center gap-1.5 hover:brightness-110 shadow cursor-pointer"
-                >
-                  <Unlock className="w-4 h-4" />
-                  <span>Abrir Turno con Base</span>
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Métricas del Turno Abierto (Incluyendo todos los medios de pago y múltiples bases) */}
-        {activeShift && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-4">
-            
-            {/* Base Inicial y Adicionales */}
-            <div className="bg-[#18171f] p-3 rounded-xl border border-[#2d281e]">
-              <span className="text-[10px] text-[#a8a29e] uppercase font-bold block">Base Total</span>
-              <span className="text-sm font-black text-[#fef3c7] mt-1 block">
-                {formatCOP(activeShift.initialCash)}
-              </span>
-              <span className="text-[10px] text-[#78716c]">
-                {activeShift.baseEntries?.length ? `${activeShift.baseEntries.length} entradas de base` : 'Base inicial'}
-              </span>
-            </div>
-
-            {/* Ventas Efectivo */}
-            <div className="bg-[#18171f] p-3 rounded-xl border border-[#2d281e]">
-              <span className="text-[10px] text-[#a8a29e] uppercase font-bold block">Ventas Efectivo</span>
-              <span className="text-sm font-black text-emerald-400 mt-1 block">
-                {formatCOP(activeShift.salesCash)}
-              </span>
-              <span className="text-[10px] text-[#78716c]">Cobrado en caja</span>
-            </div>
-
-            {/* Ventas Datáfono */}
-            <div className="bg-[#18171f] p-3 rounded-xl border border-[#2d281e]">
-              <span className="text-[10px] text-[#a8a29e] uppercase font-bold block">Tarjetas / Datáfono</span>
-              <span className="text-sm font-black text-cyan-300 mt-1 block">
-                {formatCOP(activeShift.salesCard)}
-              </span>
-              <span className="text-[10px] text-[#78716c]">Vouchers bancarios</span>
-            </div>
-
-            {/* Ventas Nequi / Daviplata / Transferencia */}
-            <div className="bg-[#18171f] p-3 rounded-xl border border-[#2d281e]">
-              <span className="text-[10px] text-[#a8a29e] uppercase font-bold block">Nequi / Daviplata</span>
-              <span className="text-sm font-black text-purple-300 mt-1 block">
-                {formatCOP(activeShift.salesTransfer)}
-              </span>
-              <span className="text-[10px] text-[#78716c]">Transferencias activas</span>
-            </div>
-
-            {/* Movimientos menores (Ingresos / Egresos) */}
-            <div className="bg-[#18171f] p-3 rounded-xl border border-[#2d281e]">
-              <span className="text-[10px] text-[#a8a29e] uppercase font-bold block">Caja Menor (+ / -)</span>
-              <div className="text-xs font-bold mt-1 space-y-0.5">
-                <span className="text-emerald-400 block">+{formatCOP(activeShift.inflowCash)}</span>
-                <span className="text-red-400 block">-{formatCOP(activeShift.outflowCash)}</span>
-              </div>
-            </div>
-
-            {/* Efectivo Esperado en Cajón */}
-            <div className="bg-gradient-to-br from-[#241e14] to-[#17161f] p-3 rounded-xl border border-[#5c491c] ring-1 ring-[#d4af37]/30">
-              <span className="text-[10px] text-[#d4af37] uppercase font-black block">Efectivo Esperado</span>
-              <span className="text-base font-black text-[#fef3c7] mt-1 block">
-                {formatCOP(balance?.expectedCash || 0)}
-              </span>
-              <span className="text-[10px] text-[#a8a29e]">Debe haber en cajón</span>
-            </div>
-
-          </div>
-        )}
-      </div>
-
-      {/* 2. Sección: Listado de Bases Registradas en el Turno */}
-      {activeShift && activeShift.baseEntries && activeShift.baseEntries.length > 0 && (
-        <div className="bg-[#14131a] p-5 rounded-2xl border border-[#2d281e] shadow-xl">
-          <div className="flex items-center justify-between pb-3 border-b border-[#2d281e] mb-3">
-            <h3 className="font-bold text-sm text-[#fef3c7] flex items-center gap-2">
-              <Coins className="w-4 h-4 text-[#d4af37]" />
-              <span>Bases Registradas en el Turno ({activeShift.baseEntries.length})</span>
-            </h3>
-            <span className="text-xs text-[#a8a29e]">
-              Suma Total de Bases: {formatCOP(activeShift.initialCash)}
-            </span>
-          </div>
-
-          <div className="space-y-2">
-            {activeShift.baseEntries.map((base) => (
-              <div
-                key={base.id}
-                className="bg-[#18171f] p-3 rounded-xl border border-[#2d281e] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
-              >
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-black text-sm text-[#fef3c7]">{formatCOP(base.amount)}</span>
-                    <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-[#2b2416] text-[#d4af37] border border-[#d4af37]/30">
-                      {base.reason}
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-[#a8a29e] mt-1 block">
-                    Registrado el {formatColombiaDateTime(base.createdAt)} · Por {base.userName}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingBaseId(base.id);
-                      setEditBaseAmount(base.amount);
-                      setEditBaseReason(base.reason);
-                    }}
-                    className="px-2.5 py-1.5 rounded-lg bg-[#252016] text-[#d4af37] border border-[#d4af37]/40 hover:bg-[#352c1b] font-bold flex items-center gap-1 cursor-pointer"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                    <span>Editar</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteBase(base.id)}
-                    className="px-2.5 py-1.5 rounded-lg bg-red-950 text-red-300 border border-red-700/50 hover:bg-red-900 font-bold flex items-center gap-1 cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Borrar</span>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 3. Sección: Pedidos Abiertos Pendientes de Cobro */}
-      <div className="bg-[#14131a] p-5 rounded-2xl border border-[#2d281e] shadow-xl">
-        <div className="flex items-center justify-between pb-3 border-b border-[#2d281e] mb-4">
-          <div className="flex items-center gap-2">
-            <Receipt className="w-5 h-5 text-[#d4af37]" />
-            <h3 className="font-bold text-sm text-[#fef3c7]">
-              Pedidos Comerciales Pendientes de Cobro ({activeOrders.length})
-            </h3>
-          </div>
-          <span className="text-xs text-[#a8a29e]">
-            Total por Facturar: {formatCOP(activeOrders.reduce((acc, o) => acc + o.total, 0))}
+          <span className="px-3 py-1 rounded-xl bg-[#2b2416] border border-[#d4af37]/40 text-xs font-black text-[#fef3c7]">
+            Base acumulada: <strong className="font-mono text-[#d4af37]">{formatCOP(currentBaseTotal)}</strong>
           </span>
         </div>
 
-        {activeOrders.length === 0 ? (
-          <div className="p-8 border border-dashed border-[#383124] rounded-xl text-center text-[#78716c] text-xs">
-            No hay pedidos pendientes de cobro en este momento.
+        <form onSubmit={handleRegisterBase} className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+          <div className="sm:col-span-4">
+            <label
+              htmlFor="cash-base-amount"
+              className="block text-xs font-bold text-[#fef3c7] mb-1"
+            >
+              Valor de la base (COP)
+            </label>
+            <input
+              id="cash-base-amount"
+              type="number"
+              min={1}
+              step="1"
+              value={baseAmountInput}
+              onChange={(e) => {
+                setBaseAmountInput(e.target.value);
+                if (baseError) setBaseError('');
+              }}
+              placeholder="Ingresa el valor de la base..."
+              className="w-full px-3.5 py-2.5 rounded-xl bg-[#18171f] border border-[#383124] focus:border-[#d4af37] text-sm font-black font-mono text-[#fef3c7] placeholder-[#78716c] focus:outline-none"
+            />
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {activeOrders.map((order) => (
-              <div
-                key={order.id}
-                className="bg-[#18171f] p-3.5 rounded-xl border border-[#2d281e] flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <span className="font-mono font-bold text-xs text-[#d4af37]">
-                        #{order.orderNumber}
+
+          <div className="sm:col-span-5">
+            <label
+              htmlFor="cash-base-reason"
+              className="block text-xs font-bold text-[#a8a29e] mb-1"
+            >
+              Concepto (opcional)
+            </label>
+            <input
+              id="cash-base-reason"
+              type="text"
+              value={baseReasonInput}
+              onChange={(e) => setBaseReasonInput(e.target.value)}
+              placeholder="Ej. Base inicial del día, cambio adicional..."
+              className="w-full px-3.5 py-2.5 rounded-xl bg-[#18171f] border border-[#383124] focus:border-[#d4af37] text-xs text-[#fef3c7] placeholder-[#78716c] focus:outline-none"
+            />
+          </div>
+
+          <div className="sm:col-span-3">
+            <button
+              type="submit"
+              disabled={isSavingBase || actionLoading}
+              className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#B77900] to-[#D6A21A] text-[#181818] font-black text-xs inline-flex items-center justify-center gap-2 hover:brightness-110 shadow-lg cursor-pointer disabled:opacity-50"
+            >
+              {isSavingBase ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4 stroke-[3]" />}
+              <span>{isSavingBase ? 'Registrando...' : 'Registrar base'}</span>
+            </button>
+          </div>
+        </form>
+
+        {baseError && (
+          <div className="px-3.5 py-2 rounded-xl bg-red-950/70 border border-red-600/60 text-red-200 text-xs font-bold flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+            <span>{baseError}</span>
+          </div>
+        )}
+
+        {/* Listado de bases registradas en el período abierto */}
+        {currentBaseEntries.length > 0 && (
+          <div className="pt-2 space-y-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#a8a29e] block">
+              Bases registradas en este período ({currentBaseEntries.length})
+            </span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {currentBaseEntries.map((base) => (
+                <div
+                  key={base.id}
+                  className="p-3 rounded-2xl bg-[#18171f] border border-[#2d281e] flex items-center justify-between gap-2 text-xs"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-black font-mono text-sm text-[#d4af37]">
+                        {formatCOP(base.amount)}
                       </span>
-                      <h4 className="font-bold text-sm text-[#fef3c7]">
-                        {order.tableName || order.customerName}
-                      </h4>
+                      <span className="text-xs font-bold text-[#fef3c7] truncate">
+                        {base.reason}
+                      </span>
                     </div>
-                    <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-[#2b2416] text-[#d4af37] border border-[#d4af37]/40">
-                      {order.type.replace('_', ' ')}
+                    <span className="text-[10px] text-[#a8a29e] block mt-0.5">
+                      {formatColombiaDateTime(base.createdAt)} · {base.userName}
                     </span>
                   </div>
 
-                  <div className="text-xs text-[#a8a29e] mb-2">
-                    {order.items.length} productos · {order.currentRound || 1} rondas
-                  </div>
-
-                  <div className="p-2 rounded bg-[#121117] border border-[#2d281e] flex justify-between items-center text-xs">
-                    <span className="text-[#a8a29e]">Total a Cobrar:</span>
-                    <span className="font-black text-[#d4af37] text-sm">{formatCOP(order.total)}</span>
-                  </div>
+                  {baseIdPendingDelete === base.id ? (
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleConfirmDeleteBase(base.id)}
+                        className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white text-[11px] font-black cursor-pointer"
+                      >
+                        Confirmar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBaseIdPendingDelete(null)}
+                        className="px-2 py-1 rounded-lg bg-[#14131a] border border-[#383124] text-[11px] font-bold text-[#a8a29e] cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingBaseId(base.id);
+                          setEditBaseAmountInput(String(base.amount));
+                          setEditBaseReasonInput(base.reason);
+                        }}
+                        className="p-1.5 rounded-lg bg-[#2b2416] border border-[#d4af37]/40 text-[#d4af37] hover:brightness-110 cursor-pointer"
+                        aria-label={`Editar base ${base.reason}`}
+                        title="Editar base"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBaseIdPendingDelete(base.id)}
+                        className="p-1.5 rounded-lg bg-red-950/60 border border-red-700/50 text-red-300 hover:bg-red-900/70 cursor-pointer"
+                        aria-label={`Borrar base ${base.reason}`}
+                        title="Borrar base"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => setSelectedOrderForPay(order)}
-                  className="mt-3 w-full py-2 rounded-xl bg-gradient-to-r from-[#d4af37] to-[#b89728] text-[#0e0e12] font-black text-xs flex items-center justify-center gap-1.5 hover:brightness-110 shadow cursor-pointer"
-                >
-                  <Receipt className="w-4 h-4" />
-                  <span>Cobrar Pedido</span>
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* 4. Sección: Historial de Movimientos de Caja Menor */}
-      <div className="bg-[#14131a] p-5 rounded-2xl border border-[#2d281e] shadow-xl">
-        <h3 className="font-bold text-sm text-[#fef3c7] mb-3 flex items-center gap-2">
-          <Clock className="w-4 h-4 text-[#d4af37]" />
-          <span>Trazabilidad de Movimientos de Caja Menor ({cashMovements.length})</span>
-        </h3>
-
-        {cashMovements.length === 0 ? (
-          <p className="text-xs text-[#78716c] italic">No hay egresos ni ingresos registrados en el turno.</p>
-        ) : (
-          <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-            {cashMovements.map((mov) => (
-              <div
-                key={mov.id}
-                className="bg-[#18171f] p-3 rounded-xl border border-[#2d281e] flex items-center justify-between text-xs"
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                      mov.type === 'ingreso'
-                        ? 'bg-emerald-950 text-emerald-400 border border-emerald-700/50'
-                        : 'bg-red-950 text-red-400 border border-red-700/50'
-                    }`}
-                  >
-                    {mov.type === 'ingreso' ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
-                  </div>
-                  <div>
-                    <span className="font-bold text-[#fef3c7] block">{mov.reason}</span>
-                    <span className="text-[10px] text-[#a8a29e]">
-                      {formatColombiaDateTime(mov.createdAt)} · Registrado por {mov.userName}
-                    </span>
-                  </div>
-                </div>
-
-                <span
-                  className={`font-black text-sm ${
-                    mov.type === 'ingreso' ? 'text-emerald-400' : 'text-red-400'
-                  }`}
-                >
-                  {mov.type === 'ingreso' ? '+' : '-'} {formatCOP(mov.amount)}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* MODAL: Registrar Base Adicional */}
-      {showBaseModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#121117] border border-[#3f3521] rounded-2xl w-full max-w-md p-5 text-[#faf5ee] shadow-2xl">
-            <h3 className="font-bold text-base text-[#fef3c7] mb-1">
-              Registrar Base Adicional de Caja
-            </h3>
-            <p className="text-xs text-[#a8a29e] mb-4">
-              Permite inyectar o sumar una nueva base de efectivo al turno actual.
-            </p>
-
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-[#a8a29e] mb-1">Monto de la Base (COP)</label>
-                <input
-                  type="number"
-                  value={baseAmount}
-                  onChange={(e) => setBaseAmount(parseInt(e.target.value) || 0)}
-                  className="w-full bg-[#18171f] border border-[#383124] rounded-lg px-3 py-2 text-sm font-bold text-[#fef3c7]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#a8a29e] mb-1">Motivo / Concepto</label>
-                <input
-                  type="text"
-                  placeholder="Ej: Adición de cambio, fondo adicional"
-                  value={baseReason}
-                  onChange={(e) => setBaseReason(e.target.value)}
-                  className="w-full bg-[#18171f] border border-[#383124] rounded-lg px-3 py-2 text-xs text-[#fef3c7] focus:outline-none focus:border-[#d4af37]"
-                />
-              </div>
+              ))}
             </div>
+          </div>
+        )}
+      </div>
 
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowBaseModal(false)}
-                className="px-4 py-2 rounded-xl border border-[#383124] text-xs font-semibold text-[#a8a29e]"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleAddBaseSubmit}
-                disabled={baseAmount <= 0 || !baseReason.trim()}
-                className="px-5 py-2 rounded-xl bg-gradient-to-r from-[#d4af37] to-[#b89728] text-[#0e0e12] font-black text-xs hover:brightness-110 disabled:opacity-50"
-              >
-                Guardar Base
-              </button>
+      {/* ============================================================ */}
+      {/* 2. REGISTRO DE CUADRE POR MEDIOS DE PAGO ACTIVOS             */}
+      {/* ============================================================ */}
+      <form
+        onSubmit={handleRegisterCuadre}
+        className="bg-[#14131a] p-5 rounded-3xl border border-[#2d281e] shadow-xl space-y-4"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-[#2d281e]">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-emerald-950/80 border border-emerald-600/60 flex items-center justify-center text-emerald-300">
+              <ClipboardCheck className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-[#fef3c7]">
+                2. Registro de Cuadre por Medios de Pago Activos
+              </h3>
+              <p className="text-[11px] text-[#a8a29e]">
+                Ingresa el valor contado o verificado en cada medio de pago. Solo <strong className="text-emerald-400">Efectivo</strong> es obligatorio; los demás pueden quedar vacíos (se mostrarán como "Sin registrar").
+              </p>
             </div>
           </div>
         </div>
-      )}
 
-      {/* MODAL: Editar Base */}
+        {/* Campos de Medios de Pago Activos */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {activePaymentMethods.map((pm) => {
+            const Icon = getMethodIcon(pm.category, pm.isCash);
+            const val = closureInputs[pm.id] ?? '';
+
+            return (
+              <div
+                key={pm.id}
+                className={`p-4 rounded-2xl border space-y-2.5 transition-all ${
+                  pm.isCash
+                    ? 'bg-[#2b2416] border-[#d4af37]/70 ring-1 ring-[#d4af37]/30'
+                    : 'bg-[#18171f] border-[#2d281e]'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <label
+                    htmlFor={`cuadre-method-${pm.id}`}
+                    className="text-xs font-black text-[#fef3c7] flex items-center gap-2"
+                  >
+                    <Icon
+                      className={`w-4 h-4 ${pm.isCash ? 'text-emerald-400' : 'text-[#d4af37]'}`}
+                    />
+                    <span>{pm.name}</span>
+                  </label>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${
+                      pm.isCash
+                        ? 'bg-emerald-950/80 text-emerald-300 border-emerald-600/60'
+                        : 'bg-[#14131a] text-[#a8a29e] border-[#383124]'
+                    }`}
+                  >
+                    {pm.isCash ? 'Obligatorio' : 'Opcional'}
+                  </span>
+                </div>
+
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-[#a8a29e]">
+                    $
+                  </span>
+                  <input
+                    id={`cuadre-method-${pm.id}`}
+                    type="number"
+                    min={0}
+                    step="1"
+                    value={val}
+                    onChange={(e) => {
+                      setClosureInputs((prev) => ({ ...prev, [pm.id]: e.target.value }));
+                      if (closureError) setClosureError('');
+                    }}
+                    placeholder={pm.isCash ? 'Efectivo contado...' : 'Opcional (sin registrar)'}
+                    className="w-full pl-7 pr-3 py-2.5 rounded-xl bg-[#121117] border border-[#383124] focus:border-[#d4af37] text-sm font-black font-mono text-[#fef3c7] placeholder-[#78716c] focus:outline-none"
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Observaciones y Botón Registrar Cuadre */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-end justify-between gap-3 pt-1">
+          <div className="flex-1">
+            <label
+              htmlFor="cuadre-notes"
+              className="block text-[11px] font-bold text-[#a8a29e] mb-1"
+            >
+              Observaciones del cuadre (opcional)
+            </label>
+            <input
+              id="cuadre-notes"
+              type="text"
+              value={closureNotes}
+              onChange={(e) => setClosureNotes(e.target.value)}
+              placeholder="Ej. Cierre turno noche, novedad de billete o datáfono..."
+              className="w-full px-3.5 py-2.5 rounded-xl bg-[#18171f] border border-[#383124] focus:border-[#d4af37] text-xs text-[#fef3c7] placeholder-[#78716c] focus:outline-none"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={isRegisteringClosure || actionLoading}
+            className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:brightness-110 text-white font-black text-xs inline-flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/25 cursor-pointer disabled:opacity-50 shrink-0"
+          >
+            {isRegisteringClosure ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <ClipboardCheck className="w-4 h-4" />
+            )}
+            <span>{isRegisteringClosure ? 'Registrando cuadre...' : 'Registrar cuadre'}</span>
+          </button>
+        </div>
+
+        {closureError && (
+          <div className="px-3.5 py-2.5 rounded-xl bg-red-950/70 border border-red-600/60 text-red-200 text-xs font-bold flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+            <span>{closureError}</span>
+          </div>
+        )}
+      </form>
+
+      {/* ============================================================ */}
+      {/* 3. NAVEGACIÓN EN 3 PESTAÑAS: INGRESOS / DESEMBOLSOS / CIERRES */}
+      {/* ============================================================ */}
+      <div className="bg-[#14131a] rounded-3xl border border-[#2d281e] shadow-xl overflow-hidden">
+        {/* Barra de 3 pestañas */}
+        <div
+          role="tablist"
+          aria-label="Secciones del cuadre de caja"
+          className="p-3 border-b border-[#2d281e] bg-[#1a1922] grid grid-cols-3 gap-2"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'ingresos'}
+            onClick={() => setActiveTab('ingresos')}
+            className={`py-2.5 px-3 rounded-2xl text-xs font-black inline-flex items-center justify-center gap-2 border transition-all cursor-pointer ${
+              activeTab === 'ingresos'
+                ? 'bg-[#2b2416] text-[#fef3c7] border-[#d4af37] shadow-md'
+                : 'bg-[#14131a] text-[#a8a29e] border-[#2d281e] hover:border-[#d4af37]/50 hover:text-[#fef3c7]'
+            }`}
+          >
+            <ArrowUpRight className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>Ingresos</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-950/70 text-emerald-300 border border-emerald-700/50">
+              {periodIncomes.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'desembolsos'}
+            onClick={() => setActiveTab('desembolsos')}
+            className={`py-2.5 px-3 rounded-2xl text-xs font-black inline-flex items-center justify-center gap-2 border transition-all cursor-pointer ${
+              activeTab === 'desembolsos'
+                ? 'bg-[#2b2416] text-[#fef3c7] border-[#d4af37] shadow-md'
+                : 'bg-[#14131a] text-[#a8a29e] border-[#2d281e] hover:border-[#d4af37]/50 hover:text-[#fef3c7]'
+            }`}
+          >
+            <ArrowDownRight className="w-4 h-4 text-red-400 shrink-0" />
+            <span>Desembolsos</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-red-950/70 text-red-300 border border-red-700/50">
+              {periodDisbursements.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'cierres'}
+            onClick={() => setActiveTab('cierres')}
+            className={`py-2.5 px-3 rounded-2xl text-xs font-black inline-flex items-center justify-center gap-2 border transition-all cursor-pointer ${
+              activeTab === 'cierres'
+                ? 'bg-[#2b2416] text-[#fef3c7] border-[#d4af37] shadow-md'
+                : 'bg-[#14131a] text-[#a8a29e] border-[#2d281e] hover:border-[#d4af37]/50 hover:text-[#fef3c7]'
+            }`}
+          >
+            <ClipboardCheck className="w-4 h-4 text-[#d4af37] shrink-0" />
+            <span>Cierres</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-[#2b2416] text-[#d4af37] border border-[#d4af37]/40">
+              {cashClosures.length}
+            </span>
+          </button>
+        </div>
+
+        {/* Contenido de la pestaña activa */}
+        <div className="p-5 space-y-4">
+          {/* PESTAÑA 1: INGRESOS */}
+          {activeTab === 'ingresos' && (
+            <>
+              {/* Totales por cada medio de pago */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                <div className="p-3 rounded-2xl bg-emerald-950/50 border border-emerald-700/60">
+                  <span className="text-[10px] uppercase font-black text-emerald-300 block">
+                    Total Ingresos
+                  </span>
+                  <span className="text-base font-black font-mono text-[#fef3c7] mt-1 block">
+                    {formatCOP(incomeSummary.grandTotal)}
+                  </span>
+                  <span className="text-[10px] text-emerald-300/80">
+                    {periodIncomes.length} registros
+                  </span>
+                </div>
+
+                {incomeSummary.byMethod.map((item) => (
+                  <div
+                    key={item.methodId}
+                    className="p-3 rounded-2xl bg-[#18171f] border border-[#2d281e]"
+                  >
+                    <span className="text-[10px] uppercase font-bold text-[#a8a29e] block truncate">
+                      {item.methodName}
+                    </span>
+                    <span className="text-sm font-black font-mono text-emerald-400 mt-1 block">
+                      {formatCOP(item.total)}
+                    </span>
+                    <span className="text-[10px] text-[#78716c]">
+                      {item.count} {item.count === 1 ? 'registro' : 'registros'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Botones de filtro por medio de pago + buscador */}
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setIncomeMethodFilter('todos')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-black border cursor-pointer transition-all ${
+                      incomeMethodFilter === 'todos'
+                        ? 'bg-[#d4af37] text-[#121117] border-[#d4af37]'
+                        : 'bg-[#18171f] text-[#fef3c7] border-[#2d281e] hover:border-[#d4af37]/60'
+                    }`}
+                  >
+                    Todos ({periodIncomes.length})
+                  </button>
+                  {incomeSummary.byMethod.map((m) => (
+                    <button
+                      key={m.methodId}
+                      type="button"
+                      onClick={() => setIncomeMethodFilter(m.methodId)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border cursor-pointer transition-all ${
+                        incomeMethodFilter === m.methodId
+                          ? 'bg-[#d4af37] text-[#121117] border-[#d4af37]'
+                          : 'bg-[#18171f] text-[#fef3c7] border-[#2d281e] hover:border-[#d4af37]/60'
+                      }`}
+                    >
+                      {m.methodName} ({m.count})
+                    </button>
+                  ))}
+                </div>
+
+                <div className="relative w-full lg:w-64">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#a8a29e]" />
+                  <input
+                    type="text"
+                    value={incomeSearch}
+                    onChange={(e) => setIncomeSearch(e.target.value)}
+                    placeholder="Buscar ingreso..."
+                    className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-[#18171f] border border-[#2d281e] text-xs text-[#fef3c7] placeholder-[#78716c] focus:outline-none focus:border-[#d4af37]"
+                  />
+                </div>
+              </div>
+
+              {renderFlowTable(filteredIncomes, 'ingreso')}
+            </>
+          )}
+
+          {/* PESTAÑA 2: DESEMBOLSOS */}
+          {activeTab === 'desembolsos' && (
+            <>
+              {/* Totales por cada medio de pago */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                <div className="p-3 rounded-2xl bg-red-950/50 border border-red-700/60">
+                  <span className="text-[10px] uppercase font-black text-red-300 block">
+                    Total Desembolsos
+                  </span>
+                  <span className="text-base font-black font-mono text-[#fef3c7] mt-1 block">
+                    {formatCOP(disbursementSummary.grandTotal)}
+                  </span>
+                  <span className="text-[10px] text-red-300/80">
+                    {periodDisbursements.length} registros
+                  </span>
+                </div>
+
+                {disbursementSummary.byMethod.map((item) => (
+                  <div
+                    key={item.methodId}
+                    className="p-3 rounded-2xl bg-[#18171f] border border-[#2d281e]"
+                  >
+                    <span className="text-[10px] uppercase font-bold text-[#a8a29e] block truncate">
+                      {item.methodName}
+                    </span>
+                    <span className="text-sm font-black font-mono text-red-400 mt-1 block">
+                      {formatCOP(item.total)}
+                    </span>
+                    <span className="text-[10px] text-[#78716c]">
+                      {item.count} {item.count === 1 ? 'registro' : 'registros'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Botones de filtro por medio de pago + buscador */}
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setDisbursementMethodFilter('todos')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-black border cursor-pointer transition-all ${
+                      disbursementMethodFilter === 'todos'
+                        ? 'bg-[#d4af37] text-[#121117] border-[#d4af37]'
+                        : 'bg-[#18171f] text-[#fef3c7] border-[#2d281e] hover:border-[#d4af37]/60'
+                    }`}
+                  >
+                    Todos ({periodDisbursements.length})
+                  </button>
+                  {disbursementSummary.byMethod.map((m) => (
+                    <button
+                      key={m.methodId}
+                      type="button"
+                      onClick={() => setDisbursementMethodFilter(m.methodId)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border cursor-pointer transition-all ${
+                        disbursementMethodFilter === m.methodId
+                          ? 'bg-[#d4af37] text-[#121117] border-[#d4af37]'
+                          : 'bg-[#18171f] text-[#fef3c7] border-[#2d281e] hover:border-[#d4af37]/60'
+                      }`}
+                    >
+                      {m.methodName} ({m.count})
+                    </button>
+                  ))}
+                </div>
+
+                <div className="relative w-full lg:w-64">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#a8a29e]" />
+                  <input
+                    type="text"
+                    value={disbursementSearch}
+                    onChange={(e) => setDisbursementSearch(e.target.value)}
+                    placeholder="Buscar desembolso..."
+                    className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-[#18171f] border border-[#2d281e] text-xs text-[#fef3c7] placeholder-[#78716c] focus:outline-none focus:border-[#d4af37]"
+                  />
+                </div>
+              </div>
+
+              {renderFlowTable(filteredDisbursements, 'desembolso')}
+            </>
+          )}
+
+          {/* PESTAÑA 3: CIERRES */}
+          {activeTab === 'cierres' && (
+            <>
+              {cashClosures.length === 0 ? (
+                <div className="p-8 rounded-2xl border border-dashed border-[#383124] bg-[#18171f] text-center text-xs text-[#a8a29e]">
+                  Aún no se han generado cierres de caja. Completa el campo de Efectivo arriba y presiona <strong className="text-[#fef3c7]">Registrar cuadre</strong> para generar el primer cierre.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {cashClosures.map((closure) => {
+                    const isLatest = isLastCashClosure(closure.id, cashClosures);
+                    const status = getDifferenceStatus(
+                      closure.cashRegistered,
+                      closure.cashDifference
+                    );
+
+                    return (
+                      <div
+                        key={closure.id}
+                        className="p-4 rounded-2xl bg-[#18171f] border border-[#2d281e] flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+                      >
+                        <div className="space-y-1.5 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-mono font-black text-sm text-[#d4af37]">
+                              {closure.consecutivo}
+                            </span>
+                            {isLatest && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-[#2b2416] text-[#d4af37] border border-[#d4af37]/50">
+                                Último cierre
+                              </span>
+                            )}
+                            {status === 'cuadrado' ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-950/70 text-emerald-300 border border-emerald-600/60">
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>Efectivo Cuadrado</span>
+                              </span>
+                            ) : status === 'sobrante' ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-sky-950/70 text-sky-300 border border-sky-600/60">
+                                <TrendingUp className="w-3 h-3" />
+                                <span>Sobrante +{formatCOP(closure.cashDifference)}</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-red-950/70 text-red-300 border border-red-600/60">
+                                <AlertTriangle className="w-3 h-3" />
+                                <span>Faltante {formatCOP(closure.cashDifference)}</span>
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="text-[11px] text-[#a8a29e]">
+                            Cerrado: <strong className="text-[#fef3c7]">{formatColombiaDateTime(closure.closedAt)}</strong> · Responsable: {closure.userName}
+                          </p>
+
+                          <div className="flex flex-wrap items-center gap-3 text-xs pt-0.5">
+                            <span className="text-[#a8a29e]">
+                              Base: <strong className="font-mono text-[#fef3c7]">{formatCOP(closure.baseTotal)}</strong>
+                            </span>
+                            <span className="text-emerald-400">
+                              Ingresos: <strong className="font-mono">{formatCOP(closure.totalIncomes)}</strong>
+                            </span>
+                            <span className="text-red-400">
+                              Desembolsos: <strong className="font-mono">{formatCOP(closure.totalDisbursements)}</strong>
+                            </span>
+                            <span className="text-[#d4af37]">
+                              Efectivo reg.: <strong className="font-mono">{formatCOP(closure.cashRegistered)}</strong>
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setClosureToConsult(closure)}
+                            className="px-3.5 py-2 rounded-xl bg-[#2b2416] hover:bg-[#3d321d] border border-[#d4af37]/60 text-[#fef3c7] text-xs font-black inline-flex items-center gap-1.5 cursor-pointer transition-all"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-[#d4af37]" />
+                            <span>Consultar</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setClosureToEdit(closure)}
+                            className="px-3.5 py-2 rounded-xl bg-[#14131a] hover:bg-[#2b2416] border border-[#383124] hover:border-[#d4af37]/60 text-[#fef3c7] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer transition-all"
+                          >
+                            <Edit2 className="w-3.5 h-3.5 text-[#d4af37]" />
+                            <span>Editar</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={!isLatest}
+                            onClick={() => isLatest && setClosureToDelete(closure)}
+                            title={
+                              isLatest
+                                ? 'Borrar el último cierre generado'
+                                : 'Solo se puede borrar el último cierre para no afectar los anteriores'
+                            }
+                            className={`px-3.5 py-2 rounded-xl border text-xs font-bold inline-flex items-center gap-1.5 transition-all ${
+                              isLatest
+                                ? 'bg-red-950/70 hover:bg-red-900/80 border-red-700/60 text-red-300 cursor-pointer'
+                                : 'bg-[#14131a] border-[#2d281e] text-[#78716c] opacity-45 cursor-not-allowed'
+                            }`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Borrar</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* MODAL: Editar Base Registrada */}
       {editingBaseId && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#121117] border border-[#3f3521] rounded-2xl w-full max-w-md p-5 text-[#faf5ee] shadow-2xl">
-            <h3 className="font-bold text-base text-[#fef3c7] mb-1">
-              Editar Registro de Base
-            </h3>
-            <p className="text-xs text-[#a8a29e] mb-4">
-              Modifica el valor o el concepto de esta entrada de base.
-            </p>
-
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-[#a8a29e] mb-1">Monto de la Base (COP)</label>
-                <input
-                  type="number"
-                  value={editBaseAmount}
-                  onChange={(e) => setEditBaseAmount(parseInt(e.target.value) || 0)}
-                  className="w-full bg-[#18171f] border border-[#383124] rounded-lg px-3 py-2 text-sm font-bold text-[#fef3c7]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#a8a29e] mb-1">Motivo / Concepto</label>
-                <input
-                  type="text"
-                  value={editBaseReason}
-                  onChange={(e) => setEditBaseReason(e.target.value)}
-                  className="w-full bg-[#18171f] border border-[#383124] rounded-lg px-3 py-2 text-xs text-[#fef3c7] focus:outline-none focus:border-[#d4af37]"
-                />
-              </div>
-            </div>
-
-            <div className="mt-5 flex justify-end gap-2">
+          <div className="bg-[#121117] border border-[#3f3521] rounded-3xl w-full max-w-md p-5 text-[#faf5ee] shadow-2xl">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-black text-base text-[#fef3c7]">Editar Registro de Base</h3>
               <button
                 type="button"
                 onClick={() => setEditingBaseId(null)}
-                className="px-4 py-2 rounded-xl border border-[#383124] text-xs font-semibold text-[#a8a29e]"
+                className="p-1.5 rounded-xl bg-[#18171f] border border-[#2d281e] text-[#a8a29e] hover:text-[#fef3c7] cursor-pointer"
+                aria-label="Cerrar edición de base"
               >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleUpdateBaseSubmit}
-                disabled={editBaseAmount <= 0 || !editBaseReason.trim()}
-                className="px-5 py-2 rounded-xl bg-gradient-to-r from-[#d4af37] to-[#b89728] text-[#0e0e12] font-black text-xs hover:brightness-110 disabled:opacity-50"
-              >
-                Actualizar Base
+                <X className="w-4 h-4" />
               </button>
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* MODAL: Movimiento de Caja Menor (Ingreso / Egreso) */}
-      {showMovementModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#121117] border border-[#3f3521] rounded-2xl w-full max-w-md p-5 text-[#faf5ee] shadow-2xl">
-            <h3 className="font-bold text-base text-[#fef3c7] mb-1">
-              Registrar Movimiento de Caja Menor
-            </h3>
-            <p className="text-xs text-[#a8a29e] mb-4">
-              Afecta el saldo esperado en efectivo del turno actual.
-            </p>
-
-            <div className="space-y-3">
+            <form onSubmit={handleUpdateBaseSubmit} className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-[#a8a29e] mb-1">Tipo de Movimiento</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setMovementType('egreso')}
-                    className={`py-2 text-xs font-bold rounded-lg border ${
-                      movementType === 'egreso'
-                        ? 'bg-red-950 text-red-300 border-red-700'
-                        : 'bg-[#18171f] text-[#a8a29e] border-[#2d281e]'
-                    }`}
-                  >
-                    Egreso / Salida
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMovementType('ingreso')}
-                    className={`py-2 text-xs font-bold rounded-lg border ${
-                      movementType === 'ingreso'
-                        ? 'bg-emerald-950 text-emerald-300 border-emerald-700'
-                        : 'bg-[#18171f] text-[#a8a29e] border-[#2d281e]'
-                    }`}
-                  >
-                    Ingreso Adicional
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#a8a29e] mb-1">Monto en Pesos (COP)</label>
-                <input
-                  type="number"
-                  value={movementAmount}
-                  onChange={(e) => setMovementAmount(parseInt(e.target.value) || 0)}
-                  className="w-full bg-[#18171f] border border-[#383124] rounded-lg px-3 py-2 text-sm font-bold text-[#fef3c7]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#a8a29e] mb-1">Motivo / Justificación</label>
-                <input
-                  type="text"
-                  placeholder="Ej: Compra de hielo urgente, propinas retiradas"
-                  value={movementReason}
-                  onChange={(e) => setMovementReason(e.target.value)}
-                  className="w-full bg-[#18171f] border border-[#383124] rounded-lg px-3 py-2 text-xs text-[#fef3c7] focus:outline-none focus:border-[#d4af37]"
-                />
-              </div>
-            </div>
-
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowMovementModal(false)}
-                className="px-4 py-2 rounded-xl border border-[#383124] text-xs font-semibold text-[#a8a29e]"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleAddMovement}
-                disabled={!movementReason.trim() || movementAmount <= 0}
-                className="px-5 py-2 rounded-xl bg-gradient-to-r from-[#d4af37] to-[#b89728] text-[#0e0e12] font-black text-xs hover:brightness-110 disabled:opacity-50"
-              >
-                Guardar Movimiento
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: Cierre de Turno y Arqueo Ciego */}
-      {showCloseModal && activeShift && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#121117] border border-[#3f3521] rounded-2xl w-full max-w-lg p-5 text-[#faf5ee] shadow-2xl">
-            <h3 className="font-bold text-base text-[#fef3c7] mb-1">
-              Arqueo de Caja y Cierre de Turno
-            </h3>
-            <p className="text-xs text-[#a8a29e] mb-4">
-              Cálculo desde apertura ({formatColombiaDateTime(activeShift.openedAt)}) hasta el momento actual. Incluye todos los medios de pago.
-            </p>
-
-            <div className="space-y-4">
-              <div className="bg-[#18171f] p-3 rounded-xl border border-[#2d281e] space-y-1.5 text-xs">
-                <div className="flex justify-between text-[#a8a29e]">
-                  <span>Base Total Registrada:</span>
-                  <span>{formatCOP(activeShift.initialCash)}</span>
-                </div>
-                <div className="flex justify-between text-emerald-400">
-                  <span>Ventas en Efectivo:</span>
-                  <span>+{formatCOP(activeShift.salesCash)}</span>
-                </div>
-                <div className="flex justify-between text-cyan-300">
-                  <span>Tarjetas / Datáfono:</span>
-                  <span>+{formatCOP(activeShift.salesCard)}</span>
-                </div>
-                <div className="flex justify-between text-purple-300">
-                  <span>Nequi / Daviplata:</span>
-                  <span>+{formatCOP(activeShift.salesTransfer)}</span>
-                </div>
-                <div className="flex justify-between text-[#a8a29e]">
-                  <span>Caja Menor Neta:</span>
-                  <span>{formatCOP((activeShift.inflowCash || 0) - (activeShift.outflowCash || 0))}</span>
-                </div>
-                <div className="pt-2 border-t border-[#2d281e] flex justify-between font-bold text-[#d4af37]">
-                  <span>Efectivo Teórico Esperado:</span>
-                  <span>{formatCOP(balance?.expectedCash || 0)}</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#fef3c7] mb-1">
-                  Efectivo Físico Contado en Caja (COP):
+                <label className="block text-xs font-bold text-[#a8a29e] mb-1">
+                  Monto de la Base (COP)
                 </label>
                 <input
                   type="number"
-                  value={actualCashCount}
-                  onChange={(e) => setActualCashCount(parseInt(e.target.value) || 0)}
-                  className="w-full bg-[#18171f] border border-[#383124] rounded-lg px-3 py-2 text-base font-bold text-[#fef3c7] focus:border-[#d4af37]"
+                  min={1}
+                  value={editBaseAmountInput}
+                  onChange={(e) => setEditBaseAmountInput(e.target.value)}
+                  className="w-full bg-[#18171f] border border-[#383124] focus:border-[#d4af37] rounded-xl px-3 py-2 text-sm font-black font-mono text-[#fef3c7] focus:outline-none"
                 />
-              </div>
-
-              {/* Resultado del Cuadre */}
-              <div className="p-3 rounded-xl bg-[#18171f] border border-[#2d281e]">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-[#a8a29e]">Diferencia de Caja:</span>
-                  <span
-                    className={`font-black text-sm ${
-                      (balance?.difference || 0) === 0
-                        ? 'text-emerald-400'
-                        : (balance?.difference || 0) > 0
-                        ? 'text-cyan-300'
-                        : 'text-red-400'
-                    }`}
-                  >
-                    {(balance?.difference || 0) === 0
-                      ? '✓ Caja Cuadrada Exacta'
-                      : (balance?.difference || 0) > 0
-                      ? `+ Sobrante: ${formatCOP(balance?.difference)}`
-                      : `- Faltante: ${formatCOP(balance?.difference)}`}
-                  </span>
-                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-[#a8a29e] mb-1">Observaciones de Cierre</label>
-                <textarea
-                  rows={2}
-                  placeholder="Detalles del cuadre o notas del cajero..."
-                  value={closeShiftNotes}
-                  onChange={(e) => setCloseShiftNotes(e.target.value)}
-                  className="w-full bg-[#18171f] border border-[#383124] rounded-lg p-2 text-xs text-[#fef3c7]"
+                <label className="block text-xs font-bold text-[#a8a29e] mb-1">
+                  Concepto
+                </label>
+                <input
+                  type="text"
+                  value={editBaseReasonInput}
+                  onChange={(e) => setEditBaseReasonInput(e.target.value)}
+                  className="w-full bg-[#18171f] border border-[#383124] focus:border-[#d4af37] rounded-xl px-3 py-2 text-xs text-[#fef3c7] focus:outline-none"
                 />
               </div>
+
+              <div className="pt-3 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingBaseId(null)}
+                  className="px-4 py-2 rounded-xl border border-[#383124] text-xs font-bold text-[#a8a29e] cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-[#B77900] to-[#D6A21A] text-[#181818] font-black text-xs hover:brightness-110 cursor-pointer"
+                >
+                  Actualizar Base
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Consultar Informe Completo del Cierre */}
+      {closureToConsult && (
+        <CashClosureReportModal
+          closure={closureToConsult}
+          onClose={() => setClosureToConsult(null)}
+        />
+      )}
+
+      {/* MODAL: Editar Valores Registrados en un Cierre */}
+      {closureToEdit && (
+        <CashClosureEditModal
+          closure={closureToEdit}
+          isSaving={isUpdatingClosure}
+          onSave={handleSaveEditedClosure}
+          onClose={() => setClosureToEdit(null)}
+        />
+      )}
+
+      {/* MODAL: Confirmar Borrado del Último Cierre */}
+      {closureToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#121117] border border-red-600/60 rounded-3xl w-full max-w-md p-6 text-[#faf5ee] shadow-2xl space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-red-950/70 border border-red-600/60 text-red-400 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
             </div>
 
-            <div className="mt-5 flex justify-end gap-2">
+            <div className="text-center space-y-1.5">
+              <h3 className="text-base font-black text-[#fef3c7]">
+                ¿Borrar el último cierre ({closureToDelete.consecutivo})?
+              </h3>
+              <p className="text-xs text-[#a8a29e]">
+                Al eliminar este último cierre, sus movimientos y bases volverán al período abierto actual sin afectar ninguno de los cierres anteriores.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#2d281e]">
               <button
                 type="button"
-                onClick={() => setShowCloseModal(false)}
-                className="px-4 py-2 rounded-xl border border-[#383124] text-xs font-semibold text-[#a8a29e]"
+                disabled={isDeletingClosure}
+                onClick={() => setClosureToDelete(null)}
+                className="px-4 py-2 rounded-xl bg-[#18171f] border border-[#383124] text-xs font-bold text-[#a8a29e] cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="button"
-                onClick={handleCloseShift}
-                className="px-5 py-2 rounded-xl bg-red-950 text-red-200 border border-red-700 hover:bg-red-900 font-black text-xs"
+                disabled={isDeletingClosure}
+                onClick={handleConfirmDeleteLastClosure}
+                className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-black inline-flex items-center gap-2 cursor-pointer disabled:opacity-50"
               >
-                Confirmar y Cerrar Turno
+                {isDeletingClosure && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>{isDeletingClosure ? 'Eliminando...' : 'Sí, borrar último cierre'}</span>
               </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* MODALS de Cobro y Factura */}
-      {selectedOrderForPay && (
-        <CheckoutModal
-          order={selectedOrderForPay}
-          onClose={() => setSelectedOrderForPay(null)}
-          onPaymentComplete={(payment) => {
-            setReceiptPayment(payment);
-            setSelectedOrderForPay(null);
-          }}
-        />
-      )}
-
-      {receiptPayment && (
-        <ReceiptModal
-          payment={receiptPayment}
-          order={orders.find((o) => o.id === receiptPayment.orderId)}
-          onClose={() => setReceiptPayment(null)}
-        />
-      )}
-
     </div>
   );
 };

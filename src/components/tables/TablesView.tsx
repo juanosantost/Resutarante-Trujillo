@@ -35,7 +35,7 @@ import {
 } from 'lucide-react';
 
 export const TablesView: React.FC = () => {
-  const { tables, areas, orders, currentBranch } = useRestaurant();
+  const { tables, areas, orders, visibleOrders, activeOrders, currentBranch } = useRestaurant();
   const { currentUser } = useAuth();
 
   // Vista activa: Mapa gráfico vs Configuración de Salones y Mesas
@@ -101,14 +101,19 @@ export const TablesView: React.FC = () => {
 
   const occupancyRate = totalTables > 0 ? Math.round((occupiedTables.length / totalTables) * 100) : 0;
 
-  // Consumo activo total en salón
-  const activeRoomSales = orders
-    .filter((o) => o.status === 'abierto' && o.type === 'mesa')
+  // Consumo activo total en salón (acotado por rol: Administrador todos, Asesor solo los propios)
+  const activeRoomSales = activeOrders
+    .filter((o) => o.type === 'mesa')
     .reduce((sum, o) => sum + o.total, 0);
 
   const getTableOrder = (table: Table): Order | undefined => {
     if (!table.currentOrderId) return undefined;
-    return orders.find((o) => o.id === table.currentOrderId && o.status === 'abierto');
+    return visibleOrders.find((o) => o.id === table.currentOrderId && o.status === 'abierto');
+  };
+
+  const hasOtherStaffActiveOrder = (table: Table, visibleOrder?: Order): boolean => {
+    if (!table.currentOrderId || visibleOrder) return false;
+    return orders.some((o) => o.id === table.currentOrderId && o.status === 'abierto');
   };
 
   const isAdmin = currentUser?.role === 'administrador';
@@ -294,10 +299,11 @@ export const TablesView: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {filteredTables.map((table) => {
           const order = getTableOrder(table);
+          const occupiedByOther = hasOtherStaffActiveOrder(table, order);
           const statusMeta = getTableStatusConfig(table.status);
           const isOccupied = table.status === 'ocupada' || table.status === 'cuenta_solicitada';
-          const hasOpenTab = Boolean(table.hasOpenTab || order);
-          const billAmount = order ? order.total : table.currentBillAmount || 0;
+          const hasOpenTab = Boolean(order || (!occupiedByOther && table.hasOpenTab));
+          const billAmount = order ? order.total : 0;
 
           return (
             <div
@@ -340,7 +346,14 @@ export const TablesView: React.FC = () => {
 
                 {/* Distinción Explícita: Ocupación Física vs Cuenta Abierta */}
                 <div className="my-2.5">
-                  {hasOpenTab ? (
+                  {occupiedByOther ? (
+                    <div className="p-2.5 rounded-xl bg-amber-950/40 border border-amber-600/40 flex items-center justify-between gap-2 text-[11px] text-amber-300 font-semibold">
+                      <span className="truncate">
+                        Atendida por {table.assignedWaiterName || 'otro asesor'}
+                      </span>
+                      <span className="text-[10px] uppercase font-black shrink-0">Privado</span>
+                    </div>
+                  ) : hasOpenTab ? (
                     <div className="table-open-tab-container p-2.5 rounded-xl bg-[#292212]/90 border border-[#B77900]/40 flex items-center justify-between shadow-sm">
                       <div className="flex items-center gap-1.5 text-xs text-[#D6A21A] font-bold">
                         <Receipt className="w-3.5 h-3.5 shrink-0" />

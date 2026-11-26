@@ -19,11 +19,13 @@ import { useAuth } from './AuthContext';
 import { checkAndSeedInitialData, INITIAL_BRANCHES, INITIAL_MENU_ITEMS, INITIAL_CATEGORIES } from '../services/dbSeed';
 import {
   DEFAULT_DAILY_MENU_PRODUCT,
-  DEFAULT_DAILY_MENU_GROUPS,
   INITIAL_PRODUCTS,
   INITIAL_PRODUCT_CATEGORIES,
   INITIAL_MODIFIER_GROUPS,
 } from '../services/catalogSeed';
+import {
+  buildDailyMenuAuditSummary,
+} from '../utils/dataPreservationUtils';
 import {
   Branch,
   UserRole,
@@ -85,6 +87,8 @@ import {
   AbonoStatus,
   Expense,
   OtherIncome,
+  QuickSaleVisibilityConfig,
+  CashClosure,
 } from '../types';
 import {
   calculateOrderTotals,
@@ -136,6 +140,26 @@ import {
   toggleCarteraItemPaidVisual,
   calculateCarteraAdditionAmounts,
 } from '../utils/carteraProductsUtils';
+import {
+  resolveOrderOwnership,
+  filterOrdersForViewer,
+  canUserManageOrder,
+} from '../utils/orderVisibilityUtils';
+import {
+  DEFAULT_QUICK_SALE_CONFIG,
+  normalizeQuickSaleConfig,
+} from '../utils/quickSaleConfigUtils';
+import {
+  resolveActivePaymentMethods,
+  getLastClosureTimestamp,
+  sortClosuresNewestFirst,
+  buildCurrentPeriodIncomes,
+  buildCurrentPeriodDisbursements,
+  validateCashClosureInputs,
+  buildCashClosureRecord,
+  recalculateClosureWithEditedValues,
+  isLastCashClosure,
+} from '../utils/cashReconciliationUtils';
 
 interface RestaurantContextType {
   // Estado base
@@ -155,6 +179,7 @@ interface RestaurantContextType {
   prepStations: PrepStation[];
   auditLogs: AuditLog[];
   orders: Order[];
+  visibleOrders: Order[];
   activeOrders: Order[];
   payments: Payment[];
   comandas: Comanda[];
@@ -164,6 +189,7 @@ interface RestaurantContextType {
   productionLogs: ProductionLog[];
   activeShift: CashShift | null;
   cashMovements: CashMovement[];
+  cashClosures: CashClosure[];
   categories: MenuCategory[];
   menuItems: MenuItem[];
 
@@ -178,6 +204,8 @@ interface RestaurantContextType {
     isVisible: boolean;
     featureGroups: ModifierGroup[];
   }) => Promise<void>;
+  quickSaleConfig: QuickSaleVisibilityConfig;
+  saveQuickSaleConfig: (config: QuickSaleVisibilityConfig) => Promise<void>;
 
   createProduct: (data: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string>;
   importProductsFromExcel: (
@@ -254,6 +282,7 @@ interface RestaurantContextType {
     }>;
     notes?: string;
     includeTip?: boolean;
+    onOrderCreated?: (order: Order) => void;
   }) => Promise<string>;
 
   addRoundToOrder: (
@@ -293,6 +322,16 @@ interface RestaurantContextType {
   deleteCashBase: (baseId: string) => Promise<void>;
   closeCashShift: (actualCash: number, notes?: string) => Promise<void>;
   addCashMovement: (type: 'ingreso' | 'egreso', amount: number, reason: string) => Promise<void>;
+  registerCashClosure: (params: {
+    rawValuesByMethodId: Record<string, string>;
+    notes?: string;
+  }) => Promise<CashClosure>;
+  updateCashClosureValues: (
+    closureId: string,
+    rawValuesByMethodId: Record<string, string>,
+    notes?: string
+  ) => Promise<CashClosure>;
+  deleteLastCashClosure: (closureId: string) => Promise<void>;
   updateInventoryStock: (
     itemId: string,
     quantity: number,
@@ -574,6 +613,8 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodItem[]>([]);
   // Otros Ingresos
   const [otherIncomes, setOtherIncomes] = useState<OtherIncome[]>([]);
+  // Configuración de visibilidad para Venta Rápida (Mostrador)
+  const [quickSaleConfig, setQuickSaleConfig] = useState<QuickSaleVisibilityConfig>(DEFAULT_QUICK_SALE_CONFIG);
 
   // Colecciones reactivas
   const [tables, setTables] = useState<Table[]>([]);
@@ -588,6 +629,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [productionLogs, setProductionLogs] = useState<ProductionLog[]>([]);
   const [activeShift, setActiveShift] = useState<CashShift | null>(null);
   const [cashMovements, setCashMovements] = useState<CashMovement[]>([]);
+  const [cashClosures, setCashClosures] = useState<CashClosure[]>([]);
   const [categories, setCategories] = useState<MenuCategory[]>(INITIAL_CATEGORIES);
   const [menuItems, setMenuItems] = useState<MenuItem[]>(INITIAL_MENU_ITEMS);
   const [separados, setSeparados] = useState<Separado[]>([]);
@@ -663,8 +705,11 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setMenuItems(list);
     }, (error) => handleFirestoreError(error, OperationType.GET, 'menuItems'));
 
-    // Módulo 03: Categorías
+    // Módulo 03: Categorías (100% solo lectura — NUNCA sobrescribir categorías desde onSnapshot)
     const unsubCatalogCategories = onSnapshot(collection(db, 'categories'), (snap) => {
+      if (snap.empty && snap.metadata.fromCache) {
+        return;
+      }
       const list: Category[] = [];
       snap.forEach((d) => {
         const item = { ...d.data(), id: d.id } as Category & { isDeleted?: boolean };
@@ -672,21 +717,6 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           list.push(item as Category);
         }
       });
-      const hasDailyCategory = list.some((c) => c.id === 'cat-menu-del-dia');
-      if (!hasDailyCategory) {
-        const dailyCat: Category = {
-          id: 'cat-menu-del-dia',
-          name: 'Menú del Día',
-          description: 'Almuerzos ejecutivos con Sopa, Principio, Carne y 3 Acompañamientos a elección',
-          order: 0,
-          isActive: true,
-          isVisibleInMenu: true,
-          icon: 'UtensilsCrossed',
-          itemCount: 1,
-        };
-        list.unshift(dailyCat);
-        setDoc(doc(db, 'categories', dailyCat.id), sanitizeFirestoreData(dailyCat), { merge: true }).catch(() => {});
-      }
       setCatalogCategories(list.sort((a, b) => (a.order || 0) - (b.order || 0)));
     }, (error) => handleFirestoreError(error, OperationType.GET, 'categories'));
 
@@ -706,99 +736,19 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       }
     }, (error) => handleFirestoreError(error, OperationType.GET, 'modifierGroups'));
 
-    // Módulo 03: Productos
+    // Módulo 03: Productos (solo lectura reactiva — NUNCA sobrescribir Menú del Día desde onSnapshot)
     const unsubProducts = onSnapshot(collection(db, 'products'), (snap) => {
+      // Ignorar snapshots vacíos provenientes únicamente de caché local inicial
+      if (snap.empty && snap.metadata.fromCache) {
+        return;
+      }
       const list: Product[] = [];
       snap.forEach((d) => list.push({ ...d.data(), id: d.id } as Product));
       const dailyIdx = list.findIndex((p) => p.id === 'prod-almuerzo-del-dia' || p.isDailyMenu);
-      if (dailyIdx === -1) {
-        list.unshift(DEFAULT_DAILY_MENU_PRODUCT);
-        setDoc(
-          doc(db, 'products', DEFAULT_DAILY_MENU_PRODUCT.id),
-          sanitizeFirestoreData(DEFAULT_DAILY_MENU_PRODUCT),
-          { merge: true }
-        ).catch(() => {});
-        setDoc(
-          doc(db, 'menuItems', DEFAULT_DAILY_MENU_PRODUCT.id),
-          sanitizeFirestoreData({
-            id: DEFAULT_DAILY_MENU_PRODUCT.id,
-            name: DEFAULT_DAILY_MENU_PRODUCT.name,
-            description: DEFAULT_DAILY_MENU_PRODUCT.description,
-            categoryId: DEFAULT_DAILY_MENU_PRODUCT.categoryId,
-            price: DEFAULT_DAILY_MENU_PRODUCT.price,
-            station: 'cocina_caliente',
-            prepTimeMinutes: DEFAULT_DAILY_MENU_PRODUCT.prepTimeMinutes,
-            recipe: DEFAULT_DAILY_MENU_PRODUCT.recipe || [],
-            isAvailable: true,
-            isAvailableForSale: true,
-            isVisibleInMenu: true,
-            isDailyMenu: true,
-            status: 'activo',
-            image: DEFAULT_DAILY_MENU_PRODUCT.images?.[0] || '',
-            sku: DEFAULT_DAILY_MENU_PRODUCT.sku,
-            branchId: 'all',
-            prepStationId: DEFAULT_DAILY_MENU_PRODUCT.prepStationId,
-            variants: [],
-          }),
-          { merge: true }
-        ).catch(() => {});
-      } else {
-        // Asegurar nombre "Menú del Día", categoría "Menú del Día" y la categoría Bebida / Sobremesa
-        const dailyItem = list[dailyIdx];
-        const currentGroups = Array.isArray(dailyItem.featureGroups) ? [...dailyItem.featureGroups] : [];
-        const hasDrinkGroup = currentGroups.some(
-          (g) => g.id === 'grp-almuerzo-bebida' || g.name.toLowerCase().includes('bebida')
-        );
-        const defaultDrinkGroup = DEFAULT_DAILY_MENU_GROUPS.find(
-          (g) => g.id === 'grp-almuerzo-bebida'
-        );
-
-        let needsFirestoreSync = false;
-        const syncPayload: Record<string, any> = {};
-
-        if (!hasDrinkGroup && defaultDrinkGroup) {
-          currentGroups.push(defaultDrinkGroup);
-          dailyItem.featureGroups = currentGroups;
-          syncPayload.featureGroups = currentGroups;
-          needsFirestoreSync = true;
-        }
-
-        if (
-          dailyItem.name === 'Almuerzo del día' ||
-          dailyItem.categoryId !== 'cat-menu-del-dia' ||
-          dailyItem.categoryName !== 'Menú del Día'
-        ) {
-          dailyItem.name = 'Menú del Día';
-          dailyItem.categoryId = 'cat-menu-del-dia';
-          dailyItem.categoryName = 'Menú del Día';
-          syncPayload.name = 'Menú del Día';
-          syncPayload.categoryId = 'cat-menu-del-dia';
-          syncPayload.categoryName = 'Menú del Día';
-          needsFirestoreSync = true;
-
-          setDoc(
-            doc(db, 'menuItems', dailyItem.id),
-            sanitizeFirestoreData({
-              name: 'Menú del Día',
-              categoryId: 'cat-menu-del-dia',
-            }),
-            { merge: true }
-          ).catch(() => {});
-        }
-
-        if (needsFirestoreSync) {
-          setDoc(
-            doc(db, 'products', dailyItem.id),
-            sanitizeFirestoreData(syncPayload),
-            { merge: true }
-          ).catch(() => {});
-        }
-
-        // Ubicar como primer producto arriba a la mano izquierda
-        if (dailyIdx > 0) {
-          const [daily] = list.splice(dailyIdx, 1);
-          list.unshift(daily);
-        }
+      if (dailyIdx > 0) {
+        // Ubicar como primer producto arriba a la mano izquierda sin mutar Firestore
+        const [daily] = list.splice(dailyIdx, 1);
+        list.unshift(daily);
       }
       setProducts(list);
     }, (error) => handleFirestoreError(error, OperationType.GET, 'products'));
@@ -819,62 +769,53 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setCustomers(list.sort((a, b) => a.name.localeCompare(b.name)));
     }, (error) => handleFirestoreError(error, OperationType.GET, 'customers'));
 
-    // Configuración: Medios de Pago
+    // Configuración: Medios de Pago (100% solo lectura — NUNCA sobrescribir medios de pago desde onSnapshot)
     const paymentMethodsQ = query(collection(db, 'payment_methods'));
     const unsubPaymentMethods = onSnapshot(
       paymentMethodsQ,
-      async (snap) => {
-        if (snap.empty) {
-          try {
-            const batch = writeBatch(db);
-            DEFAULT_PAYMENT_METHODS.forEach((pm) => {
-              const slug = pm.name
-                .trim()
-                .toLowerCase()
-                .normalize('NFD')
-                .replace(/[\u0300-\u036f]/g, '')
-                .replace(/[^a-z0-9]+/g, '_')
-                .replace(/^_|_$/g, '');
-              const docRef = doc(db, 'payment_methods', `default_${slug}`);
-              batch.set(
-                docRef,
-                {
-                  ...pm,
-                  createdAt: new Date().toISOString(),
-                },
-                { merge: true }
-              );
-            });
-            await batch.commit();
-          } catch (e) {
-            console.error('Error sembrando medios de pago por defecto:', e);
-          }
-        } else {
-          const rawList: PaymentMethodItem[] = [];
-          snap.forEach((d) => rawList.push({ ...d.data(), id: d.id } as PaymentMethodItem));
-
-          // Deduplicar medios de pago con el mismo nombre normalizado (evita duplicados por siembra concurrente)
-          const dedupedMap = new Map<string, PaymentMethodItem>();
-          for (const item of rawList) {
-            const key = (item.name || '').trim().toLowerCase().replace(/\s+/g, '_');
-            const existing = dedupedMap.get(key);
-            if (!existing) {
-              dedupedMap.set(key, item);
-            } else if (!existing.isActive && item.isActive) {
-              dedupedMap.set(key, item);
-            } else if (
-              existing.isActive === item.isActive &&
-              (item.createdAt || '') < (existing.createdAt || '')
-            ) {
-              dedupedMap.set(key, item);
-            }
-          }
-
-          const uniqueList = Array.from(dedupedMap.values());
-          setPaymentMethods(uniqueList.sort((a, b) => a.name.localeCompare(b.name)));
+      (snap) => {
+        if (snap.empty && snap.metadata.fromCache) {
+          return;
         }
+        const rawList: PaymentMethodItem[] = [];
+        snap.forEach((d) => rawList.push({ ...d.data(), id: d.id } as PaymentMethodItem));
+
+        // Deduplicar medios de pago con el mismo nombre normalizado sin modificar Firestore
+        const dedupedMap = new Map<string, PaymentMethodItem>();
+        for (const item of rawList) {
+          const key = (item.name || '').trim().toLowerCase().replace(/\s+/g, '_');
+          const existing = dedupedMap.get(key);
+          if (!existing) {
+            dedupedMap.set(key, item);
+          } else if (!existing.isActive && item.isActive) {
+            dedupedMap.set(key, item);
+          } else if (
+            existing.isActive === item.isActive &&
+            (item.createdAt || '') < (existing.createdAt || '')
+          ) {
+            dedupedMap.set(key, item);
+          }
+        }
+
+        const uniqueList = Array.from(dedupedMap.values());
+        setPaymentMethods(uniqueList.sort((a, b) => a.name.localeCompare(b.name)));
       },
       (error) => handleFirestoreError(error, OperationType.GET, 'payment_methods')
+    );
+
+    // Configuración de visibilidad de Venta Rápida (solo lectura reactiva; no escribe si no existe)
+    const unsubQuickSaleConfig = onSnapshot(
+      doc(db, 'system_settings', 'quick_sale_config'),
+      (snap) => {
+        if (snap.exists()) {
+          setQuickSaleConfig(normalizeQuickSaleConfig(snap.data() as Partial<QuickSaleVisibilityConfig>));
+        } else {
+          setQuickSaleConfig(DEFAULT_QUICK_SALE_CONFIG);
+        }
+      },
+      (error) => {
+        console.warn('Error leyendo configuración de Venta Rápida:', error);
+      }
     );
 
     return () => {
@@ -887,6 +828,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       unsubSuppliers();
       unsubCustomers();
       unsubPaymentMethods();
+      unsubQuickSaleConfig();
     };
   }, []);
 
@@ -978,6 +920,14 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       snap.forEach((d) => list.push({ ...d.data(), id: d.id } as CashMovement));
       setCashMovements(list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
     }, (error) => handleFirestoreError(error, OperationType.GET, 'cashMovements'));
+
+    // Cierres de caja / Cuadres históricos
+    const cashClosuresQ = query(collection(db, 'cashClosures'), where('branchId', '==', currentBranchId));
+    const unsubCashClosures = onSnapshot(cashClosuresQ, (snap) => {
+      const list: CashClosure[] = [];
+      snap.forEach((d) => list.push({ ...d.data(), id: d.id } as CashClosure));
+      setCashClosures(sortClosuresNewestFirst(list));
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'cashClosures'));
 
     // Salones y Áreas (Módulo 02)
     const areasQ = query(collection(db, 'areas'), where('branchId', '==', currentBranchId));
@@ -1092,6 +1042,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       unsubMov();
       unsubShift();
       unsubCashMov();
+      unsubCashClosures();
       unsubPurchases();
       unsubAdvances();
       unsubPay();
@@ -1105,8 +1056,28 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     };
   }, [currentBranchId]);
 
+  // Contexto de visibilidad de pedidos por rol:
+  // - Administrador: ve todos los pedidos activos e históricos
+  // - Asesor: solo ve y gestiona sus propios pedidos
+  const orderViewer = useMemo(
+    () => ({
+      id: currentUser?.id,
+      email: currentUser?.email,
+      fullName: currentUser?.fullName || staffName,
+      role: userRole || currentUser?.role,
+    }),
+    [currentUser?.id, currentUser?.email, currentUser?.fullName, currentUser?.role, staffName, userRole]
+  );
+
   // Listas derivadas
-  const activeOrders = orders.filter((o) => o.status === 'abierto');
+  const visibleOrders = useMemo(
+    () => filterOrdersForViewer(orders, orderViewer),
+    [orders, orderViewer]
+  );
+  const activeOrders = useMemo(
+    () => visibleOrders.filter((o) => o.status === 'abierto'),
+    [visibleOrders]
+  );
   const activeComandas = comandas.filter((c) => {
     if (c.status === 'servida' || c.status === 'cancelada') return false;
     const linkedOrder = orders.find((o) => o.id === c.orderId);
@@ -1141,6 +1112,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     items,
     notes,
     includeTip = true,
+    onOrderCreated,
   }: {
     type: OrderType;
     tableId?: string;
@@ -1162,6 +1134,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }>;
     notes?: string;
     includeTip?: boolean;
+    onOrderCreated?: (order: Order) => void;
   }): Promise<string> => {
     if (actionLoading) throw new Error('Operación en proceso');
     setActionLoading(true);
@@ -1199,6 +1172,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const { subtotal, tax, tip, total } = calculateOrderTotals(orderItems, taxRate, includeTip, 0.10);
 
       const now = new Date().toISOString();
+      const ownership = resolveOrderOwnership(currentUser, staffName, userRole);
 
       const newOrder: Order = {
         id: orderId,
@@ -1223,26 +1197,33 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         tax,
         tip,
         total,
-        waiterId: userRole === 'mesero' ? 'usr-mesero' : 'usr-staff',
-        waiterName: staffName,
+        waiterId: ownership.waiterId,
+        waiterName: ownership.waiterName,
+        createdByUserId: ownership.createdByUserId,
+        createdByEmail: ownership.createdByEmail,
         notes: notes || '',
         currentRound: 1,
         createdAt: now,
         updatedAt: now,
       };
 
-      // 1. Guardar orden
+      // 1. Guardar orden y actualizar estado local de inmediato para habilitar cobro instantáneo
       await setDoc(doc(db, 'orders', orderId), sanitizeFirestoreData(newOrder));
+      setOrders((prev) => (prev.some((o) => o.id === orderId) ? prev : [newOrder, ...prev]));
 
       // 2. Si es mesa, marcarla ocupada
       if (type === 'mesa' && tableId) {
-        await updateDoc(doc(db, 'tables', tableId), {
-          status: 'ocupada',
-          currentOrderId: orderId,
-          assignedWaiterName: staffName,
-          openedAt: now,
-          updatedAt: now,
-        });
+        await updateDoc(
+          doc(db, 'tables', tableId),
+          sanitizeFirestoreData({
+            status: 'ocupada',
+            currentOrderId: orderId,
+            assignedWaiterId: ownership.createdByUserId || undefined,
+            assignedWaiterName: ownership.waiterName,
+            openedAt: now,
+            updatedAt: now,
+          })
+        );
       }
 
       // 3. Generar comanda de cocina para Ronda 1
@@ -1326,10 +1307,45 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }
       }
 
+      onOrderCreated?.(newOrder);
       return orderId;
     } catch (error) {
       console.error('Error in createOrder:', error);
       handleFirestoreError(error, OperationType.CREATE, 'orders');
+      throw error;
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Configuración de visibilidad de categorías y productos en Venta Rápida
+  const saveQuickSaleConfig = async (config: QuickSaleVisibilityConfig): Promise<void> => {
+    setActionLoading(true);
+    try {
+      const now = new Date().toISOString();
+      const normalized = normalizeQuickSaleConfig({
+        ...config,
+        updatedAt: now,
+        updatedBy: currentUser?.fullName || staffName || 'Usuario',
+      });
+
+      await setDoc(
+        doc(db, 'system_settings', 'quick_sale_config'),
+        sanitizeFirestoreData(normalized),
+        { merge: true }
+      );
+      setQuickSaleConfig(normalized);
+
+      await logAuditAction({
+        entityType: 'product',
+        entityId: 'quick_sale_config',
+        entityName: 'Configuración de Venta Rápida',
+        action: 'update',
+        details: `Visibilidad actualizada: ${normalized.hiddenCategoryIds.length} categoría(s) y ${normalized.hiddenProductIds.length} producto(s) ocultos en Venta Rápida`,
+      });
+    } catch (error) {
+      console.error('Error saving quickSaleConfig:', error);
+      handleFirestoreError(error, OperationType.WRITE, 'system_settings/quick_sale_config');
       throw error;
     } finally {
       setActionLoading(false);
@@ -1357,6 +1373,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       const targetOrder = orders.find((o) => o.id === orderId);
       if (!targetOrder) throw new Error('Orden no encontrada');
+      if (!canUserManageOrder(targetOrder, orderViewer)) {
+        throw new Error('Solo puedes gestionar tus propios pedidos.');
+      }
 
       const resolvedDest = resolveRoundDestination({
         order: targetOrder,
@@ -1584,6 +1603,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       const targetOrder = orders.find((o) => o.id === orderId);
       if (!targetOrder) throw new Error('Pedido no encontrado');
+      if (!canUserManageOrder(targetOrder, orderViewer)) {
+        throw new Error('Solo puedes anular tus propios pedidos.');
+      }
       if (targetOrder.status === 'facturado') {
         throw new Error('No se puede anular un pedido que ya ha sido facturado y cobrado.');
       }
@@ -1718,6 +1740,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       const order = orders.find((o) => o.id === orderId);
       if (!order) throw new Error('Orden no encontrada');
+      if (!canUserManageOrder(order, orderViewer)) {
+        throw new Error('Solo puedes modificar tus propios pedidos.');
+      }
 
       const now = new Date().toISOString();
       const taxRate = getEffectiveTaxRate(currentBranch);
@@ -1759,6 +1784,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       const order = orders.find((o) => o.id === orderId);
       if (!order) throw new Error('Pedido no encontrado');
+      if (!canUserManageOrder(order, orderViewer)) {
+        throw new Error('Solo puedes modificar tus propios pedidos.');
+      }
 
       const now = new Date().toISOString();
       let toggledItemName = '';
@@ -1856,6 +1884,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       const order = orders.find((o) => o.id === orderId);
       if (!order) throw new Error('Orden no encontrada');
+      if (!canUserManageOrder(order, orderViewer)) {
+        throw new Error('Solo puedes cobrar tus propios pedidos.');
+      }
 
       const now = new Date().toISOString();
       const currentItems: OrderItem[] = updatedItems || order.items || [];
@@ -2142,15 +2173,19 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   };
 
-  // OPERACIÓN 5.1: Registrar Base Adicional de Caja
+  // OPERACIÓN 5.1: Registrar Base de Caja (si no hay turno abierto, lo inicia automáticamente)
   const addCashBase = async (amount: number, reason: string) => {
-    if (!activeShift) throw new Error('No hay un turno de caja abierto en esta sucursal');
+    const cleanReason = reason.trim() || 'Base de caja';
+    if (!activeShift) {
+      await openCashShift(amount, cleanReason);
+      return;
+    }
     try {
       const now = new Date().toISOString();
       const baseEntry = {
         id: `base-${Date.now()}`,
         amount,
-        reason,
+        reason: cleanReason,
         createdAt: now,
         userName: staffName,
       };
@@ -2291,6 +2326,193 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     } catch (error) {
       console.error('Error adding cash movement:', error);
       handleFirestoreError(error, OperationType.CREATE, 'cashMovements');
+    }
+  };
+
+  // OPERACIÓN 7.1: Registrar Cuadre / Cierre de Caja completo por medios de pago activos
+  const registerCashClosure = async (params: {
+    rawValuesByMethodId: Record<string, string>;
+    notes?: string;
+  }): Promise<CashClosure> => {
+    setActionLoading(true);
+    try {
+      const activeMethods = resolveActivePaymentMethods(paymentMethods);
+      const validation = validateCashClosureInputs(params.rawValuesByMethodId, activeMethods);
+      if (!validation.isValid) {
+        throw new Error(validation.error || 'Valores inválidos para el cuadre de caja');
+      }
+
+      const now = new Date().toISOString();
+      const periodStart = getLastClosureTimestamp(cashClosures);
+      const periodIncomes = buildCurrentPeriodIncomes({
+        sinceIso: periodStart,
+        activeMethods,
+        payments,
+        orders,
+        abonos,
+        otherIncomes,
+        supplierAdvanceReintegros,
+        cashMovements,
+        branchId: currentBranchId,
+      });
+      const periodDisbursements = buildCurrentPeriodDisbursements({
+        sinceIso: periodStart,
+        activeMethods,
+        expenses,
+        purchasePayments,
+        supplierAdvances,
+        cashMovements,
+        branchId: currentBranchId,
+      });
+
+      const baseEntries = activeShift?.baseEntries || [];
+      const baseTotal = activeShift ? activeShift.initialCash || 0 : 0;
+
+      const maxSeq = cashClosures.reduce((max, c) => {
+        const m = (c.consecutivo || '').match(/(\d+)$/);
+        const n = m ? parseInt(m[1], 10) : 0;
+        return Math.max(max, n);
+      }, 0);
+      const consecutivo = `CIE-${String(maxSeq + 1).padStart(4, '0')}`;
+      const closureId = `cie-${Date.now()}`;
+
+      const closureRecord = buildCashClosureRecord({
+        id: closureId,
+        consecutivo,
+        branchId: currentBranchId,
+        periodStart,
+        closedAt: now,
+        userId: currentUser?.id || userRole,
+        userName: currentUser?.fullName?.trim() || staffName,
+        notes: params.notes,
+        baseTotal,
+        baseEntries,
+        activeMethods,
+        parsedRegisteredValues: validation.parsedValues,
+        incomes: periodIncomes,
+        disbursements: periodDisbursements,
+        closedShiftId: activeShift?.id || null,
+      });
+
+      await setDoc(doc(db, 'cashClosures', closureId), sanitizeFirestoreData(closureRecord));
+
+      // Cerrar el turno activo (consumiendo sus bases) si existe
+      if (activeShift) {
+        await updateDoc(doc(db, 'cashShifts', activeShift.id), {
+          status: 'cerrado',
+          closedAt: now,
+          actualCash: closureRecord.cashRegistered,
+          difference: closureRecord.cashDifference,
+          notes: params.notes
+            ? `${activeShift.notes || ''} | Cierre ${consecutivo}: ${params.notes}`
+            : activeShift.notes,
+        });
+      }
+
+      await logAuditAction({
+        entityType: 'caja',
+        entityId: closureId,
+        entityName: `Cierre de Caja ${consecutivo}`,
+        action: 'create',
+        details: `Cuadre ${consecutivo} registrado. Efectivo esperado: ${formatCOP(
+          closureRecord.cashExpected
+        )}, registrado: ${formatCOP(closureRecord.cashRegistered)}, diferencia: ${formatCOP(
+          closureRecord.cashDifference
+        )}.`,
+      });
+
+      return closureRecord;
+    } catch (error) {
+      console.error('Error registering cash closure:', error);
+      throw error;
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // OPERACIÓN 7.2: Editar valores registrados de un cierre de caja existente
+  const updateCashClosureValues = async (
+    closureId: string,
+    rawValuesByMethodId: Record<string, string>,
+    notes?: string
+  ): Promise<CashClosure> => {
+    setActionLoading(true);
+    try {
+      const target = cashClosures.find((c) => c.id === closureId);
+      if (!target) throw new Error('Cierre de caja no encontrado');
+
+      const recalculated = recalculateClosureWithEditedValues(target, rawValuesByMethodId, notes);
+      if (!recalculated.isValid || !recalculated.updatedClosure) {
+        throw new Error(recalculated.error || 'Error validando los valores editados');
+      }
+
+      const updated = recalculated.updatedClosure;
+      await updateDoc(
+        doc(db, 'cashClosures', closureId),
+        sanitizeFirestoreData({
+          methodBalances: updated.methodBalances,
+          cashExpected: updated.cashExpected,
+          cashRegistered: updated.cashRegistered,
+          cashDifference: updated.cashDifference,
+          notes: updated.notes || null,
+          updatedAt: updated.updatedAt,
+        })
+      );
+
+      await logAuditAction({
+        entityType: 'caja',
+        entityId: closureId,
+        entityName: `Cierre de Caja ${updated.consecutivo}`,
+        action: 'update',
+        details: `Valores editados en cierre ${updated.consecutivo}. Nuevo efectivo registrado: ${formatCOP(
+          updated.cashRegistered
+        )}, diferencia: ${formatCOP(updated.cashDifference)}.`,
+      });
+
+      return updated;
+    } catch (error) {
+      console.error('Error updating cash closure:', error);
+      throw error;
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // OPERACIÓN 7.3: Borrar ÚNICAMENTE el último cierre de caja generado (sin afectar anteriores)
+  const deleteLastCashClosure = async (closureId: string): Promise<void> => {
+    setActionLoading(true);
+    try {
+      if (!isLastCashClosure(closureId, cashClosures)) {
+        throw new Error('Solo se permite borrar el último cierre de caja registrado para no afectar cierres anteriores.');
+      }
+
+      const target = cashClosures.find((c) => c.id === closureId);
+      if (!target) throw new Error('Cierre de caja no encontrado');
+
+      await deleteDoc(doc(db, 'cashClosures', closureId));
+
+      // Si el último cierre cerró un turno con bases y actualmente no hay turno abierto, reabrirlo
+      if (target.closedShiftId && !activeShift) {
+        await updateDoc(doc(db, 'cashShifts', target.closedShiftId), {
+          status: 'abierto',
+          closedAt: null,
+          actualCash: null,
+          difference: null,
+        }).catch(() => {});
+      }
+
+      await logAuditAction({
+        entityType: 'caja',
+        entityId: closureId,
+        entityName: `Cierre de Caja ${target.consecutivo}`,
+        action: 'delete',
+        details: `Se eliminó el último cierre de caja (${target.consecutivo}) sin afectar los cierres anteriores.`,
+      });
+    } catch (error) {
+      console.error('Error deleting last cash closure:', error);
+      throw error;
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -3794,7 +4016,12 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         entityId: prodId,
         entityName: cleanName,
         action: 'update',
-        details: `Menú del día "${cleanName}" actualizado: Precio $${cleanPrice.toLocaleString('es-CO')} COP, Visible: ${params.isVisible ? 'SÍ' : 'NO'}, ${params.featureGroups.length} categorías configuradas`,
+        details: buildDailyMenuAuditSummary({
+          name: cleanName,
+          price: cleanPrice,
+          isVisible: params.isVisible,
+          featureGroups: params.featureGroups,
+        }),
       });
     } catch (error) {
       console.error('Error saving daily menu config:', error);
@@ -6682,6 +6909,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         prepStations,
         auditLogs,
         orders,
+        visibleOrders,
         activeOrders,
         payments,
         comandas,
@@ -6691,6 +6919,7 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         productionLogs,
         activeShift,
         cashMovements,
+        cashClosures,
         categories: activeCombinedCategories,
         menuItems: activeProductsAsMenuItems,
 
@@ -6730,6 +6959,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         togglePrepStationActive,
         logAuditAction,
 
+        quickSaleConfig,
+        saveQuickSaleConfig,
+
         createOrder,
         addRoundToOrder,
         cancelOrder,
@@ -6744,6 +6976,9 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         deleteCashBase,
         closeCashShift,
         addCashMovement,
+        registerCashClosure,
+        updateCashClosureValues,
+        deleteLastCashClosure,
         updateInventoryStock,
         createInventoryItem,
         produceInventoryItem,
@@ -6851,35 +7086,12 @@ export const RestaurantProvider: React.FC<{ children: React.ReactNode }> = ({ ch
               }
             }
 
-            // Cleanup obsolete branches leaving only sede-buga
-            try {
-              const branchesSnap = await getDocs(collection(db, 'branches'));
-              for (const bDoc of branchesSnap.docs) {
-                if (bDoc.id !== 'sede-buga') {
-                  await deleteDoc(doc(db, 'branches', bDoc.id)).catch(() => {});
-                }
-              }
-              // Ensure sede-buga is saved
-              await setDoc(doc(db, 'branches', 'sede-buga'), {
-                id: 'sede-buga',
-                name: 'Sede Principal — Restrepo (Valle)',
-                address: 'Restrepo, Valle del Cauca, Colombia',
-                city: 'Restrepo (Valle)',
-                phone: '+57 (602) 237-4589',
-                isActive: true,
-                orderPrefix: 'RES-',
-                createdAt: new Date().toISOString(),
-              }, { merge: true });
-            } catch (branchErr) {
-              console.warn('Error regulando colección branches:', branchErr);
-            }
-
-            // Reset tables to 'libre' and ensure branchId is sede-buga
+            // Preservar siempre la configuración real de sucursales, usuarios, catálogo y menú del día (NO sobrescribir branches)
+            // Reset tables to 'libre' conservando su configuración real y branchId actual
             try {
               const tablesSnap = await getDocs(collection(db, 'tables'));
               for (const tDoc of tablesSnap.docs) {
                 await updateDoc(doc(db, 'tables', tDoc.id), {
-                  branchId: 'sede-buga',
                   status: 'libre',
                   currentOrderId: null,
                   hasOpenTab: false,

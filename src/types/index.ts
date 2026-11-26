@@ -540,6 +540,8 @@ export interface Order {
   total: number;
   waiterId?: string;
   waiterName?: string;
+  createdByUserId?: string;
+  createdByEmail?: string;
   notes?: string;
   currentRound: number;
   cancellationReason?: string;
@@ -1138,6 +1140,86 @@ export interface CarteraRecord {
   updatedAt: string;
   createdBy: string;
 }
+
+export interface QuickSaleVisibilityConfig {
+  hiddenCategoryIds: string[];
+  hiddenProductIds: string[];
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export type CashFlowEntryKind =
+  | 'venta'
+  | 'abono_separado'
+  | 'abono_cartera'
+  | 'otro_ingreso'
+  | 'reintegro_proveedor'
+  | 'caja_menor_ingreso'
+  | 'gasto'
+  | 'pago_proveedor'
+  | 'anticipo_proveedor'
+  | 'caja_menor_egreso';
+
+export interface CashFlowEntry {
+  id: string;
+  flow: 'ingreso' | 'desembolso';
+  kind: CashFlowEntryKind;
+  consecutivo: string;
+  date: string;
+  concept: string;
+  thirdParty: string;
+  paymentMethodId: string;
+  paymentMethodName: string;
+  amount: number;
+  userName: string;
+  observations?: string;
+}
+
+export interface CashClosureMethodBalance {
+  methodId: string;
+  methodName: string;
+  category: PaymentMethodCategory;
+  isCash: boolean;
+  baseAmount: number;
+  incomesTotal: number;
+  disbursementsTotal: number;
+  expectedAmount: number;
+  registeredAmount: number | null;
+  difference: number | null;
+}
+
+export interface CashClosureBaseEntry {
+  id: string;
+  amount: number;
+  reason: string;
+  createdAt: string;
+  userName: string;
+}
+
+export interface CashClosure {
+  id: string;
+  consecutivo: string;
+  branchId: string;
+  periodStart: string | null;
+  closedAt: string;
+  createdAt: string;
+  updatedAt?: string;
+  userId: string;
+  userName: string;
+  notes?: string;
+  baseTotal: number;
+  baseEntries: CashClosureBaseEntry[];
+  methodBalances: CashClosureMethodBalance[];
+  totalIncomes: number;
+  totalDisbursements: number;
+  cashExpected: number;
+  cashRegistered: number;
+  cashDifference: number;
+  incomes: CashFlowEntry[];
+  disbursements: CashFlowEntry[];
+  closedShiftId?: string | null;
+}
+
 
 
 

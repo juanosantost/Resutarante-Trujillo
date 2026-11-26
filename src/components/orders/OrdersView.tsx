@@ -30,9 +30,12 @@ import {
   RotateCcw,
 } from 'lucide-react';
 
+import { normalizeUserRole } from '../../utils/auth';
+
 export const OrdersView: React.FC = () => {
-  const { orders, currentBranch, cancelOrder, toggleOrderItemCancelled } = useRestaurant();
+  const { visibleOrders, userRole, currentBranch, cancelOrder, toggleOrderItemCancelled } = useRestaurant();
   const { showToast } = useToast();
+  const isAsesorScope = normalizeUserRole(userRole) === 'asesor';
 
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [typeFilter, setTypeFilter] = useState<string>('todos');
@@ -62,7 +65,8 @@ export const OrdersView: React.FC = () => {
     }
   };
 
-  const filteredOrders = orders.filter((o) => {
+  const filteredOrders = visibleOrders.filter((o) => {
+    if (statusFilter !== 'todos' && o.status !== statusFilter) return false;
     if (typeFilter !== 'todos' && o.type !== typeFilter) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -114,6 +118,11 @@ export const OrdersView: React.FC = () => {
 
         {/* Filtros */}
         <div className="flex items-center gap-2 flex-wrap">
+          {isAsesorScope && (
+            <span className="px-2.5 py-1.5 rounded-xl bg-sky-950/70 border border-sky-700/60 text-sky-300 text-[11px] font-black uppercase tracking-wider">
+              Solo mis pedidos
+            </span>
+          )}
           <select
             aria-label="Filtrar por Estado"
             value={statusFilter}
@@ -473,7 +482,7 @@ export const OrdersView: React.FC = () => {
       {receiptPayment && (
         <ReceiptModal
           payment={receiptPayment}
-          order={orders.find((o) => o.id === receiptPayment.orderId)}
+          order={visibleOrders.find((o) => o.id === receiptPayment.orderId)}
           onClose={() => setReceiptPayment(null)}
         />
       )}

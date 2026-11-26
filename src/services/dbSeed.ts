@@ -1,12 +1,16 @@
 import {
   collection,
   doc,
-  getDocs,
+  getDocFromServer,
+  getDocsFromServer,
+  limit,
+  query,
   setDoc,
   serverTimestamp
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
 import { Branch, Table, RestaurantArea, PrepStation, MenuCategory, MenuItem, InventoryItem, CashShift, DEFAULT_BRANCH_PRINT_CONFIG } from '../types';
+import { shouldRunInitialDatabaseSeed } from '../utils/dataPreservationUtils';
 
 export const INITIAL_BRANCHES: Branch[] = [
   {
@@ -391,55 +395,104 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
 
 export async function checkAndSeedInitialData() {
   try {
-    const branchesRef = collection(db, 'branches');
-    const branchSnap = await getDocs(branchesRef);
+    // PROTECCIÓN PERMANENTE DE DATOS REALES:
+    // Verificar en el SERVIDOR si la base de datos ya fue inicializada o ya contiene datos reales.
+    // Si el servidor no responde, si existe system_settings/db_initialized, o si ya existe al menos
+    // un registro en branches, users, products u orders, NO sembrar ni tocar ningún documento.
+    const markerRef = doc(db, 'system_settings', 'db_initialized');
+    let markerSnap;
+    let branchesProbe;
+    let usersProbe;
+    let productsProbe;
+    let ordersProbe;
 
-    if (branchSnap.empty) {
-      console.log('Seeding initial Sistema Colmena branch...');
-      for (const branch of INITIAL_BRANCHES) {
-        await setDoc(doc(db, 'branches', branch.id), branch);
-      }
+    try {
+      [markerSnap, branchesProbe, usersProbe, productsProbe, ordersProbe] = await Promise.all([
+        getDocFromServer(markerRef),
+        getDocsFromServer(query(collection(db, 'branches'), limit(1))),
+        getDocsFromServer(query(collection(db, 'users'), limit(1))),
+        getDocsFromServer(query(collection(db, 'products'), limit(1))),
+        getDocsFromServer(query(collection(db, 'orders'), limit(1))),
+      ]);
+    } catch {
+      console.warn('Skipping initial data seed: Firestore server unreachable.');
+      return;
     }
 
-    // 2. Seed menu categories si está vacío
+    const allowSeed = shouldRunInitialDatabaseSeed({
+      serverReachable: true,
+      markerExists: markerSnap.exists(),
+      existingCoreCounts: {
+        branches: branchesProbe.size,
+        users: usersProbe.size,
+        products: productsProbe.size,
+        orders: ordersProbe.size,
+      },
+    });
+
+    if (!allowSeed) {
+      // Marcar definitivamente la base de datos como inicializada para proteger todos los datos reales
+      if (!markerSnap.exists()) {
+        await setDoc(
+          markerRef,
+          {
+            initialized: true,
+            protectRealData: true,
+            preservedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        ).catch(() => {});
+      }
+      return;
+    }
+
+    // Solo en una base de datos 100% nueva y vacía en el servidor se ejecuta la siembra única inicial:
+    console.log('Seeding brand-new empty Sistema Colmena database (one-time)...');
+    for (const branch of INITIAL_BRANCHES) {
+      await setDoc(doc(db, 'branches', branch.id), branch);
+    }
+
+    // 2. Seed menu categories (solo en base nueva vacía)
     const menuCatRef = collection(db, 'menuCategories');
-    const menuCatSnap = await getDocs(menuCatRef);
+    const menuCatSnap = await getDocsFromServer(menuCatRef);
     if (menuCatSnap.empty) {
-      console.log('Seeding initial Menu Categories...');
       for (const cat of INITIAL_CATEGORIES) {
         await setDoc(doc(db, 'menuCategories', cat.id), cat);
       }
     }
 
-    // 3. Seed menu items si está vacío (solo Menú del Día por defecto)
+    // 3. Seed menu items si está vacío en servidor (solo Menú del Día por defecto)
     const menuItemsRef = collection(db, 'menuItems');
-    const menuItemsSnap = await getDocs(menuItemsRef);
+    const menuItemsSnap = await getDocsFromServer(menuItemsRef);
     if (menuItemsSnap.empty) {
-      console.log('Seeding initial Menu Items (Solo Menú del Día)...');
       const { DEFAULT_DAILY_MENU_PRODUCT } = await import('./catalogSeed');
-      await setDoc(doc(db, 'menuItems', DEFAULT_DAILY_MENU_PRODUCT.id), {
-        id: DEFAULT_DAILY_MENU_PRODUCT.id,
-        name: DEFAULT_DAILY_MENU_PRODUCT.name,
-        description: DEFAULT_DAILY_MENU_PRODUCT.description,
-        categoryId: DEFAULT_DAILY_MENU_PRODUCT.categoryId,
-        price: DEFAULT_DAILY_MENU_PRODUCT.price,
-        station: 'cocina_caliente',
-        prepTimeMinutes: DEFAULT_DAILY_MENU_PRODUCT.prepTimeMinutes,
-        recipe: [],
-        isAvailable: true,
-        image: DEFAULT_DAILY_MENU_PRODUCT.images?.[0] || '',
-        sku: DEFAULT_DAILY_MENU_PRODUCT.sku,
-        branchId: DEFAULT_DAILY_MENU_PRODUCT.branchId,
-        prepStationId: DEFAULT_DAILY_MENU_PRODUCT.prepStationId,
-        variants: [],
-        isCombo: false,
-        comboConfig: null,
-      });
+      const existingDailyMenuItem = await getDocFromServer(doc(db, 'menuItems', DEFAULT_DAILY_MENU_PRODUCT.id));
+      if (!existingDailyMenuItem.exists()) {
+        console.log('Seeding initial Menu Items (Solo Menú del Día)...');
+        await setDoc(doc(db, 'menuItems', DEFAULT_DAILY_MENU_PRODUCT.id), {
+          id: DEFAULT_DAILY_MENU_PRODUCT.id,
+          name: DEFAULT_DAILY_MENU_PRODUCT.name,
+          description: DEFAULT_DAILY_MENU_PRODUCT.description,
+          categoryId: DEFAULT_DAILY_MENU_PRODUCT.categoryId,
+          price: DEFAULT_DAILY_MENU_PRODUCT.price,
+          station: 'cocina_caliente',
+          prepTimeMinutes: DEFAULT_DAILY_MENU_PRODUCT.prepTimeMinutes,
+          recipe: [],
+          isAvailable: true,
+          image: DEFAULT_DAILY_MENU_PRODUCT.images?.[0] || '',
+          sku: DEFAULT_DAILY_MENU_PRODUCT.sku,
+          branchId: DEFAULT_DAILY_MENU_PRODUCT.branchId,
+          prepStationId: DEFAULT_DAILY_MENU_PRODUCT.prepStationId,
+          variants: [],
+          isCombo: false,
+          comboConfig: null,
+        });
+      }
     }
 
-    // 4. Seed inventory items si está vacío
+    // 4. Seed inventory items si está vacío en servidor
     const invRef = collection(db, 'inventoryItems');
-    const invSnap = await getDocs(invRef);
+    const invSnap = await getDocsFromServer(invRef);
     if (invSnap.empty) {
       console.log('Seeding initial Inventory Items...');
       for (const inv of INITIAL_INVENTORY) {
@@ -447,9 +500,9 @@ export async function checkAndSeedInitialData() {
       }
     }
 
-    // Módulo 02: Seed Áreas si no existen
+    // Módulo 02: Seed Áreas si no existen en servidor
     const areasRef = collection(db, 'areas');
-    const areasSnap = await getDocs(areasRef);
+    const areasSnap = await getDocsFromServer(areasRef);
     if (areasSnap.empty) {
       console.log('Seeding initial Restaurant Areas...');
       for (const area of INITIAL_AREAS) {
@@ -457,9 +510,9 @@ export async function checkAndSeedInitialData() {
       }
     }
 
-    // Módulo 02: Seed Estaciones Operativas si no existen
+    // Módulo 02: Seed Estaciones Operativas si no existen en servidor
     const prepStationsRef = collection(db, 'prepStations');
-    const prepStationsSnap = await getDocs(prepStationsRef);
+    const prepStationsSnap = await getDocsFromServer(prepStationsRef);
     if (prepStationsSnap.empty) {
       console.log('Seeding initial Prep Stations...');
       for (const st of INITIAL_PREP_STATIONS) {
@@ -467,9 +520,9 @@ export async function checkAndSeedInitialData() {
       }
     }
 
-    // Módulo 02: Seed o actualizar Mesas con areaId y campos completos
+    // Módulo 02: Seed Mesas (solo en base nueva vacía — nunca sobrescribir mesas existentes)
     const tablesRef = collection(db, 'tables');
-    const tablesSnap = await getDocs(tablesRef);
+    const tablesSnap = await getDocsFromServer(tablesRef);
     if (tablesSnap.empty) {
       console.log('Seeding initial Tables...');
       for (const table of INITIAL_TABLES) {
@@ -481,31 +534,11 @@ export async function checkAndSeedInitialData() {
           updatedAt: new Date().toISOString(),
         });
       }
-    } else {
-      // Migrar mesas existentes que no tengan areaId
-      for (const tableDoc of tablesSnap.docs) {
-        const data = tableDoc.data();
-        if (!data.areaId) {
-          const matchingArea = INITIAL_AREAS.find((a) => a.name === data.zone) || INITIAL_AREAS[0];
-          await setDoc(
-            doc(db, 'tables', tableDoc.id),
-            {
-              areaId: matchingArea.id,
-              name: data.name || `Mesa ${data.number}`,
-              displayOrder: data.displayOrder || data.number,
-              isActive: data.isActive !== undefined ? data.isActive : true,
-              hasOpenTab: data.hasOpenTab || Boolean(data.currentOrderId),
-              currentBillAmount: data.currentBillAmount || 0,
-            },
-            { merge: true }
-          );
-        }
-      }
     }
 
-    // Módulo 03: Seed Categorías del Menú Gastronómico si no existen
+    // Módulo 03: Seed Categorías del Menú Gastronómico si no existen en servidor
     const categoriesRef = collection(db, 'categories');
-    const categoriesSnap = await getDocs(categoriesRef);
+    const categoriesSnap = await getDocsFromServer(categoriesRef);
     if (categoriesSnap.empty) {
       console.log('Seeding initial Módulo 03 Product Categories...');
       const { INITIAL_PRODUCT_CATEGORIES } = await import('./catalogSeed');
@@ -514,9 +547,9 @@ export async function checkAndSeedInitialData() {
       }
     }
 
-    // Módulo 03: Seed Grupos de Modificadores y Adicionales
+    // Módulo 03: Seed Grupos de Modificadores y Adicionales en servidor
     const modGroupsRef = collection(db, 'modifierGroups');
-    const modGroupsSnap = await getDocs(modGroupsRef);
+    const modGroupsSnap = await getDocsFromServer(modGroupsRef);
     if (modGroupsSnap.empty) {
       console.log('Seeding initial Módulo 03 Modifier Groups...');
       const { INITIAL_MODIFIER_GROUPS } = await import('./catalogSeed');
@@ -525,42 +558,45 @@ export async function checkAndSeedInitialData() {
       }
     }
 
-    // Módulo 03: Seed Productos con Variantes y Combos (Solo Menú del Día por defecto)
+    // Módulo 03: Seed Productos con Variantes y Combos (Solo Menú del Día si la colección está realmente vacía en servidor)
     const productsRef = collection(db, 'products');
-    const productsSnap = await getDocs(productsRef);
+    const productsSnap = await getDocsFromServer(productsRef);
     if (productsSnap.empty) {
-      console.log('Seeding initial Módulo 03 Products (Solo Menú del Día)...');
       const { DEFAULT_DAILY_MENU_PRODUCT } = await import('./catalogSeed');
-      const prod = DEFAULT_DAILY_MENU_PRODUCT;
-      await setDoc(doc(db, 'products', prod.id), prod);
-      // También sincronizar con menuItems para compatibilidad con pedidos previos
-      await setDoc(
-        doc(db, 'menuItems', prod.id),
-        {
-          id: prod.id,
-          name: prod.name,
-          description: prod.description,
-          categoryId: prod.categoryId,
-          price: prod.price,
-          station: 'cocina_caliente',
-          prepTimeMinutes: prod.prepTimeMinutes,
-          recipe: [],
-          isAvailable: prod.isAvailableForSale && prod.status === 'activo',
-          image: prod.images?.[0] || '',
-          sku: prod.sku,
-          branchId: prod.branchId,
-          prepStationId: prod.prepStationId,
-          variants: prod.variants || [],
-          isCombo: Boolean(prod.isCombo),
-          comboConfig: prod.comboConfig || null,
-        },
-        { merge: true }
-      );
+      const existingDailyProduct = await getDocFromServer(doc(db, 'products', DEFAULT_DAILY_MENU_PRODUCT.id));
+      if (!existingDailyProduct.exists()) {
+        console.log('Seeding initial Módulo 03 Products (Solo Menú del Día)...');
+        const prod = DEFAULT_DAILY_MENU_PRODUCT;
+        await setDoc(doc(db, 'products', prod.id), prod);
+        // También sincronizar con menuItems para compatibilidad con pedidos previos
+        await setDoc(
+          doc(db, 'menuItems', prod.id),
+          {
+            id: prod.id,
+            name: prod.name,
+            description: prod.description,
+            categoryId: prod.categoryId,
+            price: prod.price,
+            station: 'cocina_caliente',
+            prepTimeMinutes: prod.prepTimeMinutes,
+            recipe: [],
+            isAvailable: prod.isAvailableForSale && prod.status === 'activo',
+            image: prod.images?.[0] || '',
+            sku: prod.sku,
+            branchId: prod.branchId,
+            prepStationId: prod.prepStationId,
+            variants: prod.variants || [],
+            isCombo: Boolean(prod.isCombo),
+            comboConfig: prod.comboConfig || null,
+          },
+          { merge: true }
+        );
+      }
     }
 
     // Seed de Clientes de prueba
     const customersRef = collection(db, 'customers');
-    const custSnap = await getDocs(customersRef);
+    const custSnap = await getDocsFromServer(customersRef);
     if (custSnap.empty) {
       console.log('Seeding initial Customers...');
       const sampleCustomers = [
@@ -642,7 +678,7 @@ export async function checkAndSeedInitialData() {
 
     // Seed de Separados iniciales
     const sepRef = collection(db, 'separados');
-    const sepSnap = await getDocs(sepRef);
+    const sepSnap = await getDocsFromServer(sepRef);
     if (sepSnap.empty) {
       console.log('Seeding initial Separados...');
       const sampleSeparado = {
@@ -715,7 +751,7 @@ export async function checkAndSeedInitialData() {
 
     // Seed de Cartera inicial
     const crdRef = collection(db, 'cartera');
-    const crdSnap = await getDocs(crdRef);
+    const crdSnap = await getDocsFromServer(crdRef);
     if (crdSnap.empty) {
       console.log('Seeding initial Cartera...');
       const sampleCartera = {
@@ -765,7 +801,7 @@ export async function checkAndSeedInitialData() {
 
     // Seed de Proveedores, Compras, Anticipos y Cuentas por Pagar
     const supRef = collection(db, 'suppliers');
-    const supSnap = await getDocs(supRef);
+    const supSnap = await getDocsFromServer(supRef);
     if (supSnap.empty) {
       console.log('Seeding initial Suppliers, Advances and Payables...');
       
@@ -907,6 +943,17 @@ export async function checkAndSeedInitialData() {
         createdAt: new Date().toISOString(),
       });
     }
+
+    // Marcar la base de datos como inicializada permanentemente para que nunca vuelva a sobreescribirse
+    await setDoc(
+      markerRef,
+      {
+        initialized: true,
+        protectRealData: true,
+        seededAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
   } catch (error) {
     console.error('Error seeding data:', error);
     handleFirestoreError(error, OperationType.WRITE, 'seed_data');

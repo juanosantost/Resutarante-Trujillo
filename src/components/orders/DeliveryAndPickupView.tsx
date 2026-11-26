@@ -66,7 +66,7 @@ export interface DeliveryDriver {
 
 export const DeliveryAndPickupView: React.FC = () => {
   const {
-    orders,
+    visibleOrders,
     currentBranch,
     customers,
     menuItems,
@@ -135,9 +135,9 @@ export const DeliveryAndPickupView: React.FC = () => {
   const [incidenceModalOrder, setIncidenceModalOrder] = useState<Order | null>(null);
   const [incidenceText, setIncidenceText] = useState<string>('');
 
-  // 1. Filtrado Inteligente de Pedidos
+  // 1. Filtrado Inteligente de Pedidos (ya acotado por rol en visibleOrders)
   const deliveryOrders = useMemo(() => {
-    return orders.filter((o) => {
+    return visibleOrders.filter((o) => {
       // Filtrar por sucursal si aplica
       if (currentBranch && o.branchId !== currentBranch.id) return false;
 
@@ -182,12 +182,12 @@ export const DeliveryAndPickupView: React.FC = () => {
 
       return true;
     });
-  }, [orders, currentBranch, activeTab, dateFilter, statusFilter, driverFilter, paymentFilter, searchQuery]);
+  }, [visibleOrders, currentBranch, activeTab, dateFilter, statusFilter, driverFilter, paymentFilter, searchQuery]);
 
   // Métricas del Tablero
   const stats = useMemo(() => {
     const todayStr = new Date().toISOString().split('T')[0];
-    const todaysDeliveryOrders = orders.filter(
+    const todaysDeliveryOrders = visibleOrders.filter(
       (o) =>
         o.type === 'domicilio' &&
         (!currentBranch || o.branchId === currentBranch.id) &&
@@ -219,7 +219,7 @@ export const DeliveryAndPickupView: React.FC = () => {
       totalEntregadosCOP,
       pendingReconciliationCOP,
     };
-  }, [orders, currentBranch]);
+  }, [visibleOrders, currentBranch]);
 
   // Mappings de Badge de Estado
   const getDeliveryStatusBadge = (status: DeliveryStatus = 'recibido') => {
@@ -525,7 +525,7 @@ export const DeliveryAndPickupView: React.FC = () => {
             }`}
           >
             <Bike className="w-4 h-4" />
-            <span>Panel de Domicilios ({orders.filter((o) => o.type === 'domicilio').length})</span>
+            <span>Panel de Domicilios ({visibleOrders.filter((o) => o.type === 'domicilio').length})</span>
           </button>
 
           <button
@@ -538,7 +538,7 @@ export const DeliveryAndPickupView: React.FC = () => {
             }`}
           >
             <ShoppingBag className="w-4 h-4" />
-            <span>Pedidos Para Llevar / Takeaway ({orders.filter((o) => o.type === 'para_llevar').length})</span>
+            <span>Pedidos Para Llevar / Takeaway ({visibleOrders.filter((o) => o.type === 'para_llevar').length})</span>
           </button>
 
           <button
@@ -595,7 +595,7 @@ export const DeliveryAndPickupView: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {drivers.map((drv) => {
               // Filtrar pedidos asignados a este repartidor
-              const assignedOrders = orders.filter(
+              const assignedOrders = visibleOrders.filter(
                 (o) => o.deliveryDriverId === drv.id && o.type === 'domicilio'
               );
               const pendingMoney = assignedOrders

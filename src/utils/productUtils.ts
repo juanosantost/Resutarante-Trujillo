@@ -554,6 +554,7 @@ export function buildDefaultDailyMenuItem(
   let modifiersSurcharge = 0;
 
   for (const group of groups) {
+    if (group.isActive === false) continue;
     const activeOptions = (group.options || []).filter((o) => o.isActive !== false);
     if (activeOptions.length === 0) continue;
     const chosen = activeOptions.find((o) => o.isDefault) || activeOptions[0];

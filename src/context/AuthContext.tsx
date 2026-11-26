@@ -10,7 +10,9 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
+  getDocsFromServer,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -22,6 +24,10 @@ import { auth, db, handleFirestoreError, OperationType } from '../services/fireb
 import { ColmenaUser, UserRole, Branch, ReceiptConfig, BranchPrintConfig, DEFAULT_BRANCH_PRINT_CONFIG } from '../types';
 import { canUserAccessBranch, canUserAccessModule, normalizeUserRole } from '../utils/auth';
 import { estimateDataUrlSizeBytes } from '../utils/imageUtils';
+import {
+  preserveBranchDocumentFromFirestore,
+  reconcileSessionUserWithFirestore,
+} from '../utils/dataPreservationUtils';
 
 interface AuthContextType {
   firebaseUser: FirebaseUser | null;
@@ -100,15 +106,15 @@ export const INITIAL_BRANCHES: Branch[] = [
 export const DEFAULT_ADMIN_USER: ColmenaUser = {
   id: 'usr-admin-principal',
   firebaseUid: 'admin-seed-uid',
-  fullName: 'Juan Carlos Gómez (Super Admin)',
-  documentNumber: '1020304050',
+  fullName: 'Juan David Santos Tamayo',
+  documentNumber: '1115069269',
   email: 'juan.santos.ieci@gmail.com',
   role: 'administrador',
   authorizedBranchIds: ['sede-buga'],
   isActive: true,
   createdAt: new Date().toISOString(),
   lastLoginAt: new Date().toISOString(),
-  phone: '3001234567',
+  phone: '31546040990',
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -123,7 +129,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
   const [branches, setBranches] = useState<Branch[]>(INITIAL_BRANCHES);
   const [currentBranchId, setCurrentBranchId] = useState<string>('sede-buga');
-  const [allUsers, setAllUsers] = useState<ColmenaUser[]>([DEFAULT_ADMIN_USER]);
+  const [allUsers, setAllUsers] = useState<ColmenaUser[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(() => {
     try {
       return !localStorage.getItem('colmena_logged_user');
@@ -186,42 +192,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   setIsLoading(false);
                   return;
                 }
-                // Crear primer admin
-                const newUser: ColmenaUser = {
-                  id: fbUser.uid,
-                  firebaseUid: fbUser.uid,
-                  fullName: fbUser.displayName || 'Juan Carlos Gómez',
-                  documentNumber: '1020304050',
-                  email: 'juan.santos.ieci@gmail.com',
-                  role: 'administrador',
-                  authorizedBranchIds: ['sede-chapinero', 'sede-parque93'],
-                  isActive: true,
-                  createdAt: new Date().toISOString(),
-                  lastLoginAt: new Date().toISOString(),
-                  phone: '3001234567',
-                };
-                await setDoc(userDocRef, newUser).catch(() => {});
-                setCurrentUser(newUser);
+                // Verificar primero en servidor si ya existe usr-admin-principal o por correo antes de crear
+                try {
+                  const serverEmailSnap = await getDocsFromServer(q);
+                  if (!serverEmailSnap.empty) {
+                    const matchedDoc = serverEmailSnap.docs[0];
+                    const userData = { ...matchedDoc.data(), id: matchedDoc.id } as ColmenaUser;
+                    setCurrentUser(userData);
+                    setIsLoading(false);
+                    return;
+                  }
+                  const principalSnap = await getDocFromServer(doc(db, 'users', 'usr-admin-principal'));
+                  if (principalSnap.exists()) {
+                    const userData = { ...principalSnap.data(), id: principalSnap.id } as ColmenaUser;
+                    setCurrentUser(userData);
+                    setIsLoading(false);
+                    return;
+                  }
+                  // Solo crear si el servidor confirma que no existe ningún registro del propietario
+                  const newUser: ColmenaUser = {
+                    ...DEFAULT_ADMIN_USER,
+                    id: fbUser.uid,
+                    firebaseUid: fbUser.uid,
+                    fullName: fbUser.displayName || DEFAULT_ADMIN_USER.fullName,
+                    createdAt: new Date().toISOString(),
+                    lastLoginAt: new Date().toISOString(),
+                  };
+                  await setDoc(userDocRef, newUser).catch(() => {});
+                  setCurrentUser(newUser);
+                } catch {
+                  // Si no hay conexión al servidor, no sobrescribir ni duplicar registros
+                  if (!currentUser) {
+                    setCurrentUser({
+                      ...DEFAULT_ADMIN_USER,
+                      firebaseUid: fbUser.uid || DEFAULT_ADMIN_USER.firebaseUid,
+                    });
+                  }
+                }
               }
             }
           } catch (err) {
             console.warn('Handling auth user profile fetch:', err);
-            // Fallback al usuario autorizado
+            // Fallback al usuario autorizado (solo en memoria, sin sobrescribir Firestore)
             if (!currentUser) {
-              const fallbackUser: ColmenaUser = {
-                id: fbUser.uid || 'usr-admin-principal',
-                firebaseUid: fbUser.uid || 'admin-seed-uid',
-                fullName: fbUser.displayName || 'Juan Carlos Gómez',
-                documentNumber: '1020304050',
-                email: 'juan.santos.ieci@gmail.com',
-                role: 'administrador',
-                authorizedBranchIds: ['sede-chapinero', 'sede-parque93'],
-                isActive: true,
-                createdAt: new Date().toISOString(),
-                lastLoginAt: new Date().toISOString(),
-                phone: '3001234567',
-              };
-              setCurrentUser(fallbackUser);
+              setCurrentUser({
+                ...DEFAULT_ADMIN_USER,
+                firebaseUid: fbUser.uid || DEFAULT_ADMIN_USER.firebaseUid,
+              });
             }
           }
         }
@@ -239,56 +256,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  // 2. Listener en tiempo real para Sucursales
+  // 2. Listener en tiempo real para Sucursales (100% solo lectura — NUNCA sobrescribir datos reales)
   useEffect(() => {
     const unsubBranches = onSnapshot(
       collection(db, 'branches'),
       (snap) => {
+        if (snap.empty && snap.metadata.fromCache) {
+          return;
+        }
         const list: Branch[] = [];
         snap.forEach((d) => {
           const raw = d.data();
-          const rawCity = raw.city || '';
-          const cleanCity = rawCity.includes('Buga') ? 'Restrepo (Valle)' : (rawCity || 'Restrepo (Valle)');
-          const rawAddress = raw.address || '';
-          const cleanAddress = rawAddress.includes('Buga') ? 'Restrepo, Valle del Cauca, Colombia' : (rawAddress || 'Restrepo, Valle del Cauca, Colombia');
-          const rawName = raw.name || '';
-          const cleanName = rawName.includes('Buga') ? 'Sede Principal — Restrepo (Valle)' : (rawName || 'Sede Principal Restrepo');
-
-          const branchItem: Branch = {
-            ...raw,
-            id: d.id,
-            name: cleanName,
-            nit: raw.nit || '901.458.920-4',
-            address: cleanAddress,
-            phone: raw.phone || '+57 (602) 237-4589',
-            city: cleanCity,
-            logoUrl: raw.logoUrl || undefined,
-            notes: raw.notes || '',
-            taxRate: raw.taxRate !== undefined ? Number(raw.taxRate) : (raw.receiptConfig?.showTax === false ? 0 : 0.08),
-            isActive: raw.isActive ?? true,
-            status: (raw.isActive ?? true) ? 'activa' : 'inactiva',
-            receiptConfig: raw.receiptConfig || {
-              ...DEFAULT_RECEIPT_CONFIG,
-              prefix: 'RES-',
-            },
-            printConfig: raw.printConfig || DEFAULT_BRANCH_PRINT_CONFIG,
-            createdAt: raw.createdAt || new Date().toISOString(),
-          };
-          list.push(branchItem);
-
-          // Si el documento en Firestore no tiene NIT o receiptConfig o printConfig, actualizarlo
-          if (!raw.nit || !raw.receiptConfig || !raw.printConfig) {
-            setDoc(
-              doc(db, 'branches', d.id),
-              {
-                nit: branchItem.nit,
-                receiptConfig: branchItem.receiptConfig,
-                printConfig: branchItem.printConfig,
-                taxRate: branchItem.taxRate,
+          list.push(
+            preserveBranchDocumentFromFirestore(raw, d.id, {
+              receiptConfig: {
+                ...DEFAULT_RECEIPT_CONFIG,
+                prefix: 'RES-',
               },
-              { merge: true }
-            ).catch(() => {});
-          }
+              printConfig: DEFAULT_BRANCH_PRINT_CONFIG,
+            })
+          );
         });
         if (list.length > 0) {
           setBranches(list);
@@ -300,15 +287,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubBranches();
   }, []);
 
-  // 3. Listener en tiempo real para Usuarios del sistema
+  // 3. Listener en tiempo real para Usuarios del sistema (100% solo lectura — NUNCA sobrescribir datos reales)
   useEffect(() => {
     const unsubUsers = onSnapshot(
       collection(db, 'users'),
       (snap) => {
+        if (snap.empty && snap.metadata.fromCache) {
+          return;
+        }
         const list: ColmenaUser[] = [];
         snap.forEach((d) => list.push({ ...d.data(), id: d.id } as ColmenaUser));
         if (list.length > 0) {
-          setAllUsers(list.sort((a, b) => (a.fullName || '').localeCompare(b.fullName || '')));
+          const sorted = list.sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''));
+          setAllUsers(sorted);
+          // Sincronizar siempre el usuario en sesión (incluido localStorage) con los datos reales de Firestore
+          setCurrentUser((prev) => {
+            if (!prev) return prev;
+            const reconciled = reconcileSessionUserWithFirestore(prev, sorted);
+            if (reconciled && JSON.stringify(reconciled) !== JSON.stringify(prev)) {
+              try {
+                localStorage.setItem('colmena_logged_user', JSON.stringify(reconciled));
+              } catch {
+                // ignore storage errors
+              }
+            }
+            return reconciled;
+          });
         }
       },
       (error) => handleFirestoreError(error, OperationType.GET, 'users')
@@ -317,77 +321,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubUsers();
   }, []);
 
-  // Si no hay usuarios en la base de datos, sembrar únicamente el administrador autorizado
+  // Solo si el SERVIDOR confirma que la base de datos es nueva (sin db_initialized) y no existe
+  // ningún usuario en /users, registrar el administrador principal inicial.
   useEffect(() => {
     async function seedInitialUsersIfEmpty() {
       try {
-        const snap = await getDocs(collection(db, 'users'));
-        if (snap.empty) {
-          console.log('Sembrando usuario administrador inicial...');
-          const adminUser: ColmenaUser = {
-            id: 'usr-admin-principal',
-            firebaseUid: 'admin-seed-uid',
-            fullName: 'Juan Carlos Gómez (Super Admin)',
-            documentNumber: '1020304050',
-            email: 'juan.santos.ieci@gmail.com',
-            role: 'administrador',
-            authorizedBranchIds: ['sede-buga'],
-            isActive: true,
-            createdAt: new Date().toISOString(),
-            lastLoginAt: new Date().toISOString(),
-            phone: '3001234567',
-          };
-          await setDoc(doc(db, 'users', adminUser.id), adminUser);
+        const markerSnap = await getDocFromServer(doc(db, 'system_settings', 'db_initialized'));
+        if (markerSnap.exists()) {
+          return;
+        }
+        const serverSnap = await getDocsFromServer(collection(db, 'users'));
+        if (serverSnap.empty) {
+          const principalCheck = await getDocFromServer(doc(db, 'users', DEFAULT_ADMIN_USER.id));
+          if (!principalCheck.exists()) {
+            console.log('Sembrando usuario administrador inicial en servidor vacío...');
+            const now = new Date().toISOString();
+            const adminUser: ColmenaUser = {
+              ...DEFAULT_ADMIN_USER,
+              createdAt: now,
+              lastLoginAt: now,
+            };
+            await setDoc(doc(db, 'users', adminUser.id), adminUser);
+          }
         }
       } catch (err) {
-        console.warn('Note on user seeding:', err);
+        // Si el cliente está sin conexión o el servidor no responde, omitir siembra para preservar datos reales
+        console.warn('Skipping initial user seed (server verification unavailable):', err);
       }
     }
 
     seedInitialUsersIfEmpty();
-  }, []);
-
-  // Asegurar que exista la sede de Restrepo (Valle) y actualizar datos de ubicación
-  useEffect(() => {
-    async function seedBranchesIfEmpty() {
-      try {
-        const snap = await getDocs(collection(db, 'branches'));
-        const restrepoBranch = INITIAL_BRANCHES[0];
-        
-        // Asegurar que la sede principal esté registrada en Restrepo (Valle)
-        const branchRef = doc(db, 'branches', 'sede-buga');
-        const branchSnap = await getDoc(branchRef);
-        if (!branchSnap.exists()) {
-          await setDoc(branchRef, restrepoBranch);
-        } else {
-          const currentData = branchSnap.data() as Partial<Branch>;
-          if (
-            currentData.city?.includes('Buga') ||
-            currentData.name?.includes('Buga') ||
-            currentData.address?.includes('Buga') ||
-            currentData.receiptConfig?.footerText?.includes('Buga')
-          ) {
-            await updateDoc(branchRef, {
-              name: 'Sede Principal — Restrepo (Valle)',
-              city: 'Restrepo (Valle)',
-              address: 'Restrepo, Valle del Cauca, Colombia',
-              'receiptConfig.footerText': '¡Gracias por su visita! Restrepo (Valle). Propina voluntaria según Ley 1935 de 2018.',
-              'receiptConfig.prefix': 'RES-',
-            }).catch(() => {});
-          }
-        }
-
-        // Limpiar sucursales obsoletas no pertenecientes a la sede principal
-        for (const bDoc of snap.docs) {
-          if (bDoc.id === 'sede-chapinero' || bDoc.id === 'sede-parque93') {
-            await deleteDoc(doc(db, 'branches', bDoc.id)).catch(() => {});
-          }
-        }
-      } catch (err) {
-        console.warn('Note on branch seeding:', err);
-      }
-    }
-    seedBranchesIfEmpty();
   }, []);
 
   // Determinar sucursal actual y sucursales autorizadas
@@ -468,18 +431,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await signOut(auth);
           throw new Error('Acceso no autorizado. Este correo electrónico no está autorizado en Sistema Colmena.');
         }
+        // Verificar primero en servidor si ya existe el usuario principal antes de crear uno nuevo
+        const serverQSnap = await getDocsFromServer(q).catch(() => null);
+        if (serverQSnap && !serverQSnap.empty) {
+          const doc0 = serverQSnap.docs[0];
+          const u = { ...doc0.data(), id: doc0.id } as ColmenaUser;
+          saveUserSession(u);
+          await updateDoc(doc(db, 'users', doc0.id), {
+            firebaseUid: user.uid,
+            lastLoginAt: new Date().toISOString(),
+          }).catch(() => {});
+          return;
+        }
+        const principalSnap = await getDocFromServer(doc(db, 'users', DEFAULT_ADMIN_USER.id)).catch(() => null);
+        if (principalSnap && principalSnap.exists()) {
+          const u = { ...principalSnap.data(), id: principalSnap.id } as ColmenaUser;
+          saveUserSession(u);
+          await updateDoc(doc(db, 'users', principalSnap.id), {
+            firebaseUid: user.uid,
+            lastLoginAt: new Date().toISOString(),
+          }).catch(() => {});
+          return;
+        }
         const newUser: ColmenaUser = {
+          ...DEFAULT_ADMIN_USER,
           id: user.uid,
           firebaseUid: user.uid,
-          fullName: user.displayName || 'Juan Carlos Gómez',
-          documentNumber: '1020304050',
-          email: 'juan.santos.ieci@gmail.com',
-          role: 'administrador',
+          fullName: user.displayName || DEFAULT_ADMIN_USER.fullName,
           authorizedBranchIds: branches.map((b) => b.id),
-          isActive: true,
           createdAt: new Date().toISOString(),
           lastLoginAt: new Date().toISOString(),
-          phone: '3001234567',
         };
         await setDoc(userDocRef, newUser);
         saveUserSession(newUser);
@@ -623,7 +604,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     if (currentUser && currentUser.id === userId) {
-      setCurrentUser((prev) => (prev ? { ...prev, ...data } : null));
+      setCurrentUser((prev) => {
+        if (!prev) return null;
+        const updated = { ...prev, ...data };
+        try {
+          localStorage.setItem('colmena_logged_user', JSON.stringify(updated));
+        } catch {
+          // ignore storage errors
+        }
+        return updated;
+      });
     }
   };
 
